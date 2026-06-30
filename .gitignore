@@ -1,1 +1,30 @@
 *.claude/*
+
+# Go
+/bin/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+*.pprof
+coverage.txt
+coverage.html
+
+# Build artifacts
+/oapigen
+/oapigen_*
+
+# Go workspace
+go.work
+go.work.sum
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
