@@ -73,12 +73,9 @@ func (r *RealFS) resolve(name string) (string, error) {
 	if r.baseDir == "" {
 		return filepath.Clean(name), nil
 	}
-	cleaned := filepath.Clean(filepath.Join(r.baseDir, name))
-	rel, err := filepath.Rel(r.baseDir, cleaned)
-	if err != nil {
-		return "", fmt.Errorf("fs: cannot relate %q to base %q: %w", name, r.baseDir, err)
-	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	base := filepath.Clean(r.baseDir)
+	cleaned := filepath.Clean(filepath.Join(base, name))
+	if cleaned != base && !strings.HasPrefix(cleaned, base+string(filepath.Separator)) {
 		return "", fmt.Errorf("fs: path %q escapes base dir %q", name, r.baseDir)
 	}
 	return cleaned, nil

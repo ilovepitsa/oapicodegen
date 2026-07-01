@@ -137,3 +137,30 @@ func TestCreate_RelativeOutputPath(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "package main\n", string(got))
 }
+
+func TestCreate_MkdirAllFails_ReturnsError(t *testing.T) {
+	// output под файлом — MkdirAll(".") не сможет создать каталог.
+	tmp := t.TempDir()
+	blocker := filepath.Join(tmp, "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0o644))
+
+	c := NewFileWriterConfiguratorFromFlags(flag.NewFlagSet("test", flag.ContinueOnError))
+	_, err := c.Create(filepath.Join(blocker, "out"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "configurator: create output dir")
+}
+
+func TestFileWriter_WriteFile_MkdirAllFails(t *testing.T) {
+	tmp := t.TempDir()
+	output := filepath.Join(tmp, "out")
+
+	c := NewFileWriterConfiguratorFromFlags(flag.NewFlagSet("test", flag.ContinueOnError))
+	fw, err := c.Create(output)
+	require.NoError(t, err)
+
+	// Создаём файл-блокер в output, чтобы MkdirAll для подкаталога с тем же именем упал.
+	require.NoError(t, os.WriteFile(filepath.Join(output, "blocker"), []byte("x"), 0o644))
+
+	err = fw.WriteFile("blocker/sub.go", codegen.NewFile([]byte("package main\n")))
+	require.Error(t, err)
+}

@@ -107,6 +107,19 @@ func TestRealFS_BaseDir_RejectsEscape(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestRealFS_BaseDir_RejectsEscape_AllOps(t *testing.T) {
+	base := t.TempDir()
+	rfs := NewRecommendedReal(WithBaseDir(base))
+
+	_, err := rfs.Open("../escape")
+	assert.Error(t, err)
+	_, err = rfs.ReadDir("../escape")
+	assert.Error(t, err)
+	assert.Error(t, rfs.Remove("../escape"))
+	_, err = rfs.Stat("../escape")
+	assert.Error(t, err)
+}
+
 func TestRealFS_BaseDir_NestedDirsCreated(t *testing.T) {
 	base := t.TempDir()
 	rfs := NewRecommendedReal(WithBaseDir(base))

@@ -14,14 +14,35 @@ import (
 )
 
 // fakeT — собирает вызовы Fatal/Fatalf без реального падения теста.
-// Используется в тестах, которые проверяют, что Equals вызывает Fatal.
+// Fatal имитирует поведение testing.T.Fatal: останавливает выполнение
+// через panic, который перехватывается runCatchingFatal.
 type fakeT struct {
 	fatalCalls []string
 }
 
-func (f *fakeT) Fatal(args ...any) { f.fatalCalls = append(f.fatalCalls, fmt.Sprint(args...)) }
+type fakeTFatal struct{}
+
+func (f *fakeT) Fatal(args ...any) {
+	f.fatalCalls = append(f.fatalCalls, fmt.Sprint(args...))
+	panic(fakeTFatal{})
+}
+
 func (f *fakeT) Fatalf(format string, args ...any) {
 	f.fatalCalls = append(f.fatalCalls, fmt.Sprintf(format, args...))
+	panic(fakeTFatal{})
+}
+
+// runCatchingFatal выполняет fn, перехватывая panic от fakeT.Fatal.
+func runCatchingFatal(t *testing.T, fn func()) {
+	t.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(fakeTFatal); !ok {
+				panic(r)
+			}
+		}
+	}()
+	fn()
 }
 
 // setUpdate устанавливает флаг -update на время теста и сбрасывает в конце.
@@ -72,7 +93,7 @@ func TestEquals_Mismatch_Fails(t *testing.T) {
 
 	ft := &fakeT{}
 	d := NewDir(ft, WithPath(tmp))
-	d.Equals("f.txt", []byte("world"))
+	runCatchingFatal(t, func() { d.Equals("f.txt", []byte("world")) })
 	assert.Len(t, ft.fatalCalls, 1, "expected Fatal to be called on mismatch")
 	assert.Contains(t, ft.fatalCalls[0], "golden mismatch")
 }
@@ -82,7 +103,7 @@ func TestEquals_MissingGoldenFile_Fails(t *testing.T) {
 
 	ft := &fakeT{}
 	d := NewDir(ft, WithPath(tmp))
-	d.Equals("nonexistent.txt", []byte("anything"))
+	runCatchingFatal(t, func() { d.Equals("nonexistent.txt", []byte("anything")) })
 	assert.Len(t, ft.fatalCalls, 1, "expected Fatal to be called on missing golden file")
 	assert.Contains(t, ft.fatalCalls[0], "golden: read")
 }
@@ -179,7 +200,9 @@ func TestCodegenFS_WriteFile_MismatchFails(t *testing.T) {
 	ft := &fakeT{}
 	d := NewDir(ft, WithPath(tmp))
 	fw := NewCodegenFS(ft, d)
-	_ = fw.WriteFile("f.gen.go", codegen.NewFile([]byte("package new\n")))
+	runCatchingFatal(t, func() {
+		_ = fw.WriteFile("f.gen.go", codegen.NewFile([]byte("package new\n")))
+	})
 	assert.Len(t, ft.fatalCalls, 1, "expected Fatal on mismatch")
 	assert.Contains(t, ft.fatalCalls[0], "golden mismatch")
 }
@@ -226,4 +249,30 @@ func TestFlagRegistration(t *testing.T) {
 	f := flag.Lookup("update")
 	require.NotNil(t, f)
 	assert.Contains(t, f.Usage, "golden")
+}
+
+func TestEquals_UpdateMode_MkdirAllFails(t *testing.T) {
+	setUpdate(t, true)
+	tmp := t.TempDir()
+	// blocker — файл; MkdirAll("blocker/...") упадёт.
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "blocker"), []byte("x"), 0o644))
+
+	ft := &fakeT{}
+	d := NewDir(ft, WithPath(tmp))
+	runCatchingFatal(t, func() { d.Equals("blocker/nested.txt", []byte("x")) })
+	require.Len(t, ft.fatalCalls, 1)
+	assert.Contains(t, ft.fatalCalls[0], "golden: create parent dir")
+}
+
+func TestEquals_UpdateMode_WriteFileFails(t *testing.T) {
+	setUpdate(t, true)
+	tmp := t.TempDir()
+	// target — каталог; WriteFile в каталог упадёт.
+	require.NoError(t, os.MkdirAll(filepath.Join(tmp, "target"), 0o755))
+
+	ft := &fakeT{}
+	d := NewDir(ft, WithPath(tmp))
+	runCatchingFatal(t, func() { d.Equals("target", []byte("x")) })
+	require.Len(t, ft.fatalCalls, 1)
+	assert.Contains(t, ft.fatalCalls[0], "golden: write")
 }

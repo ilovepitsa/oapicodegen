@@ -1,0 +1,129 @@
+package parser
+
+import (
+	"strings"
+
+	highbase "github.com/pb33f/libopenapi/datamodel/high/base"
+	"github.com/pb33f/libopenapi/orderedmap"
+	"gopkg.in/yaml.v3"
+)
+
+// schemaFromProxy конвертирует *highbase.SchemaProxy в наш *Schema.
+// Если proxy — $ref, возвращается Schema с заполненным Ref и (по возможности)
+// разрешёнными полями целевой схемы.
+func schemaFromProxy(proxy *highbase.SchemaProxy) *Schema {
+	if proxy == nil {
+		return nil
+	}
+
+	if proxy.IsReference() {
+		ref := proxy.GetReference()
+		s := &Schema{Ref: ref}
+		s.Name = refToSchemaName(ref)
+		if target := proxy.Schema(); target != nil {
+			fillSchema(s, target)
+		}
+		return s
+	}
+
+	s := &Schema{}
+	fillSchema(s, proxy.Schema())
+	return s
+}
+
+// fillSchema заполняет поля s из *highbase.Schema.
+func fillSchema(s *Schema, sh *highbase.Schema) {
+	s.Description = sh.Description
+	s.Format = sh.Format
+	s.Nullable = boolPtrOrFalse(sh.Nullable)
+	s.Deprecated = boolPtrOrFalse(sh.Deprecated)
+	s.ReadOnly = boolPtrOrFalse(sh.ReadOnly)
+	s.WriteOnly = boolPtrOrFalse(sh.WriteOnly)
+
+	if len(sh.Type) > 0 {
+		s.Type = sh.Type[0]
+	}
+
+	s.Required = append(s.Required, sh.Required...)
+
+	if sh.Default != nil {
+		s.Default = decodeNode(sh.Default)
+	}
+	for _, n := range sh.Enum {
+		s.Enum = append(s.Enum, decodeNode(n))
+	}
+
+	if sh.Items != nil && sh.Items.IsA() && sh.Items.A != nil {
+		s.Items = schemaFromProxy(sh.Items.A)
+	}
+
+	if sh.Properties != nil {
+		for pair := sh.Properties.First(); pair != nil; pair = pair.Next() {
+			s.Properties = append(s.Properties, &Property{
+				Name:     pair.Key(),
+				Schema:   schemaFromProxy(pair.Value()),
+				Required: containsString(s.Required, pair.Key()),
+			})
+		}
+	}
+
+	s.AllOf = appendComposites(s.AllOf, sh.AllOf)
+	s.OneOf = appendComposites(s.OneOf, sh.OneOf)
+	s.AnyOf = appendComposites(s.AnyOf, sh.AnyOf)
+}
+
+func appendComposites(dst []*Schema, proxies []*highbase.SchemaProxy) []*Schema {
+	for _, p := range proxies {
+		dst = append(dst, schemaFromProxy(p))
+	}
+	return dst
+}
+
+// extractComponentsSchemas проходит components.schemas и наполняет doc.Schemas.
+func extractComponentsSchemas(doc *Document, schemas *orderedmap.Map[string, *highbase.SchemaProxy]) {
+	if schemas == nil {
+		return
+	}
+	for pair := schemas.First(); pair != nil; pair = pair.Next() {
+		s := schemaFromProxy(pair.Value())
+		s.Name = pair.Key()
+		doc.Schemas = append(doc.Schemas, s)
+	}
+}
+
+func refToSchemaName(ref string) string {
+	if ref == "" {
+		return ""
+	}
+	if idx := strings.LastIndex(ref, "/"); idx >= 0 {
+		return ref[idx+1:]
+	}
+	return strings.TrimPrefix(ref, "#/components/schemas/")
+}
+
+func boolPtrOrFalse(b *bool) bool {
+	return b != nil && *b
+}
+
+// decodeNode декодирует yaml.Node в any (string/int/float/bool/...).
+// yaml.v3 не возвращает ошибку для any-таргета (паникует на невалидных узлах),
+// поэтому ветки ошибок нет — узлы приходят от libopenapi, уже валидные.
+func decodeNode(n *yaml.Node) any {
+	if n == nil {
+		return nil
+	}
+	var v any
+	if err := n.Decode(&v); err != nil {
+		return nil
+	}
+	return v
+}
+
+func containsString(slice []string, v string) bool {
+	for _, s := range slice {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
