@@ -40,7 +40,7 @@ type Writer struct {
 // P пишет args через fmt.Fprint (без разделителей между args).
 // Удобно для кодогенерации: w.P("resp, err := ", call, "\n").
 func (w *Writer) P(args ...any) {
-	fmt.Fprint(&w.buf, args...)
+	_, _ = fmt.Fprint(&w.buf, args...)
 }
 
 // W пишет строку s как есть.
