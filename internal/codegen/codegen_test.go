@@ -76,47 +76,47 @@ func (c *captureWriter) WriteFile(name string, file File) error {
 func (c *captureWriter) Close() error { return nil }
 
 func TestWithPath_PrefixesName(t *testing.T) {
-	cap := &captureWriter{files: map[string][]byte{}}
-	fw := WithPath(cap, "model")
+	cw := &captureWriter{files: map[string][]byte{}}
+	fw := WithPath(cw, "model")
 
 	b := NewBufferWriter()
 	b.P("package model")
 	require.NoError(t, fw.WriteFile("user.gen.go", b))
-	_, ok := cap.files["model/user.gen.go"]
-	assert.True(t, ok, "expected file at model/user.gen.go; got keys: %v", keys(cap.files))
+	_, ok := cw.files["model/user.gen.go"]
+	assert.True(t, ok, "expected file at model/user.gen.go; got keys: %v", keys(cw.files))
 }
 
 func TestPathWriter_CleansPath(t *testing.T) {
-	cap := &captureWriter{files: map[string][]byte{}}
-	fw := WithPath(cap, "model/")
+	cw := &captureWriter{files: map[string][]byte{}}
+	fw := WithPath(cw, "model/")
 
 	require.NoError(t, fw.WriteFile("user.gen.go", NewFile([]byte("x"))))
 	// path.Join нормализует trailing slash
-	_, ok := cap.files["model/user.gen.go"]
-	assert.True(t, ok, "expected normalized path; got keys: %v", keys(cap.files))
+	_, ok := cw.files["model/user.gen.go"]
+	assert.True(t, ok, "expected normalized path; got keys: %v", keys(cw.files))
 }
 
 func TestWithPath_EmptyPathPassthrough(t *testing.T) {
-	cap := &captureWriter{files: map[string][]byte{}}
-	fw := WithPath(cap, "")
+	cw := &captureWriter{files: map[string][]byte{}}
+	fw := WithPath(cw, "")
 
 	require.NoError(t, fw.WriteFile("a.go", NewFile([]byte("x"))))
-	_, ok := cap.files["a.go"]
-	assert.True(t, ok, "expected file at a.go; got keys: %v", keys(cap.files))
+	_, ok := cw.files["a.go"]
+	assert.True(t, ok, "expected file at a.go; got keys: %v", keys(cw.files))
 }
 
 func TestWithPath_Stacks(t *testing.T) {
-	cap := &captureWriter{files: map[string][]byte{}}
-	fw := WithPath(WithPath(cap, "a"), "b")
+	cw := &captureWriter{files: map[string][]byte{}}
+	fw := WithPath(WithPath(cw, "a"), "b")
 
 	require.NoError(t, fw.WriteFile("c.go", NewFile([]byte("x"))))
-	_, ok := cap.files["a/b/c.go"]
-	assert.True(t, ok, "expected file at a/b/c.go; got keys: %v", keys(cap.files))
+	_, ok := cw.files["a/b/c.go"]
+	assert.True(t, ok, "expected file at a/b/c.go; got keys: %v", keys(cw.files))
 }
 
 func TestWithPath_CloseDelegatesToInner(t *testing.T) {
-	cap := &captureWriter{files: map[string][]byte{}}
-	fw := WithPath(cap, "model")
+	cw := &captureWriter{files: map[string][]byte{}}
+	fw := WithPath(cw, "model")
 	assert.NoError(t, fw.Close())
 }
 
