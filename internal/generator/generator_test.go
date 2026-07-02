@@ -477,6 +477,80 @@ components:
 	assert.True(t, containsCollapsed(got, "DeletePet(ctx context.Context, req *client.DeletePetRequest) (*client.DeletePetResponse, error)"))
 }
 
+func TestGenerate_ImplClient(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      parameters:
+        - {name: limit, in: query, schema: {type: integer}}
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pets'}
+        default:
+          description: error
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pet'}
+  /pets/{id}:
+    delete:
+      operationId: deletePet
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '204': {description: deleted}
+components:
+  schemas:
+    Pet: {type: object, properties: {name: {type: string}}}
+    Pets: {type: array, items: {$ref: '#/components/schemas/Pet'}}
+    Error: {type: object, properties: {code: {type: integer}}}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["impl/vanillahttp/client/client.gen.go"])
+	assert.Contains(t, got, "package client")
+	assert.Contains(t, got, "nschugorev/oapigenerator/pkg/httpclient")
+	assert.Contains(t, got, "var _ apiclient.Client = (*Client)(nil)")
+	assert.Contains(t, got, "type Client struct {")
+	assert.Contains(t, got, "func NewClient(baseURL string, opts ...httpclient.Option) (*Client, error) {")
+	assert.True(t, containsCollapsed(got, "func (c *Client) ListPets(ctx context.Context, req *apiclient.ListPetsRequest) (*apiclient.ListPetsResponse, error) {"))
+	assert.Contains(t, got, "q.Set(\"limit\", fmt.Sprint(*req.Limit))")
+	assert.Contains(t, got, "case 200:")
+	assert.Contains(t, got, "result.Response200 = &v")
+	assert.Contains(t, got, "result.ResponseDefault = &v")
+
+	assert.True(t, containsCollapsed(got, "func (c *Client) CreatePet(ctx context.Context, req *apiclient.CreatePetRequest) (*apiclient.CreatePetResponse, error) {"))
+	assert.Contains(t, got, "body, err := json.Marshal(req.Body)")
+	assert.Contains(t, got, "bytes.NewReader(body)")
+	assert.Contains(t, got, "httpReq.Header.Set(\"Content-Type\", \"application/json\")")
+
+	assert.True(t, containsCollapsed(got, "func (c *Client) DeletePet(ctx context.Context, req *apiclient.DeletePetRequest) (*apiclient.DeletePetResponse, error) {"))
+	assert.Contains(t, got, "strings.Replace(path, \"{id}\", url.PathEscape(fmt.Sprint(req.ID)), 1)")
+	assert.Contains(t, got, "result.Response204 = true")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "client.gen.go", files["impl/vanillahttp/client/client.gen.go"], parser.AllErrors)
+	require.NoError(t, err, "impl client should parse as valid Go")
+}
+
 // helpers
 
 type collectWriter struct {

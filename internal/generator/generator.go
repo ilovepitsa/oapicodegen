@@ -82,6 +82,11 @@ func Generate(fw codegen.FileWriter, doc *parser.Document, opts ...Option) error
 		if err := fw.WriteFile("interfaces/server/server.gen.go", srvf); err != nil {
 			return fmt.Errorf("write interfaces/server/server.gen.go: %w", err)
 		}
+
+		implf := g.implClientFile()
+		if err := fw.WriteFile("impl/vanillahttp/client/client.gen.go", implf); err != nil {
+			return fmt.Errorf("write impl/vanillahttp/client/client.gen.go: %w", err)
+		}
 	}
 
 	return nil
