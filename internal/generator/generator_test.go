@@ -349,10 +349,10 @@ components:
 	assert.True(t, containsCollapsed(got, "CreatePet(ctx context.Context, req *CreatePetRequest) (*CreatePetResponse, error)"))
 
 	assert.Contains(t, got, "type ListPetsRequest struct {")
-	assert.True(t, containsCollapsed(got, "Limit *int // query: \"limit\""))
+	assert.True(t, containsCollapsed(got, "Limit *int `query:\"limit\"`"))
 
 	assert.Contains(t, got, "type CreatePetRequest struct {")
-	assert.True(t, containsCollapsed(got, "Body Pet // body"))
+	assert.True(t, containsCollapsed(got, "Body Pet `json:\"-\"`"))
 
 	assert.Contains(t, got, "type ListPetsResponse struct {")
 	assert.True(t, containsCollapsed(got, "Code int"))
@@ -382,7 +382,7 @@ components:
 	files := generateFiles(t, doc)
 	got := string(files["client.gen.go"])
 	assert.True(t, containsCollapsed(got, "GetPetsByID(ctx context.Context, req *GetPetsByIDRequest) (*GetPetsByIDResponse, error)"))
-	assert.True(t, containsCollapsed(got, "ID string // path: \"id\""))
+	assert.True(t, containsCollapsed(got, "ID string `param:\"id\"`"))
 }
 
 func TestGenerate_ClientSugar(t *testing.T) {
@@ -436,6 +436,41 @@ components:
 	files := generateFiles(t, doc)
 	assert.NotContains(t, files, "client.gen.go")
 	assert.NotContains(t, files, "client_sugar.gen.go")
+	assert.NotContains(t, files, "server.gen.go")
+}
+
+func TestGenerate_ServerInterface(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pets'}
+  /pets/{id}:
+    delete:
+      operationId: deletePet
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '204': {description: deleted}
+components:
+  schemas:
+    Pet: {type: object, properties: {name: {type: string}}}
+    Pets: {type: array, items: {$ref: '#/components/schemas/Pet'}}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["server.gen.go"])
+	assert.Contains(t, got, "package petstore")
+	assert.Contains(t, got, "type Server interface {")
+	assert.True(t, containsCollapsed(got, "ListPets(ctx context.Context, req *ListPetsRequest) (*ListPetsResponse, error)"))
+	assert.True(t, containsCollapsed(got, "DeletePet(ctx context.Context, req *DeletePetRequest) (*DeletePetResponse, error)"))
 }
 
 // helpers

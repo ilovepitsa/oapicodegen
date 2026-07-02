@@ -72,7 +72,20 @@ func (g *Generator) renderParamField(w *codegen.BufferWriter, p *parser.Paramete
 		fieldType = "*" + fieldType
 	}
 
-	w.Print("\t", fieldName, " ", fieldType, " // ", p.In, ": \"", p.Name, "\"\n")
+	w.Print("\t", fieldName, " ", fieldType, " `", echoTag(p.In, p.Name), "`\n")
+}
+
+func echoTag(in, name string) string {
+	switch in {
+	case "path":
+		return "param:\"" + name + "\""
+	case "query":
+		return "query:\"" + name + "\""
+	case "header":
+		return "header:\"" + name + "\""
+	default:
+		return ""
+	}
 }
 
 func (g *Generator) renderBodyField(w *codegen.BufferWriter, rb *parser.RequestBody, m *typeMapper) {
@@ -87,7 +100,7 @@ func (g *Generator) renderBodyField(w *codegen.BufferWriter, rb *parser.RequestB
 	if !rb.Required && !strings.HasPrefix(fieldType, "*") && !isInherentlyNilable(fieldType) {
 		fieldType = "*" + fieldType
 	}
-	w.Print("\tBody ", fieldType, " // body\n")
+	w.Print("\tBody ", fieldType, " `json:\"-\"`\n")
 }
 
 func (g *Generator) renderResponseStruct(w *codegen.BufferWriter, op *parser.Operation, m *typeMapper) {

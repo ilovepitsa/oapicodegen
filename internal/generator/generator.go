@@ -72,6 +72,11 @@ func Generate(fw codegen.FileWriter, doc *parser.Document, opts ...Option) error
 		if err := fw.WriteFile("client_sugar.gen.go", sf); err != nil {
 			return fmt.Errorf("write client_sugar.gen.go: %w", err)
 		}
+
+		srvf := g.serverFile()
+		if err := fw.WriteFile("server.gen.go", srvf); err != nil {
+			return fmt.Errorf("write server.gen.go: %w", err)
+		}
 	}
 
 	return nil

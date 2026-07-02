@@ -13,7 +13,7 @@ type Client interface {
 }
 
 type ListPetsRequest struct {
-	Limit *int // query: "limit"
+	Limit *int `query:"limit"`
 }
 
 type ListPetsResponse struct {
@@ -23,7 +23,7 @@ type ListPetsResponse struct {
 }
 
 type CreatePetRequest struct {
-	Body NewPet // body
+	Body NewPet `json:"-"`
 }
 
 type CreatePetResponse struct {
@@ -32,7 +32,7 @@ type CreatePetResponse struct {
 }
 
 type GetPetRequest struct {
-	ID string // path: "id"
+	ID string `param:"id"`
 }
 
 type GetPetResponse struct {
