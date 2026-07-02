@@ -553,6 +553,86 @@ components:
 
 // helpers
 
+func TestGenerate_ImplServer(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      parameters:
+        - {name: limit, in: query, schema: {type: integer}}
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pets'}
+        default:
+          description: error
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pet'}
+  /pets/{id}:
+    delete:
+      operationId: deletePet
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '204': {description: deleted}
+components:
+  schemas:
+    Pet: {type: object, properties: {name: {type: string}}}
+    Pets: {type: array, items: {$ref: '#/components/schemas/Pet'}}
+    Error: {type: object, properties: {code: {type: integer}}}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["impl/vanillahttp/server/server.gen.go"])
+	assert.Contains(t, got, "package server")
+	assert.Contains(t, got, "github.com/labstack/echo/v4")
+	assert.Contains(t, got, "type ServerHTTP struct {")
+	assert.Contains(t, got, "func NewServerHTTP(impl apiserver.Server) *ServerHTTP {")
+	assert.Contains(t, got, "func (s *ServerHTTP) Register(e *echo.Echo) {")
+	assert.Contains(t, got, `e.GET("/pets", s.listPets)`)
+	assert.Contains(t, got, `e.POST("/pets", s.createPet)`)
+	assert.Contains(t, got, `e.DELETE("/pets/:id", s.deletePet)`)
+
+	assert.Contains(t, got, "func (s *ServerHTTP) listPets(c echo.Context) error {")
+	assert.Contains(t, got, "if err := c.Bind(req); err != nil {")
+	assert.Contains(t, got, "resp, err := s.impl.ListPets(c.Request().Context(), req)")
+	assert.Contains(t, got, "return c.JSON(200, resp.Response200)")
+	assert.Contains(t, got, "return c.JSON(resp.Code, resp.ResponseDefault)")
+
+	assert.Contains(t, got, "func (s *ServerHTTP) createPet(c echo.Context) error {")
+	assert.Contains(t, got, "if err := bindBody(c, &req.Body); err != nil {")
+	assert.Contains(t, got, "func bindBody(c echo.Context, dst any) error {")
+	assert.Contains(t, got, "return c.JSON(201, resp.Response201)")
+
+	assert.Contains(t, got, "func (s *ServerHTTP) deletePet(c echo.Context) error {")
+	assert.Contains(t, got, "if resp.Response204 {")
+	assert.Contains(t, got, "return c.NoContent(204)")
+
+	assert.Contains(t, got, "return c.NoContent(resp.Code)")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "server.gen.go", files["impl/vanillahttp/server/server.gen.go"], parser.AllErrors)
+	require.NoError(t, err, "impl server should parse as valid Go")
+}
+
 type collectWriter struct {
 	files map[string][]byte
 }
