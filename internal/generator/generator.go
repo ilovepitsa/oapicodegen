@@ -5,6 +5,8 @@
 // Для каждой схемы из components.schemas генерируется <name>.gen.go с
 // определением Go-типа (struct / interface / type alias). Для oneOf/anyOf
 // дополнительно генерируется <name>_json.gen.go с UnmarshalJSON.
+// Для операций из paths генерируется client.gen.go (интерфейс Client +
+// request/response-структуры) и client_sugar.gen.go (ClientSugared обёртка).
 package generator
 
 import (
@@ -30,7 +32,7 @@ func WithPackage(pkg string) Option {
 	return func(g *Generator) { g.packageName = pkg }
 }
 
-// Generate обходит все схемы из doc.Schemas и пишет Go-файлы через fw.
+// Generate обходит все схемы и операции, пишет Go-файлы через fw.
 func Generate(fw codegen.FileWriter, doc *parser.Document, opts ...Option) error {
 	g := &Generator{
 		doc:         doc,
@@ -57,6 +59,18 @@ func Generate(fw codegen.FileWriter, doc *parser.Document, opts ...Option) error
 			if err := fw.WriteFile(jname, jf); err != nil {
 				return fmt.Errorf("write %s: %w", jname, err)
 			}
+		}
+	}
+
+	if len(doc.Operations) > 0 {
+		cf := g.clientFile()
+		if err := fw.WriteFile("client.gen.go", cf); err != nil {
+			return fmt.Errorf("write client.gen.go: %w", err)
+		}
+
+		sf := g.clientSugarFile()
+		if err := fw.WriteFile("client_sugar.gen.go", sf); err != nil {
+			return fmt.Errorf("write client_sugar.gen.go: %w", err)
 		}
 	}
 

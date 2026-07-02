@@ -301,6 +301,143 @@ components:
 	assert.Contains(t, string(files["foo.gen.go"]), "package mypackage")
 }
 
+func TestGenerate_ClientInterface(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      parameters:
+        - {name: limit, in: query, schema: {type: integer}}
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pets'}
+        default:
+          description: error
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pet'}
+components:
+  schemas:
+    Pet: {type: object, properties: {name: {type: string}}}
+    Pets: {type: array, items: {$ref: '#/components/schemas/Pet'}}
+    Error: {type: object, properties: {code: {type: integer}}}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["client.gen.go"])
+	assert.Contains(t, got, "package petstore")
+	assert.Contains(t, got, "type Client interface {")
+	assert.True(t, containsCollapsed(got, "ListPets(ctx context.Context, req *ListPetsRequest) (*ListPetsResponse, error)"))
+	assert.True(t, containsCollapsed(got, "CreatePet(ctx context.Context, req *CreatePetRequest) (*CreatePetResponse, error)"))
+
+	assert.Contains(t, got, "type ListPetsRequest struct {")
+	assert.True(t, containsCollapsed(got, "Limit *int // query: \"limit\""))
+
+	assert.Contains(t, got, "type CreatePetRequest struct {")
+	assert.True(t, containsCollapsed(got, "Body Pet // body"))
+
+	assert.Contains(t, got, "type ListPetsResponse struct {")
+	assert.True(t, containsCollapsed(got, "Code int"))
+	assert.True(t, containsCollapsed(got, "Response200 *Pets"))
+	assert.True(t, containsCollapsed(got, "ResponseDefault *Error"))
+}
+
+func TestGenerate_ClientInterface_NoOperationId(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets/{id}:
+    get:
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pet'}
+components:
+  schemas:
+    Pet: {type: object, properties: {name: {type: string}}}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["client.gen.go"])
+	assert.True(t, containsCollapsed(got, "GetPetsByID(ctx context.Context, req *GetPetsByIDRequest) (*GetPetsByIDResponse, error)"))
+	assert.True(t, containsCollapsed(got, "ID string // path: \"id\""))
+}
+
+func TestGenerate_ClientSugar(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pets'}
+  /pets/{id}:
+    delete:
+      operationId: deletePet
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '204':
+          description: deleted
+components:
+  schemas:
+    Pet: {type: object, properties: {name: {type: string}}}
+    Pets: {type: array, items: {$ref: '#/components/schemas/Pet'}}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["client_sugar.gen.go"])
+	assert.Contains(t, got, "type ClientSugared struct {")
+	assert.Contains(t, got, "func NewClientSugared(impl Client) *ClientSugared {")
+	assert.True(t, containsCollapsed(got, "func (x *ClientSugared) ListPets(ctx context.Context, req *ListPetsRequest) (*Pets, error) {"))
+	assert.True(t, containsCollapsed(got, "func (x *ClientSugared) DeletePet(ctx context.Context, req *DeletePetRequest) error {"))
+	assert.Contains(t, got, "resp, err := x.impl.ListPets(ctx, req)")
+	assert.Contains(t, got, "return resp.Response200, nil")
+	assert.Contains(t, got, "if resp.Response204 != nil {")
+	assert.Contains(t, got, "return nil")
+}
+
+func TestGenerate_ClientNoOperations(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Foo: {type: object, properties: {x: {type: string}}}
+`)
+	files := generateFiles(t, doc)
+	assert.NotContains(t, files, "client.gen.go")
+	assert.NotContains(t, files, "client_sugar.gen.go")
+}
+
 // helpers
 
 type collectWriter struct {
