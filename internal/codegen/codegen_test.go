@@ -18,36 +18,36 @@ func TestNewFile_EmptyBytes(t *testing.T) {
 	assert.Empty(t, f.Content())
 }
 
-func TestBufferWriter_P_Variadic(t *testing.T) {
+func TestBufferWriter_Print_Variadic(t *testing.T) {
 	b := NewBufferWriter()
-	b.P("resp, err := ", "call()", "\n")
+	b.Print("resp, err := ", "call()", "\n")
 	assert.Equal(t, "resp, err := call()\n", b.String())
 }
 
-func TestBufferWriter_P_SingleString(t *testing.T) {
+func TestBufferWriter_Print_SingleString(t *testing.T) {
 	b := NewBufferWriter()
-	b.P("waitTimeout := ")
+	b.Print("waitTimeout := ")
 	assert.Equal(t, "waitTimeout := ", b.String())
 }
 
-func TestBufferWriter_W(t *testing.T) {
+func TestBufferWriter_WriteString(t *testing.T) {
 	b := NewBufferWriter()
-	b.W("line1")
-	b.W("line2")
+	b.WriteString("line1")
+	b.WriteString("line2")
 	assert.Equal(t, "line1line2", b.String())
 }
 
-func TestBufferWriter_NL(t *testing.T) {
+func TestBufferWriter_NewLine(t *testing.T) {
 	b := NewBufferWriter()
-	b.W("line1")
-	b.NL()
-	b.W("line2")
+	b.WriteString("line1")
+	b.NewLine()
+	b.WriteString("line2")
 	assert.Equal(t, "line1\nline2", b.String())
 }
 
 func TestBufferWriter_Content_Bytes(t *testing.T) {
 	b := NewBufferWriter()
-	b.P("data")
+	b.Print("data")
 	assert.True(t, bytes.Equal([]byte("data"), b.Content()))
 }
 
@@ -57,7 +57,7 @@ func TestBufferWriter_ImplementsFile(t *testing.T) {
 
 func TestBufferWriter_Len_Reset(t *testing.T) {
 	b := NewBufferWriter()
-	b.P("hello")
+	b.Print("hello")
 	assert.Equal(t, 5, b.Len())
 	b.Reset()
 	assert.Zero(t, b.Len())
@@ -80,7 +80,7 @@ func TestWithPath_PrefixesName(t *testing.T) {
 	fw := WithPath(cw, "model")
 
 	b := NewBufferWriter()
-	b.P("package model")
+	b.Print("package model")
 	require.NoError(t, fw.WriteFile("user.gen.go", b))
 	_, ok := cw.files["model/user.gen.go"]
 	assert.True(t, ok, "expected file at model/user.gen.go; got keys: %v", keys(cw.files))

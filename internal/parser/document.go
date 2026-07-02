@@ -94,23 +94,24 @@ type Property struct {
 // Ref непустой, если схема — ссылка на другую ($ref). При этом остальные
 // поля могут быть заполнены из целевой схемы (если удалось разрешить).
 type Schema struct {
-	Name        string
-	Description string
-	Type        string
-	Format      string
-	Properties  []*Property
-	Required    []string
-	Items       *Schema
-	Enum        []any
-	Default     any
-	Nullable    bool
-	Deprecated  bool
-	ReadOnly    bool
-	WriteOnly   bool
-	AllOf       []*Schema
-	OneOf       []*Schema
-	AnyOf       []*Schema
-	Ref         string
+	Name                 string
+	Description          string
+	Type                 string
+	Format               string
+	Properties           []*Property
+	Required             []string
+	Items                *Schema
+	Enum                 []any
+	Default              any
+	Nullable             bool
+	Deprecated           bool
+	ReadOnly             bool
+	WriteOnly            bool
+	AllOf                []*Schema
+	OneOf                []*Schema
+	AnyOf                []*Schema
+	Ref                  string
+	AdditionalProperties *Schema
 }
 
 // Parse парсит OpenAPI 3.x документ из байтов.

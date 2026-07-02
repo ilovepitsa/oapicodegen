@@ -57,6 +57,10 @@ func fillSchema(s *Schema, sh *highbase.Schema) {
 		s.Items = schemaFromProxy(sh.Items.A)
 	}
 
+	if sh.AdditionalProperties != nil && sh.AdditionalProperties.IsA() && sh.AdditionalProperties.A != nil {
+		s.AdditionalProperties = schemaFromProxy(sh.AdditionalProperties.A)
+	}
+
 	if sh.Properties != nil {
 		for pair := sh.Properties.First(); pair != nil; pair = pair.Next() {
 			s.Properties = append(s.Properties, &Property{

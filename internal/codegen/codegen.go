@@ -1,6 +1,7 @@
 // Package codegen — ядро абстракций вывода сгенерированных файлов: интерфейс
-// File, FileWriter (запись в FS), Writer (код-райтер с P/W/NL), BufferWriter
-// (Writer + File), WithPath (префиксация путей), NoopFileWriter (dry-run).
+// File, FileWriter (запись в FS), Writer (код-райтер с Print/WriteString/
+// NewLine), BufferWriter (Writer + File), WithPath (префиксация путей),
+// NoopFileWriter (dry-run).
 // Замена git.mws-team.ru/mws/devp/platform-go/pkg/codegen (без gogen — он в T7).
 package codegen
 
@@ -37,19 +38,19 @@ type Writer struct {
 	buf bytes.Buffer
 }
 
-// P пишет args через fmt.Fprint (без разделителей между args).
-// Удобно для кодогенерации: w.P("resp, err := ", call, "\n").
-func (w *Writer) P(args ...any) {
+// Print пишет args через fmt.Fprint (без разделителей между args).
+// Удобно для кодогенерации: w.Print("resp, err := ", call, "\n").
+func (w *Writer) Print(args ...any) {
 	_, _ = fmt.Fprint(&w.buf, args...)
 }
 
-// W пишет строку s как есть.
-func (w *Writer) W(s string) {
+// WriteString пишет строку s как есть.
+func (w *Writer) WriteString(s string) {
 	w.buf.WriteString(s)
 }
 
-// NL пишет один перевод строки.
-func (w *Writer) NL() {
+// NewLine пишет один перевод строки.
+func (w *Writer) NewLine() {
 	w.buf.WriteByte('\n')
 }
 
