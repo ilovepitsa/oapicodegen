@@ -10,7 +10,7 @@ import (
 func (g *Generator) serverFile() codegen.File {
 	m := &typeMapper{}
 	m.addImport("context", "")
-	body := g.renderServer(m)
+	body := g.renderServer()
 	return g.factory.Create(&gogen.File{
 		Package: g.packageName,
 		Imports: m.imports,
@@ -18,7 +18,7 @@ func (g *Generator) serverFile() codegen.File {
 	})
 }
 
-func (g *Generator) renderServer(m *typeMapper) []byte {
+func (g *Generator) renderServer() []byte {
 	w := codegen.NewBufferWriter()
 
 	w.Print("type Server interface {\n")

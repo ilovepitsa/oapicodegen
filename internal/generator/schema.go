@@ -36,7 +36,7 @@ func (g *Generator) renderSchema(sh *parser.Schema, m *typeMapper) []byte {
 	case sh.Type == "array":
 		g.renderArraySchema(w, sh, m, name)
 	case len(sh.Enum) > 0:
-		g.renderEnum(w, sh, m, name)
+		g.renderEnum(w, sh, name)
 	case sh.Type == "object" && len(sh.Properties) == 0:
 		g.renderMapAlias(w, sh, m, name)
 	case sh.Type == "object" || len(sh.Properties) > 0:
@@ -79,8 +79,8 @@ func (g *Generator) renderField(w *codegen.BufferWriter, p *parser.Property, m *
 	w.Print(fieldName, " ", fieldType, " `json:\"", p.Name, omitEmpty, "\" yaml:\"", p.Name, omitEmpty, "\"`\n")
 }
 
-func (g *Generator) renderEnum(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) {
-	baseGo := enumBaseType(sh, m)
+func (g *Generator) renderEnum(w *codegen.BufferWriter, sh *parser.Schema, name string) {
+	baseGo := enumBaseType(sh)
 	w.Print("type ", name, " ", baseGo, "\n\n")
 
 	w.Print("const (\n")
@@ -90,7 +90,7 @@ func (g *Generator) renderEnum(w *codegen.BufferWriter, sh *parser.Schema, m *ty
 	w.Print(")\n")
 }
 
-func enumBaseType(sh *parser.Schema, m *typeMapper) string {
+func enumBaseType(sh *parser.Schema) string {
 	switch sh.Type {
 	case "integer":
 		switch sh.Format {
