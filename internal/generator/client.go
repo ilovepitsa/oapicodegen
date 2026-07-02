@@ -11,11 +11,11 @@ import (
 
 // clientFile генерирует client.gen.go: интерфейс Client + request/response-структуры.
 func (g *Generator) clientFile() codegen.File {
-	m := &typeMapper{}
+	m := &typeMapper{currentPkg: "client", modulePath: g.modulePath}
 	m.addImport("context", "")
 	body := g.renderClient(m)
 	return g.factory.Create(&gogen.File{
-		Package: g.packageName,
+		Package: "client",
 		Imports: m.imports,
 		Body:    body,
 	})

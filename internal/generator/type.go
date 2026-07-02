@@ -8,8 +8,12 @@ import (
 )
 
 // typeMapper мапит parser.Schema → Go-тип, собирая нужные импорты.
+// currentPkg — пакет, в который сейчас рендерится код ("model" / "client" / "server").
+// modulePath — Go import-path корня генерируемого кода (для ссылок на model).
 type typeMapper struct {
-	imports []gogen.Import
+	currentPkg string
+	modulePath string
+	imports    []gogen.Import
 }
 
 func (m *typeMapper) addImport(path, alias string) {
@@ -43,12 +47,12 @@ func isInherentlyNilable(t string) bool {
 // baseType возвращает Go-тип без учёта nullable.
 func (m *typeMapper) baseType(s *parser.Schema) string {
 	if s.Ref != "" {
-		return goName(refToName(s.Ref))
+		return m.qualifyModelType(refToName(s.Ref))
 	}
 
 	if len(s.OneOf) > 0 || len(s.AnyOf) > 0 || len(s.AllOf) > 0 {
 		if s.Name != "" {
-			return goName(s.Name)
+			return m.qualifyModelType(s.Name)
 		}
 		return "any"
 	}
@@ -68,11 +72,11 @@ func (m *typeMapper) baseType(s *parser.Schema) string {
 	}
 
 	if s.Type == "object" && s.Name != "" {
-		return goName(s.Name)
+		return m.qualifyModelType(s.Name)
 	}
 
 	if len(s.Enum) > 0 && s.Name != "" {
-		return goName(s.Name)
+		return m.qualifyModelType(s.Name)
 	}
 
 	switch s.Type {
@@ -106,6 +110,17 @@ func (m *typeMapper) baseType(s *parser.Schema) string {
 	}
 
 	return "any"
+}
+
+// qualifyModelType добавляет префикс "model." и импорт, если текущий пакет
+// не "model". name — Go-имя схемы (до квалификации).
+func (m *typeMapper) qualifyModelType(name string) string {
+	goName := goName(name)
+	if m.currentPkg == "model" || m.modulePath == "" {
+		return goName
+	}
+	m.addImport(m.modulePath+"/model", "model")
+	return "model." + goName
 }
 
 func refToName(ref string) string {

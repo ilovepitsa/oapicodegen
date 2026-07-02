@@ -28,15 +28,17 @@ func containsCollapsed(got, want string) bool {
 	return strings.Contains(collapseWS(got), collapseWS(want))
 }
 
+const testModulePath = "nschugorev/oapigenerator/internal/generator/testdata/golden/petstore"
+
 func TestGenerate_PetstoreGolden(t *testing.T) {
 	data := mustReadFile(t, "testdata/petstore.yaml")
 	doc, err := oapiparser.Parse(data)
 	require.NoError(t, err)
 
-	dir := golden.NewDir(t, golden.WithPath("testdata/golden/petstore"))
+	dir := golden.NewDir(t, golden.WithPath("testdata/golden/petstore"), golden.WithRecreateOnUpdate())
 	fw := golden.NewCodegenFS(t, dir)
 
-	require.NoError(t, Generate(fw, doc, WithPackage("petstore")))
+	require.NoError(t, Generate(fw, doc, WithModulePath(testModulePath)))
 }
 
 func TestGenerate_SimpleStruct(t *testing.T) {
@@ -55,8 +57,8 @@ components:
         tag: {type: string, nullable: true}
 `)
 	files := generateFiles(t, doc)
-	got := string(files["pet.gen.go"])
-	assert.Contains(t, got, "package petstore")
+	got := string(files["model/pet.gen.go"])
+	assert.Contains(t, got, "package model")
 	assert.Contains(t, got, "type Pet struct {")
 	assert.True(t, containsCollapsed(got, "ID int64 `json:\"id\""))
 	assert.True(t, containsCollapsed(got, "Name string `json:\"name\""))
@@ -76,7 +78,7 @@ components:
       default: active
 `)
 	files := generateFiles(t, doc)
-	got := string(files["status.gen.go"])
+	got := string(files["model/status.gen.go"])
 	assert.Contains(t, got, "type Status string")
 	assert.True(t, containsCollapsed(got, "StatusActive Status = \"active\""))
 	assert.True(t, containsCollapsed(got, "StatusInactive Status = \"inactive\""))
@@ -95,7 +97,7 @@ components:
       enum: [1, 2, 3]
 `)
 	files := generateFiles(t, doc)
-	got := string(files["priority.gen.go"])
+	got := string(files["model/priority.gen.go"])
 	assert.Contains(t, got, "type Priority int")
 	assert.True(t, containsCollapsed(got, "Priority1 Priority = 1"))
 }
@@ -115,7 +117,7 @@ components:
       properties: {name: {type: string}}
 `)
 	files := generateFiles(t, doc)
-	got := string(files["pet_collection.gen.go"])
+	got := string(files["model/pet_collection.gen.go"])
 	assert.Contains(t, got, "type PetCollection []Pet")
 }
 
@@ -134,15 +136,15 @@ components:
         - {$ref: '#/components/schemas/Error'}
 `)
 	files := generateFiles(t, doc)
-	require.Contains(t, files, "either.gen.go")
-	require.Contains(t, files, "either_json.gen.go")
+	require.Contains(t, files, "model/either.gen.go")
+	require.Contains(t, files, "model/either_json.gen.go")
 
-	got := string(files["either.gen.go"])
+	got := string(files["model/either.gen.go"])
 	assert.Contains(t, got, "type Either struct {")
 	assert.True(t, containsCollapsed(got, "Pet *Pet `json:\"-,inline\"`"))
 	assert.True(t, containsCollapsed(got, "Error *Error `json:\"-,inline\"`"))
 
-	jgot := string(files["either_json.gen.go"])
+	jgot := string(files["model/either_json.gen.go"])
 	assert.Contains(t, jgot, "func (m *Either) UnmarshalJSON(data []byte) error {")
 	assert.Contains(t, jgot, "var v_0 Pet")
 	assert.Contains(t, jgot, "m.Pet = &v_0")
@@ -164,8 +166,8 @@ components:
         - {$ref: '#/components/schemas/B'}
 `)
 	files := generateFiles(t, doc)
-	require.Contains(t, files, "ab_json.gen.go")
-	assert.Contains(t, string(files["ab.gen.go"]), "type AB struct {")
+	require.Contains(t, files, "model/ab_json.gen.go")
+	assert.Contains(t, string(files["model/ab.gen.go"]), "type AB struct {")
 }
 
 func TestGenerate_AllOf(t *testing.T) {
@@ -186,7 +188,7 @@ components:
           properties: {name: {type: string}}
 `)
 	files := generateFiles(t, doc)
-	got := string(files["extended.gen.go"])
+	got := string(files["model/extended.gen.go"])
 	assert.Contains(t, got, "type Extended struct {")
 	assert.Contains(t, got, "Base")
 	assert.True(t, containsCollapsed(got, "Name *string `json:\"name,omitempty\""))
@@ -204,7 +206,7 @@ components:
       properties: {at: {type: string, format: date-time}}
 `)
 	files := generateFiles(t, doc)
-	got := string(files["event.gen.go"])
+	got := string(files["model/event.gen.go"])
 	assert.True(t, containsCollapsed(got, "At *time.Time"))
 	assert.Contains(t, got, `"time"`)
 }
@@ -221,7 +223,7 @@ components:
       additionalProperties: {type: string}
 `)
 	files := generateFiles(t, doc)
-	got := string(files["bag.gen.go"])
+	got := string(files["model/bag.gen.go"])
 	assert.Contains(t, got, "type Bag map[string]string")
 }
 
@@ -242,7 +244,7 @@ components:
             items: {type: integer}
 `)
 	files := generateFiles(t, doc)
-	got := string(files["matrix.gen.go"])
+	got := string(files["model/matrix.gen.go"])
 	assert.True(t, containsCollapsed(got, "Rows [][]int"))
 }
 
@@ -284,11 +286,11 @@ info: {title: t, version: '1'}
 paths: {}
 `)
 	fw := &collectWriter{files: map[string][]byte{}}
-	require.NoError(t, Generate(fw, doc, WithPackage("empty")))
+	require.NoError(t, Generate(fw, doc, WithModulePath(testModulePath)))
 	assert.Empty(t, fw.files)
 }
 
-func TestGenerate_WithPackageOption(t *testing.T) {
+func TestGenerate_WithModulePath(t *testing.T) {
 	doc := parseSpec(t, `
 openapi: 3.0.3
 info: {title: t, version: '1'}
@@ -297,8 +299,8 @@ components:
   schemas:
     Foo: {type: object, properties: {x: {type: string}}}
 `)
-	files := generateFilesWithPkg(t, doc, "mypackage")
-	assert.Contains(t, string(files["foo.gen.go"]), "package mypackage")
+	files := generateFiles(t, doc)
+	assert.Contains(t, string(files["model/foo.gen.go"]), "package model")
 }
 
 func TestGenerate_ClientInterface(t *testing.T) {
@@ -342,8 +344,8 @@ components:
     Error: {type: object, properties: {code: {type: integer}}}
 `)
 	files := generateFiles(t, doc)
-	got := string(files["client.gen.go"])
-	assert.Contains(t, got, "package petstore")
+	got := string(files["interfaces/client/client.gen.go"])
+	assert.Contains(t, got, "package client")
 	assert.Contains(t, got, "type Client interface {")
 	assert.True(t, containsCollapsed(got, "ListPets(ctx context.Context, req *ListPetsRequest) (*ListPetsResponse, error)"))
 	assert.True(t, containsCollapsed(got, "CreatePet(ctx context.Context, req *CreatePetRequest) (*CreatePetResponse, error)"))
@@ -352,12 +354,12 @@ components:
 	assert.True(t, containsCollapsed(got, "Limit *int `query:\"limit\"`"))
 
 	assert.Contains(t, got, "type CreatePetRequest struct {")
-	assert.True(t, containsCollapsed(got, "Body Pet `json:\"-\"`"))
+	assert.True(t, containsCollapsed(got, "Body model.Pet `json:\"-\"`"))
 
 	assert.Contains(t, got, "type ListPetsResponse struct {")
 	assert.True(t, containsCollapsed(got, "Code int"))
-	assert.True(t, containsCollapsed(got, "Response200 *Pets"))
-	assert.True(t, containsCollapsed(got, "ResponseDefault *Error"))
+	assert.True(t, containsCollapsed(got, "Response200 *model.Pets"))
+	assert.True(t, containsCollapsed(got, "ResponseDefault *model.Error"))
 }
 
 func TestGenerate_ClientInterface_NoOperationId(t *testing.T) {
@@ -380,7 +382,7 @@ components:
     Pet: {type: object, properties: {name: {type: string}}}
 `)
 	files := generateFiles(t, doc)
-	got := string(files["client.gen.go"])
+	got := string(files["interfaces/client/client.gen.go"])
 	assert.True(t, containsCollapsed(got, "GetPetsByID(ctx context.Context, req *GetPetsByIDRequest) (*GetPetsByIDResponse, error)"))
 	assert.True(t, containsCollapsed(got, "ID string `param:\"id\"`"))
 }
@@ -413,10 +415,11 @@ components:
     Pets: {type: array, items: {$ref: '#/components/schemas/Pet'}}
 `)
 	files := generateFiles(t, doc)
-	got := string(files["client_sugar.gen.go"])
+	got := string(files["interfaces/client/client_sugar.gen.go"])
+	assert.Contains(t, got, "package client")
 	assert.Contains(t, got, "type ClientSugared struct {")
 	assert.Contains(t, got, "func NewClientSugared(impl Client) *ClientSugared {")
-	assert.True(t, containsCollapsed(got, "func (x *ClientSugared) ListPets(ctx context.Context, req *ListPetsRequest) (*Pets, error) {"))
+	assert.True(t, containsCollapsed(got, "func (x *ClientSugared) ListPets(ctx context.Context, req *ListPetsRequest) (*model.Pets, error) {"))
 	assert.True(t, containsCollapsed(got, "func (x *ClientSugared) DeletePet(ctx context.Context, req *DeletePetRequest) error {"))
 	assert.Contains(t, got, "resp, err := x.impl.ListPets(ctx, req)")
 	assert.Contains(t, got, "return resp.Response200, nil")
@@ -434,9 +437,10 @@ components:
     Foo: {type: object, properties: {x: {type: string}}}
 `)
 	files := generateFiles(t, doc)
-	assert.NotContains(t, files, "client.gen.go")
-	assert.NotContains(t, files, "client_sugar.gen.go")
-	assert.NotContains(t, files, "server.gen.go")
+	assert.NotContains(t, files, "interfaces/client/client.gen.go")
+	assert.NotContains(t, files, "interfaces/client/client_sugar.gen.go")
+	assert.NotContains(t, files, "interfaces/server/server.gen.go")
+	assert.Contains(t, files, "model/foo.gen.go")
 }
 
 func TestGenerate_ServerInterface(t *testing.T) {
@@ -466,11 +470,11 @@ components:
     Pets: {type: array, items: {$ref: '#/components/schemas/Pet'}}
 `)
 	files := generateFiles(t, doc)
-	got := string(files["server.gen.go"])
-	assert.Contains(t, got, "package petstore")
+	got := string(files["interfaces/server/server.gen.go"])
+	assert.Contains(t, got, "package server")
 	assert.Contains(t, got, "type Server interface {")
-	assert.True(t, containsCollapsed(got, "ListPets(ctx context.Context, req *ListPetsRequest) (*ListPetsResponse, error)"))
-	assert.True(t, containsCollapsed(got, "DeletePet(ctx context.Context, req *DeletePetRequest) (*DeletePetResponse, error)"))
+	assert.True(t, containsCollapsed(got, "ListPets(ctx context.Context, req *client.ListPetsRequest) (*client.ListPetsResponse, error)"))
+	assert.True(t, containsCollapsed(got, "DeletePet(ctx context.Context, req *client.DeletePetRequest) (*client.DeletePetResponse, error)"))
 }
 
 // helpers
@@ -495,13 +499,8 @@ func parseSpec(t *testing.T, spec string) *oapiparser.Document {
 
 func generateFiles(t *testing.T, doc *oapiparser.Document) map[string][]byte {
 	t.Helper()
-	return generateFilesWithPkg(t, doc, "petstore")
-}
-
-func generateFilesWithPkg(t *testing.T, doc *oapiparser.Document, pkg string) map[string][]byte {
-	t.Helper()
 	fw := &collectWriter{files: map[string][]byte{}}
-	require.NoError(t, Generate(fw, doc, WithPackage(pkg)))
+	require.NoError(t, Generate(fw, doc, WithModulePath(testModulePath)))
 	return fw.files
 }
 

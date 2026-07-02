@@ -14,10 +14,10 @@ func needsJSONMethods(sh *parser.Schema) bool {
 // jsonMethodsFile генерирует MarshalJSON/UnmarshalJSON для union-схем (oneOf/anyOf).
 // Методы на *<Name> валидны, т.к. union рендерится как struct, не interface.
 func (g *Generator) jsonMethodsFile(sh *parser.Schema) codegen.File {
-	m := &typeMapper{}
+	m := &typeMapper{currentPkg: "model", modulePath: g.modulePath}
 	body := g.renderJSONMethods(sh, m)
 	return g.factory.Create(&gogen.File{
-		Package: g.packageName,
+		Package: "model",
 		Imports: m.imports,
 		Body:    body,
 	})
