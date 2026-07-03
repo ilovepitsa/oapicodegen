@@ -39,13 +39,13 @@ go run ./cmd/oapigen \
 
 | Флаг | По умолчанию | Назначение |
 |------|--------------|------------|
-| `-input` | `./mws` | Корень каталога со спецификациями |
-| `-output` | `./go/mws` | Каталог для сгенерированного кода |
-| `-import-prefix` | `nschugorev/oapigenerator/go/mws` | Префикс Go-import |
-| `-common-params-path` | `common/src/openapi/parameters/list.yaml` | Список общих параметров |
-| `-dry-run` | `false` | Не записывать изменения на FS |
-| `-debug-json` | `false` | Писать отладочные JSON-файлы |
-| `-public` | `false` | Генерация публичного SDK |
+| `-input` | — | Путь к OpenAPI 3.x spec-файлу (обязательный) |
+| `-output` | — | Каталог для сгенерированного кода (обязательный, если не `-dry-run`) |
+| `-import-prefix` | — | Go import-path префикс для пакетов (обязательный) |
+| `-dry-run` | `false` | Парсить и генерировать без записи на FS |
+| `-log-level` | `info` | debug\|info\|warn\|error\|fatal |
+| `-log-format` | `console` | console\|json |
+| `-log-development` | `false` | zap development mode (stacktraces, no sampling) |
 
 ## Make-таргеты
 
