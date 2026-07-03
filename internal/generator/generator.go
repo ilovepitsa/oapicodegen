@@ -92,6 +92,16 @@ func Generate(fw codegen.FileWriter, doc *parser.Document, opts ...Option) error
 		if err := fw.WriteFile("impl/vanillahttp/server/server.gen.go", srvImplf); err != nil {
 			return fmt.Errorf("write impl/vanillahttp/server/server.gen.go: %w", err)
 		}
+
+		mockClientF := g.mockClientFile()
+		if err := fw.WriteFile("impl/mocks/client/mocks.gen.go", mockClientF); err != nil {
+			return fmt.Errorf("write impl/mocks/client/mocks.gen.go: %w", err)
+		}
+
+		mockServerF := g.mockServerFile()
+		if err := fw.WriteFile("impl/mocks/server/mocks.gen.go", mockServerF); err != nil {
+			return fmt.Errorf("write impl/mocks/server/mocks.gen.go: %w", err)
+		}
 	}
 
 	return nil

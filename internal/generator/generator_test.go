@@ -633,6 +633,61 @@ components:
 	require.NoError(t, err, "impl server should parse as valid Go")
 }
 
+func TestGenerate_Mocks(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pets'}
+  /pets/{id}:
+    delete:
+      operationId: deletePet
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '204': {description: deleted}
+components:
+  schemas:
+    Pet: {type: object, properties: {name: {type: string}}}
+    Pets: {type: array, items: {$ref: '#/components/schemas/Pet'}}
+`)
+	files := generateFiles(t, doc)
+
+	clientGot := string(files["impl/mocks/client/mocks.gen.go"])
+	assert.Contains(t, clientGot, "package mock_client")
+	assert.Contains(t, clientGot, "var _ apiclient.Client = (*MockClient)(nil)")
+	assert.Contains(t, clientGot, "type MockClient struct {")
+	assert.Contains(t, clientGot, "ctrl     *gomock.Controller")
+	assert.Contains(t, clientGot, "recorder *MockClientMockRecorder")
+	assert.Contains(t, clientGot, "func NewMockClient(ctrl *gomock.Controller) *MockClient {")
+	assert.Contains(t, clientGot, "func (m *MockClient) EXPECT() *MockClientMockRecorder {")
+	assert.True(t, containsCollapsed(clientGot, "func (m *MockClient) ListPets(arg0 context.Context, arg1 *apiclient.ListPetsRequest) (*apiclient.ListPetsResponse, error) {"))
+	assert.Contains(t, clientGot, `ret := m.ctrl.Call(m, "ListPets", arg0, arg1)`)
+	assert.Contains(t, clientGot, "func (mr *MockClientMockRecorder) ListPets(arg0, arg1 any) *gomock.Call {")
+	assert.Contains(t, clientGot, `mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPets", reflect.TypeOf((*MockClient)(nil).ListPets), arg0, arg1)`)
+
+	serverGot := string(files["impl/mocks/server/mocks.gen.go"])
+	assert.Contains(t, serverGot, "package mock_server")
+	assert.Contains(t, serverGot, "var _ apiserver.Server = (*MockServer)(nil)")
+	assert.Contains(t, serverGot, "type MockServer struct {")
+	assert.True(t, containsCollapsed(serverGot, "func (m *MockServer) DeletePet(arg0 context.Context, arg1 *apiclient.DeletePetRequest) (*apiclient.DeletePetResponse, error) {"))
+	assert.Contains(t, serverGot, "func (mr *MockServerMockRecorder) DeletePet(arg0, arg1 any) *gomock.Call {")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "client_mocks.gen.go", files["impl/mocks/client/mocks.gen.go"], parser.AllErrors)
+	require.NoError(t, err, "client mocks should parse as valid Go")
+	_, err = parser.ParseFile(fset, "server_mocks.gen.go", files["impl/mocks/server/mocks.gen.go"], parser.AllErrors)
+	require.NoError(t, err, "server mocks should parse as valid Go")
+}
+
 type collectWriter struct {
 	files map[string][]byte
 }
