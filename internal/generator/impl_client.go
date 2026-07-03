@@ -6,7 +6,7 @@ import (
 	"nschugorev/oapigenerator/internal/parser"
 )
 
-// implClientFile генерирует impl/vanillahttp/client/client.gen.go:
+// implClientFile генерирует impl/httpclient/client.gen.go:
 // реализацию client.Client через pkg/httpclient.
 func (g *Generator) implClientFile() codegen.File {
 	m := &typeMapper{currentPkg: "implclient", modulePath: g.modulePath}

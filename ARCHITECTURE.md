@@ -43,8 +43,8 @@ OpenAPI spec (YAML)
 | Schema | T13 | `model/*.gen.go` — типы + JSON-маршалинг |
 | Client interfaces | T15 | `interfaces/client/*.gen.go` |
 | Server interfaces | T16 | `interfaces/server/*.gen.go` |
-| HTTP client | T17 | `impl/vanillahttp/client/*.gen.go` |
-| HTTP server | T18 | `impl/vanillahttp/server/*.gen.go` |
+| HTTP client | T17 | `impl/httpclient/*.gen.go` |
+| HTTP server | T18 | `impl/echoserver/*.gen.go` |
 | Mocks | T19 | `impl/mocks/{client,server}/*.gen.go` |
 | SDK | T20 | `sdk/*.gen.go` |
 

@@ -1,0 +1,90 @@
+openapi: 3.0.3
+info:
+  title: minimal
+  version: '1.0.0'
+paths:
+  /items:
+    get:
+      operationId: listItems
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100}}
+        - {name: tag, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: list of items
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Items'}
+        '400': {description: bad request}
+    post:
+      operationId: createItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ItemCreate'}
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Item'}
+        '400': {description: bad request}
+  /items/{id}:
+    get:
+      operationId: getItem
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: item
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Item'}
+        '404': {description: not found}
+    delete:
+      operationId: deleteItem
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '204': {description: deleted}
+components:
+  schemas:
+    Item:
+      type: object
+      required: [id, name, kind]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        kind: {$ref: '#/components/schemas/Kind'}
+        tag: {type: string, nullable: true}
+        metadata: {type: object, additionalProperties: {type: string}}
+    ItemCreate:
+      type: object
+      required: [name, kind]
+      properties:
+        name: {type: string}
+        kind: {$ref: '#/components/schemas/Kind'}
+        tag: {type: string, nullable: true}
+    Items:
+      type: array
+      items: {$ref: '#/components/schemas/Item'}
+    Kind:
+      type: string
+      enum: [active, archived, deleted]
+    Event:
+      oneOf:
+        - {$ref: '#/components/schemas/CreatedEvent'}
+        - {$ref: '#/components/schemas/DeletedEvent'}
+    CreatedEvent:
+      type: object
+      required: [type, itemId]
+      properties:
+        type: {type: string, enum: [created]}
+        itemId: {type: string}
+    DeletedEvent:
+      type: object
+      required: [type, itemId]
+      properties:
+        type: {type: string, enum: [deleted]}
+        itemId: {type: string}

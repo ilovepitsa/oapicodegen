@@ -525,7 +525,7 @@ components:
     Error: {type: object, properties: {code: {type: integer}}}
 `)
 	files := generateFiles(t, doc)
-	got := string(files["impl/vanillahttp/client/client.gen.go"])
+	got := string(files["impl/httpclient/client.gen.go"])
 	assert.Contains(t, got, "package client")
 	assert.Contains(t, got, "nschugorev/oapigenerator/pkg/httpclient")
 	assert.Contains(t, got, "var _ apiclient.Client = (*Client)(nil)")
@@ -547,7 +547,7 @@ components:
 	assert.Contains(t, got, "result.Response204 = true")
 
 	fset := token.NewFileSet()
-	_, err := parser.ParseFile(fset, "client.gen.go", files["impl/vanillahttp/client/client.gen.go"], parser.AllErrors)
+	_, err := parser.ParseFile(fset, "client.gen.go", files["impl/httpclient/client.gen.go"], parser.AllErrors)
 	require.NoError(t, err, "impl client should parse as valid Go")
 }
 
@@ -601,7 +601,7 @@ components:
     Error: {type: object, properties: {code: {type: integer}}}
 `)
 	files := generateFiles(t, doc)
-	got := string(files["impl/vanillahttp/server/server.gen.go"])
+	got := string(files["impl/echoserver/server.gen.go"])
 	assert.Contains(t, got, "package server")
 	assert.Contains(t, got, "github.com/labstack/echo/v4")
 	assert.Contains(t, got, "type ServerHTTP struct {")
@@ -629,7 +629,7 @@ components:
 	assert.Contains(t, got, "return c.NoContent(resp.Code)")
 
 	fset := token.NewFileSet()
-	_, err := parser.ParseFile(fset, "server.gen.go", files["impl/vanillahttp/server/server.gen.go"], parser.AllErrors)
+	_, err := parser.ParseFile(fset, "server.gen.go", files["impl/echoserver/server.gen.go"], parser.AllErrors)
 	require.NoError(t, err, "impl server should parse as valid Go")
 }
 

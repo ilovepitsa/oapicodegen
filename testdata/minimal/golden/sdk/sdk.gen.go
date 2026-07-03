@@ -4,9 +4,9 @@ package sdk
 
 import (
 	"fmt"
-	implclient "nschugorev/oapigenerator/internal/generator/testdata/golden/petstore/impl/httpclient"
-	apiclient "nschugorev/oapigenerator/internal/generator/testdata/golden/petstore/interfaces/client"
 	httpclient "nschugorev/oapigenerator/pkg/httpclient"
+	implclient "nschugorev/oapigenerator/testdata/minimal/golden/impl/httpclient"
+	apiclient "nschugorev/oapigenerator/testdata/minimal/golden/interfaces/client"
 )
 
 type SDK struct {

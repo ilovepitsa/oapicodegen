@@ -8,7 +8,7 @@ import (
 	"nschugorev/oapigenerator/internal/parser"
 )
 
-// implServerFile генерирует impl/vanillahttp/server/server.gen.go:
+// implServerFile генерирует impl/echoserver/server.gen.go:
 // Echo-обработчики, делегирующие в apiserver.Server.
 func (g *Generator) implServerFile() codegen.File {
 	m := &typeMapper{currentPkg: "implserver", modulePath: g.modulePath}
