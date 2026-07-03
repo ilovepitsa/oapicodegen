@@ -50,7 +50,7 @@ func TestRun_DryRunNoFiles(t *testing.T) {
 func TestRun_MissingInput(t *testing.T) {
 	stderr := os.NewFile(0, "/dev/null")
 	err := run([]string{}, stderr)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "-input is required")
 }
 
@@ -64,7 +64,7 @@ func TestRun_MissingOutputWithoutDryRun(t *testing.T) {
 		"-input", spec,
 		"-import-prefix", "github.com/foo/bar/gen",
 	}, stderr)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "-output is required")
 }
 
@@ -78,7 +78,7 @@ func TestRun_MissingImportPrefix(t *testing.T) {
 		"-input", spec,
 		"-output", filepath.Join(tmp, "gen"),
 	}, stderr)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "-import-prefix is required")
 }
 

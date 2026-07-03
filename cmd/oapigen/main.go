@@ -19,7 +19,7 @@ import (
 
 func Main() int {
 	if err := run(os.Args[1:], os.Stderr); err != nil {
-		fmt.Fprintf(os.Stderr, "oapigen: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "oapigen: %v\n", err)
 		return 1
 	}
 	return 0
