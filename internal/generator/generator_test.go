@@ -688,6 +688,49 @@ components:
 	require.NoError(t, err, "server mocks should parse as valid Go")
 }
 
+func TestGenerate_SDK(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pets'}
+  /pets/{id}:
+    delete:
+      operationId: deletePet
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '204': {description: deleted}
+components:
+  schemas:
+    Pet: {type: object, properties: {name: {type: string}}}
+    Pets: {type: array, items: {$ref: '#/components/schemas/Pet'}}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["sdk/sdk.gen.go"])
+	assert.Contains(t, got, "package sdk")
+	assert.Contains(t, got, "type SDK struct {")
+	assert.Contains(t, got, "apiclient.Client")
+	assert.Contains(t, got, "func NewSDK(baseURL string, opts ...httpclient.Option) (*SDK, error) {")
+	assert.Contains(t, got, "c, err := implclient.NewClient(baseURL, opts...)")
+	assert.Contains(t, got, `return nil, fmt.Errorf("init sdk client: %w", err)`)
+	assert.Contains(t, got, "return &SDK{Client: c}, nil")
+	assert.Contains(t, got, "func NewSDKFromClient(c apiclient.Client) *SDK {")
+	assert.Contains(t, got, "return &SDK{Client: c}")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "sdk.gen.go", files["sdk/sdk.gen.go"], parser.AllErrors)
+	require.NoError(t, err, "sdk should parse as valid Go")
+}
+
 type collectWriter struct {
 	files map[string][]byte
 }

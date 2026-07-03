@@ -102,6 +102,11 @@ func Generate(fw codegen.FileWriter, doc *parser.Document, opts ...Option) error
 		if err := fw.WriteFile("impl/mocks/server/mocks.gen.go", mockServerF); err != nil {
 			return fmt.Errorf("write impl/mocks/server/mocks.gen.go: %w", err)
 		}
+
+		sdkF := g.sdkFile()
+		if err := fw.WriteFile("sdk/sdk.gen.go", sdkF); err != nil {
+			return fmt.Errorf("write sdk/sdk.gen.go: %w", err)
+		}
 	}
 
 	return nil
