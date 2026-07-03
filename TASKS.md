@@ -37,8 +37,8 @@
 - **T18 HTTP server** — оставляем базовый роутинг, без audit-data обработки
 - **T19 Mocks** — оставляем
 - **T20 SDK** — оставляем
-- **T21 cmdtreegenerator** — оставляем, но без x-* расширений
-- **T22 opensourceyaml** — оставляем, но без x-mws-фильтрации (пока копируем spec as-is)
+- **T21 cmdtreegenerator** → **глубокий бэклог** (не нужен в первой итерации; весь функционал завязан на `x-cli` расширения, CRUD-эвристики и multi-service parser — пересмотреть при появлении реального требования к CLI)
+- **T22 opensourceyaml** → **глубокий бэклог** (не нужен в первой итерации; публикацией спеки управляет внешняя инфраструктура, не генератор)
 - **T12 GenerationFlagsLoader** → **в бэклог** (все флаги в первой итерации off/hardcoded)
 
 ## Карта замен `platform-go`
@@ -191,15 +191,19 @@
 - Ветка: `feat/gen-sdk`
 - Зависимости: T15
 
-### T21 — cmdtreegenerator — дерево команд CLI
-- Порт `cmd/mwsapigen/internal/cmdtreegenerator` (`Generate`, `tree`, `template`, `normalize`, `get`, `all`, `equivalent`, `imports`, `table`, `e2e`, `opts`)
-- Ветка: `feat/cmdtree`
-- Зависимости: T11, T13
+### T21 — cmdtreegenerator — дерево команд CLI → ГЛУБОКИЙ БЭКЛОГ
+- ~~Порт `cmd/mwsapigen/internal/cmdtreegenerator`~~
+- Причина: оригинал (4841 строка) завязан на `x-cli` расширения, CRUD-эвристики, multi-service parser (`parser.Project`/`Service`/`Method`), кастомный CLI-фреймворк `cli.Command[T]` с profile config — ничего из этого у нас нет и не планируется в первой итерации.
+- Пересмотреть при появлении реального требования к auto-generated CLI.
+- Ветка: ~~`feat/cmdtree`~~ (не создаётся)
+- ~~Зависимости: T11, T13~~
 
-### T22 — opensourceyaml — публичный OpenAPI-spec
-- Порт `cmd/mwsapigen/internal/opensourceyaml` (`Generate`, `oapiparameter`, `oapipath`, `writer`, `utils`, `opts`)
-- Ветка: `feat/opensource-yaml`
-- Зависимости: T11
+### T22 — opensourceyaml — публичный OpenAPI-spec → ГЛУБОКИЙ БЭКЛОГ
+- ~~Порт `cmd/mwsapigen/internal/opensourceyaml`~~
+- Причина: публикацией публичного OpenAPI-spec управляет внешняя инфраструктура (repo/release pipeline), а не генератор. В первой итерации не нужно.
+- Пересмотреть при появлении требования «генератор должен вырезать `x-*` из internal-spec и публиковать public-spec».
+- Ветка: ~~`feat/opensource-yaml`~~ (не создаётся)
+- ~~Зависимости: T11~~
 
 ## Этап 4 — точка входа
 
@@ -207,9 +211,9 @@
 - `main.go`: флаги (`output`, `input`, `import-prefix`, `common-params-path`, `debug-json`, `dry-run`, `public`)
 - ~~`generation-flags-config-path`~~ → бэклог (T12)
 - ~~`new-validator`~~ → бэклог (секция валидатора)
-- Связка: parser → generator (Schema/Client/Server/HTTP/Mock/SDK) → cmdtreegenerator → opensourceyaml
+- Связка: parser → generator (Schema/Client/Server/HTTP/Mock/SDK)
 - Ветка: `feat/oapigen-main`
-- Зависимости: T8, T9, T11, T13, T15, T16, T17, T18, T19, T20, T21, T22
+- Зависимости: T8, T9, T11, T13, T15, T16, T17, T18, T19, T20
 
 ## Этап 5 — тесты и инфраструктура
 

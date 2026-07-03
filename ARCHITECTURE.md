@@ -4,7 +4,7 @@
 
 Генератор читает OpenAPI 3.x спецификации из каталога `input` и производит
 Go-пакеты: модели, клиентские/серверные интерфейсы, HTTP-клиент и HTTP-сервер,
-моки, SDK и дерево команд CLI. Выходной каталог и префикс импорта задаются
+моки, SDK. Выходной каталог и префикс импорта задаются
 флагами `cmd/oapigen`.
 
 Поток данных однонаправленный:
@@ -58,19 +58,23 @@ OpenAPI spec (YAML)
 - **`codegen/configurator`** (T8) — сборка `FileWriter` из CLI-флагов
   (dry-run, output dir).
 
-### `internal/cmdtreegenerator` (T21)
+### `internal/cmdtreegenerator` (T21) → глубокий бэклог
 
-Генерация дерева команд CLI по пути `paths`. Использует `parser` и `codegen`.
+Генерация дерева команд CLI по пути `paths`. В первой итерации **не
+реализуется**: оригинал в mwsapi завязан на `x-cli` расширения, CRUD-эвристики
+и multi-service parser, которых у нас нет. Пересмотреть при появлении
+реального требования к auto-generated CLI.
 
-### `internal/opensourceyaml` (T22)
+### `internal/opensourceyaml` (T22) → глубокий бэклог
 
-Сборка публичного OpenAPI-спека из внутренних. В первой итерации —
-копирование spec as-is без фильтрации `x-*`.
+Сборка публичного OpenAPI-спека из внутренних. В первой итерации **не
+реализуется**: публикацией спеки управляет внешняя инфраструктура, а не
+генератор. Пересмотреть при появлении явного требования.
 
 ### `cmd/oapigen` (T23)
 
 Точка входа. Парсит флаги, инициализирует logger и FileWriter, связывает
-`parser → generator → cmdtreegenerator → opensourceyaml`.
+`parser → generator`.
 
 ## Замены `platform-go`
 
@@ -103,7 +107,7 @@ OpenAPI spec (YAML)
 - Мономодель (без split Request/Response).
 - JSON-маршалинг.
 - HTTP client/server (vanilla) для стандартных методов.
-- SDK, моки, дерево команд CLI.
+- SDK, моки.
 
 Что **не входит** (см. бэклог в `TASKS.md`):
 
