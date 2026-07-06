@@ -22,6 +22,7 @@ func (m *typeMapper) addImport(path, alias string) {
 			return
 		}
 	}
+
 	m.imports = append(m.imports, gogen.Import{Path: path, Alias: alias})
 }
 
@@ -31,10 +32,12 @@ func (m *typeMapper) goType(s *parser.Schema) string {
 	if s == nil {
 		return "any"
 	}
+
 	base := m.baseType(s)
 	if s.Nullable && !isInherentlyNilable(base) {
 		return "*" + base
 	}
+
 	return base
 }
 
@@ -54,6 +57,7 @@ func (m *typeMapper) baseType(s *parser.Schema) string {
 		if s.Name != "" {
 			return m.qualifyModelType(s.Name)
 		}
+
 		return "any"
 	}
 
@@ -61,6 +65,7 @@ func (m *typeMapper) baseType(s *parser.Schema) string {
 		if s.Items != nil {
 			return "[]" + m.goType(s.Items)
 		}
+
 		return "[]any"
 	}
 
@@ -68,6 +73,7 @@ func (m *typeMapper) baseType(s *parser.Schema) string {
 		if s.AdditionalProperties != nil {
 			return "map[string]" + m.goType(s.AdditionalProperties)
 		}
+
 		return "map[string]any"
 	}
 
@@ -84,10 +90,12 @@ func (m *typeMapper) baseType(s *parser.Schema) string {
 		switch s.Format {
 		case "date-time", "date":
 			m.addImport("time", "")
+
 			return "time.Time"
 		case "binary":
 			return "[]byte"
 		}
+
 		return "string"
 	case "integer":
 		switch s.Format {
@@ -119,7 +127,9 @@ func (m *typeMapper) qualifyModelType(name string) string {
 	if m.currentPkg == "model" || m.modulePath == "" {
 		return goName
 	}
+
 	m.addImport(m.modulePath+"/model", "model")
+
 	return "model." + goName
 }
 
@@ -127,5 +137,6 @@ func refToName(ref string) string {
 	if idx := strings.LastIndex(ref, "/"); idx >= 0 {
 		return ref[idx+1:]
 	}
+
 	return ref
 }

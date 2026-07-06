@@ -16,7 +16,6 @@ import (
 
 // Configurator хранит флаги логирования, зарегистрированные на FlagSet.
 type Configurator struct {
-	flagSet     *flag.FlagSet
 	level       string
 	format      string
 	development bool
@@ -37,6 +36,7 @@ func NewLoggerConfiguratorFromFlags(fs *flag.FlagSet) *Configurator {
 	fs.StringVar(&c.level, "log-level", c.level, "log level (debug, info, warn, error, fatal)")
 	fs.StringVar(&c.format, "log-format", c.format, "log format (console, json)")
 	fs.BoolVar(&c.development, "log-development", c.development, "use zap development mode (stacktraces, no sampling)")
+
 	return c
 }
 
@@ -54,6 +54,7 @@ func (c *Configurator) Create() (*zap.Logger, error) {
 	} else {
 		cfg = zap.NewProductionConfig()
 	}
+
 	cfg.Level = zap.NewAtomicLevelAt(level)
 
 	switch strings.ToLower(c.format) {

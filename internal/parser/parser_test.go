@@ -212,6 +212,7 @@ func parsePetstore(t *testing.T) *Document {
 	require.NoError(t, err)
 	doc, err := Parse(data)
 	require.NoError(t, err)
+
 	return doc
 }
 
@@ -223,6 +224,7 @@ func findSchema(t *testing.T, doc *Document, name string) *Schema {
 		}
 	}
 	t.Fatalf("schema %q not found", name)
+
 	return nil
 }
 
@@ -234,6 +236,7 @@ func findProperty(t *testing.T, s *Schema, name string) *Property {
 		}
 	}
 	t.Fatalf("property %q not found", name)
+
 	return nil
 }
 
@@ -245,5 +248,6 @@ func findOperation(t *testing.T, doc *Document, id string) *Operation {
 		}
 	}
 	t.Fatalf("operation %q not found", id)
+
 	return nil
 }

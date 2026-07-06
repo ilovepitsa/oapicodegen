@@ -1,4 +1,4 @@
-.PHONY: build test vet fmt lint generate e2e clean tidy cover cover-html cover-html-open cover-func
+.PHONY: build test vet fmt lint generate e2e golden-check clean tidy cover cover-html cover-html-open cover-func
 
 GO ?= go
 PKG := ./...
@@ -19,13 +19,22 @@ fmt:
 	gofmt -s -w .
 
 lint: vet
-	@command -v golangci-lint >/dev/null 2>&1 && golangci-lint run || echo "golangci-lint not installed, skipping"
+	golangci-lint run
 
+# generate — перегенерирует golden-файлы (petstore + minimal e2e) с флагом -update.
 generate:
-	@echo "target placeholder: run generator on testdata"
+	$(GO) test ./internal/generator/ -run TestGenerate -update
+	$(GO) test ./cmd/oapigen/ -run TestE2E_Minimal -update
 
+# e2e — запускает e2e-тест генерации (полный пайплайн cmd/oapigen).
 e2e:
-	$(GO) test -tags=e2e ./...
+	$(GO) test ./cmd/oapigen/ -run TestE2E_Minimal
+
+# golden-check — верифицирует, что golden-файлы актуальны (без -update).
+# Используется в CI: падает, если вывод генератора разошёлся с эталоном.
+golden-check:
+	$(GO) test ./internal/generator/ -run TestGenerate
+	$(GO) test ./cmd/oapigen/ -run TestE2E_Minimal
 
 tidy:
 	$(GO) mod tidy

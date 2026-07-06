@@ -146,5 +146,6 @@ func TestRealFS_ReadOnlyFS_InterfaceAcceptance(t *testing.T) {
 
 func isPathError(err error) bool {
 	var pe *fs.PathError
+
 	return errors.As(err, &pe)
 }

@@ -13,8 +13,10 @@ func Get[T any](v T) *T {
 func Value[T any](p *T) T {
 	if p == nil {
 		var zero T
+
 		return zero
 	}
+
 	return *p
 }
 
@@ -23,7 +25,9 @@ func Clone[T any](p *T) *T {
 	if p == nil {
 		return nil
 	}
+
 	v := *p
+
 	return &v
 }
 
@@ -33,5 +37,6 @@ func Equal[T comparable](a, b *T) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
+
 	return *a == *b
 }

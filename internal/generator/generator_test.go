@@ -737,6 +737,7 @@ type collectWriter struct {
 
 func (c *collectWriter) WriteFile(name string, f codegen.File) error {
 	c.files[name] = f.Content()
+
 	return nil
 }
 
@@ -746,6 +747,7 @@ func parseSpec(t *testing.T, spec string) *oapiparser.Document {
 	t.Helper()
 	doc, err := oapiparser.Parse([]byte(spec))
 	require.NoError(t, err)
+
 	return doc
 }
 
@@ -753,6 +755,7 @@ func generateFiles(t *testing.T, doc *oapiparser.Document) map[string][]byte {
 	t.Helper()
 	fw := &collectWriter{files: map[string][]byte{}}
 	require.NoError(t, Generate(fw, doc, WithModulePath(testModulePath)))
+
 	return fw.files
 }
 
@@ -760,5 +763,6 @@ func mustReadFile(t *testing.T, p string) []byte {
 	t.Helper()
 	data, err := os.ReadFile(p)
 	require.NoError(t, err)
+
 	return data
 }

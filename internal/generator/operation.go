@@ -12,24 +12,30 @@ func operationMethodName(op *parser.Operation) string {
 	if op.OperationID != "" {
 		return goName(op.OperationID)
 	}
+
 	return deriveMethodName(op.Method, op.Path)
 }
 
 func deriveMethodName(method, path string) string {
 	var b strings.Builder
+
 	b.WriteString(strings.ToLower(method))
+
 	for _, seg := range strings.Split(path, "/") {
 		if seg == "" {
 			continue
 		}
+
 		if strings.HasPrefix(seg, "{") && strings.HasSuffix(seg, "}") {
 			inner := seg[1 : len(seg)-1]
+
 			b.WriteString("By")
 			b.WriteString(goName(inner))
 		} else {
 			b.WriteString(goName(seg))
 		}
 	}
+
 	return goName(b.String())
 }
 
@@ -44,8 +50,10 @@ func isSuccessCode(code string) bool {
 	if code == "default" {
 		return false
 	}
+
 	if len(code) < 3 {
 		return false
 	}
+
 	return code[0] == '2'
 }

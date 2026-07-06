@@ -68,6 +68,7 @@ func (c *Client) Do(ctx context.Context, req *http.Request) (*http.Response, err
 	if c.interceptor != nil {
 		return c.interceptor(ctx, req, final)
 	}
+
 	return final(ctx, req)
 }
 
@@ -99,8 +100,10 @@ func chainInterceptors(interceptors []Interceptor) Interceptor {
 
 	first := interceptors[0]
 	rest := interceptors[1:]
+
 	return func(ctx context.Context, req *http.Request, invoker Invoker) (*http.Response, error) {
 		chain := buildChain(rest, invoker)
+
 		return first(ctx, req, chain)
 	}
 }
@@ -113,6 +116,7 @@ func buildChain(interceptors []Interceptor, final Invoker) Invoker {
 
 	next := interceptors[0]
 	rest := interceptors[1:]
+
 	return func(ctx context.Context, req *http.Request) (*http.Response, error) {
 		return next(ctx, req, buildChain(rest, final))
 	}

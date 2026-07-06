@@ -20,14 +20,17 @@ func schemaFromProxy(proxy *highbase.SchemaProxy) *Schema {
 		ref := proxy.GetReference()
 		s := &Schema{Ref: ref}
 		s.Name = refToSchemaName(ref)
+
 		if target := proxy.Schema(); target != nil {
 			fillSchema(s, target)
 		}
+
 		return s
 	}
 
 	s := &Schema{}
 	fillSchema(s, proxy.Schema())
+
 	return s
 }
 
@@ -49,6 +52,7 @@ func fillSchema(s *Schema, sh *highbase.Schema) {
 	if sh.Default != nil {
 		s.Default = decodeNode(sh.Default)
 	}
+
 	for _, n := range sh.Enum {
 		s.Enum = append(s.Enum, decodeNode(n))
 	}
@@ -80,6 +84,7 @@ func appendComposites(dst []*Schema, proxies []*highbase.SchemaProxy) []*Schema 
 	for _, p := range proxies {
 		dst = append(dst, schemaFromProxy(p))
 	}
+
 	return dst
 }
 
@@ -88,6 +93,7 @@ func extractComponentsSchemas(doc *Document, schemas *orderedmap.Map[string, *hi
 	if schemas == nil {
 		return
 	}
+
 	for pair := schemas.First(); pair != nil; pair = pair.Next() {
 		s := schemaFromProxy(pair.Value())
 		s.Name = pair.Key()
@@ -99,9 +105,11 @@ func refToSchemaName(ref string) string {
 	if ref == "" {
 		return ""
 	}
+
 	if idx := strings.LastIndex(ref, "/"); idx >= 0 {
 		return ref[idx+1:]
 	}
+
 	return strings.TrimPrefix(ref, "#/components/schemas/")
 }
 
@@ -116,10 +124,12 @@ func decodeNode(n *yaml.Node) any {
 	if n == nil {
 		return nil
 	}
+
 	var v any
 	if err := n.Decode(&v); err != nil {
 		return nil
 	}
+
 	return v
 }
 
@@ -129,5 +139,6 @@ func containsString(slice []string, v string) bool {
 			return true
 		}
 	}
+
 	return false
 }

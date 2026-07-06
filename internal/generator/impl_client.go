@@ -16,7 +16,9 @@ func (g *Generator) implClientFile() codegen.File {
 	m.addImport("strings", "")
 
 	const httpclientPkg = "nschugorev/oapigenerator/pkg/httpclient"
+
 	m.addImport(httpclientPkg, "httpclient")
+
 	if g.modulePath != "" {
 		m.addImport(g.modulePath+"/interfaces/client", "apiclient")
 	}
@@ -24,33 +26,40 @@ func (g *Generator) implClientFile() codegen.File {
 	needJSON := false
 	needBytes := false
 	needURL := false
+
 	for _, op := range g.doc.Operations {
 		if op.RequestBody != nil {
 			needJSON = true
 			needBytes = true
 		}
+
 		for _, r := range op.Responses {
 			if responseSchema(r) != nil {
 				needJSON = true
 			}
 		}
+
 		for _, p := range op.Parameters {
 			if p.In == "path" || p.In == "query" {
 				needURL = true
 			}
 		}
 	}
+
 	if needJSON {
 		m.addImport("encoding/json", "")
 	}
+
 	if needBytes {
 		m.addImport("bytes", "")
 	}
+
 	if needURL {
 		m.addImport("net/url", "")
 	}
 
 	body := g.renderImplClient(m)
+
 	return g.factory.Create(&gogen.File{
 		Package: "client",
 		Imports: m.imports,
@@ -88,23 +97,29 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 	w.Print("func (c *Client) ", name, "(ctx context.Context, req *apiclient.", name, "Request) (*apiclient.", name, "Response, error) {\n")
 
 	w.Print("\tpath := \"", op.Path, "\"\n")
+
 	for _, p := range op.Parameters {
 		if p.In != "path" {
 			continue
 		}
+
 		fieldName := goName(p.Name)
 		w.Print("\tpath = strings.Replace(path, \"{", p.Name, "}\", url.PathEscape(fmt.Sprint(req.", fieldName, ")), 1)\n")
 	}
 
 	hasQuery := false
+
 	for _, p := range op.Parameters {
 		if p.In != "query" {
 			continue
 		}
+
 		if !hasQuery {
 			w.Print("\tq := url.Values{}\n")
+
 			hasQuery = true
 		}
+
 		fieldName := goName(p.Name)
 		if p.Required {
 			w.Print("\tq.Set(\"", p.Name, "\", fmt.Sprint(req.", fieldName, "))\n")
@@ -117,6 +132,7 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 
 	w.Print("\tu := *c.http.ServerURL()\n")
 	w.Print("\tu.Path = strings.TrimSuffix(u.Path, \"/\") + path\n")
+
 	if hasQuery {
 		w.Print("\tu.RawQuery = q.Encode()\n")
 	}
@@ -130,11 +146,13 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 	}
 
 	w.Print("\thttpReq, err := http.NewRequestWithContext(ctx, \"", op.Method, "\", u.String(), ")
+
 	if hasBody {
 		w.Print("bytes.NewReader(body)")
 	} else {
 		w.Print("nil")
 	}
+
 	w.Print(")\n")
 	w.Print("\tif err != nil {\n")
 	w.Print("\t\treturn nil, err\n")
@@ -144,6 +162,7 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 		if p.In != "header" {
 			continue
 		}
+
 		fieldName := goName(p.Name)
 		if p.Required {
 			w.Print("\thttpReq.Header.Set(\"", p.Name, "\", fmt.Sprint(req.", fieldName, "))\n")
@@ -168,13 +187,17 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 	w.Print("\tswitch resp.StatusCode {\n")
 
 	hasDefault := false
+
 	var defaultResp *parser.Response
+
 	for _, r := range op.Responses {
 		if r.StatusCode == "default" {
 			hasDefault = true
 			defaultResp = r
+
 			continue
 		}
+
 		g.renderImplResponseCase(w, r, m)
 	}
 
@@ -201,8 +224,10 @@ func (g *Generator) renderImplResponseBody(w *codegen.BufferWriter, label string
 	schema := responseSchema(r)
 	if schema == nil {
 		w.Print("\t\tresult.", fieldName, " = true\n")
+
 		return
 	}
+
 	typ := m.goType(schema)
 	w.Print("\t\tvar v ", typ, "\n")
 	w.Print("\t\tif err := json.NewDecoder(resp.Body).Decode(&v); err != nil {\n")

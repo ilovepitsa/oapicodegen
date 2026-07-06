@@ -14,18 +14,22 @@ func (g *Generator) implServerFile() codegen.File {
 	m := &typeMapper{currentPkg: "implserver", modulePath: g.modulePath}
 
 	m.addImport("github.com/labstack/echo/v4", "")
+
 	if g.modulePath != "" {
 		m.addImport(g.modulePath+"/interfaces/client", "apiclient")
 		m.addImport(g.modulePath+"/interfaces/server", "apiserver")
 	}
 
 	needBody := false
+
 	for _, op := range g.doc.Operations {
 		if op.RequestBody != nil {
 			needBody = true
+
 			break
 		}
 	}
+
 	if needBody {
 		m.addImport("bytes", "")
 		m.addImport("encoding/json", "")
@@ -34,6 +38,7 @@ func (g *Generator) implServerFile() codegen.File {
 	}
 
 	body := g.renderImplServer(needBody)
+
 	return g.factory.Create(&gogen.File{
 		Package: "server",
 		Imports: m.imports,
@@ -73,12 +78,14 @@ func (g *Generator) renderImplServer(needBody bool) []byte {
 	}
 
 	w.Print("func (s *ServerHTTP) Register(e *echo.Echo) {\n")
+
 	for _, op := range g.doc.Operations {
 		method := strings.ToUpper(op.Method)
 		epath := echoPath(op.Path)
 		handler := lowerFirst(operationMethodName(op))
 		w.Print("\te.", method, "(\"", epath, "\", s.", handler, ")\n")
 	}
+
 	w.Print("}\n\n")
 
 	for _, op := range g.doc.Operations {
@@ -121,6 +128,7 @@ func (g *Generator) renderImplServerResponse(w *codegen.BufferWriter, op *parser
 		if r.StatusCode == "default" {
 			continue
 		}
+
 		fieldName := responseFieldName(r.StatusCode)
 		if responseSchema(r) == nil {
 			w.Print("\tif resp.", fieldName, " {\n")
@@ -137,6 +145,7 @@ func (g *Generator) renderImplServerResponse(w *codegen.BufferWriter, op *parser
 		if r.StatusCode != "default" {
 			continue
 		}
+
 		fieldName := "ResponseDefault"
 		if responseSchema(r) == nil {
 			w.Print("\tif resp.", fieldName, " {\n")
@@ -162,5 +171,6 @@ func lowerFirst(s string) string {
 	if s == "" {
 		return ""
 	}
+
 	return strings.ToLower(s[:1]) + s[1:]
 }

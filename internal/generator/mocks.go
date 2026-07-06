@@ -22,8 +22,10 @@ func (g *Generator) mockFile(side, mockName, ifaceRef string) codegen.File {
 	m.addImport("context", "")
 	m.addImport("reflect", "")
 	m.addImport("go.uber.org/mock/gomock", "")
+
 	if g.modulePath != "" {
 		m.addImport(g.modulePath+"/interfaces/client", "apiclient")
+
 		if side == "server" {
 			m.addImport(g.modulePath+"/interfaces/server", "apiserver")
 		}
@@ -35,6 +37,7 @@ func (g *Generator) mockFile(side, mockName, ifaceRef string) codegen.File {
 	}
 
 	body := g.renderGomockMock(mockName, ifaceRef)
+
 	return g.factory.Create(&gogen.File{
 		Package: pkgName,
 		Imports: m.imports,

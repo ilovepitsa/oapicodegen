@@ -18,6 +18,7 @@ func extractPaths(doc *Document, paths *highv3.Paths) {
 		item := pair.Value()
 
 		pi := &PathItem{Path: pathStr}
+
 		ops := item.GetOperations()
 		if ops != nil {
 			for opPair := ops.First(); opPair != nil; opPair = opPair.Next() {
@@ -26,6 +27,7 @@ func extractPaths(doc *Document, paths *highv3.Paths) {
 				doc.Operations = append(doc.Operations, op)
 			}
 		}
+
 		doc.Paths = append(doc.Paths, pi)
 	}
 }
@@ -53,6 +55,7 @@ func convertOperation(path, method string, op *highv3.Operation) *Operation {
 		if op.Responses.Default != nil {
 			out.Responses = append(out.Responses, convertResponse("default", op.Responses.Default))
 		}
+
 		if op.Responses.Codes != nil {
 			for codePair := op.Responses.Codes.First(); codePair != nil; codePair = codePair.Next() {
 				out.Responses = append(out.Responses, convertResponse(codePair.Key(), codePair.Value()))
@@ -74,6 +77,7 @@ func convertParameter(p *highv3.Parameter) *Parameter {
 	if p.Schema != nil {
 		out.Schema = schemaFromProxy(p.Schema)
 	}
+
 	return out
 }
 
@@ -98,14 +102,18 @@ func convertContent(content *orderedmap.Map[string, *highv3.MediaType]) map[stri
 	if content == nil {
 		return nil
 	}
+
 	out := make(map[string]*MediaType, content.Len())
+
 	for pair := content.First(); pair != nil; pair = pair.Next() {
 		mt := &MediaType{}
 		if pair.Value() != nil && pair.Value().Schema != nil {
 			mt.Schema = schemaFromProxy(pair.Value().Schema)
 		}
+
 		out[pair.Key()] = mt
 	}
+
 	return out
 }
 
@@ -113,7 +121,9 @@ func convertHeaders(headers *orderedmap.Map[string, *highv3.Header]) map[string]
 	if headers == nil {
 		return nil
 	}
+
 	out := make(map[string]*Parameter, headers.Len())
+
 	for pair := headers.First(); pair != nil; pair = pair.Next() {
 		h := pair.Value()
 		p := &Parameter{
@@ -123,10 +133,13 @@ func convertHeaders(headers *orderedmap.Map[string, *highv3.Header]) map[string]
 			Required:    h.Required,
 			Deprecated:  h.Deprecated,
 		}
+
 		if h.Schema != nil {
 			p.Schema = schemaFromProxy(h.Schema)
 		}
+
 		out[pair.Key()] = p
 	}
+
 	return out
 }

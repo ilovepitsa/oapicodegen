@@ -81,6 +81,7 @@ func WithPath(fw FileWriter, p string) FileWriter {
 	if p == "" {
 		return fw
 	}
+
 	return &pathWriter{inner: fw, prefix: p}
 }
 

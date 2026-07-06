@@ -14,6 +14,7 @@ func (g *Generator) clientFile() codegen.File {
 	m := &typeMapper{currentPkg: "client", modulePath: g.modulePath}
 	m.addImport("context", "")
 	body := g.renderClient(m)
+
 	return g.factory.Create(&gogen.File{
 		Package: "client",
 		Imports: m.imports,
@@ -25,13 +26,17 @@ func (g *Generator) renderClient(m *typeMapper) []byte {
 	w := codegen.NewBufferWriter()
 
 	w.Print("type Client interface {\n")
+
 	for _, op := range g.doc.Operations {
 		name := operationMethodName(op)
+
 		if op.Deprecated {
 			w.Print("\t// Deprecated: operation is marked as deprecated\n")
 		}
+
 		w.Print("\t", name, "(ctx context.Context, req *", name, "Request) (*", name, "Response, error)\n")
 	}
+
 	w.Print("}\n\n")
 
 	for _, op := range g.doc.Operations {
@@ -61,6 +66,7 @@ func (g *Generator) renderParamField(w *codegen.BufferWriter, p *parser.Paramete
 	if p.Schema != nil && p.Schema.Description != "" {
 		writeDocComment(w, p.Schema.Description)
 	}
+
 	if p.Deprecated {
 		w.Print("\t// Deprecated: parameter is marked as deprecated\n")
 	}
@@ -93,13 +99,16 @@ func (g *Generator) renderBodyField(w *codegen.BufferWriter, rb *parser.RequestB
 	if schema == nil {
 		return
 	}
+
 	if rb.Description != "" {
 		writeDocComment(w, rb.Description)
 	}
+
 	fieldType := m.goType(schema)
 	if !rb.Required && !strings.HasPrefix(fieldType, "*") && !isInherentlyNilable(fieldType) {
 		fieldType = "*" + fieldType
 	}
+
 	w.Print("\tBody ", fieldType, " `json:\"-\"`\n")
 }
 
@@ -126,6 +135,7 @@ func responsePayloadType(resp *parser.Response, m *typeMapper) string {
 	if schema == nil {
 		return "bool"
 	}
+
 	return "*" + m.goType(schema)
 }
 
@@ -134,6 +144,7 @@ func bodySchema(rb *parser.RequestBody) *parser.Schema {
 	if rb == nil || rb.Content == nil {
 		return nil
 	}
+
 	return firstContentSchema(rb.Content)
 }
 
@@ -142,6 +153,7 @@ func responseSchema(resp *parser.Response) *parser.Schema {
 	if resp == nil || resp.Content == nil {
 		return nil
 	}
+
 	return firstContentSchema(resp.Content)
 }
 
@@ -149,14 +161,18 @@ func firstContentSchema(content map[string]*parser.MediaType) *parser.Schema {
 	if _, ok := content["application/json"]; ok {
 		return content["application/json"].Schema
 	}
+
 	keys := make([]string, 0, len(content))
 	for k := range content {
 		keys = append(keys, k)
 	}
+
 	sort.Strings(keys)
+
 	if len(keys) == 0 {
 		return nil
 	}
+
 	return content[keys[0]].Schema
 }
 
@@ -165,15 +181,19 @@ func sortedResponseCodes(responses []*parser.Response) []string {
 	for _, r := range responses {
 		codes = append(codes, r.StatusCode)
 	}
+
 	sort.Slice(codes, func(i, j int) bool {
 		if codes[i] == "default" {
 			return false
 		}
+
 		if codes[j] == "default" {
 			return true
 		}
+
 		return codes[i] < codes[j]
 	})
+
 	return codes
 }
 
@@ -183,5 +203,6 @@ func responseByCode(responses []*parser.Response, code string) *parser.Response 
 			return r
 		}
 	}
+
 	return nil
 }

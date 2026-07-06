@@ -141,6 +141,7 @@ func TestParseLevel_TableDriven(t *testing.T) {
 			got, err := parseLevel(tc.in)
 			if tc.wantErr {
 				require.Error(t, err)
+
 				return
 			}
 			require.NoError(t, err)

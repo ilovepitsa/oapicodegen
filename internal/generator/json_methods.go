@@ -16,6 +16,7 @@ func needsJSONMethods(sh *parser.Schema) bool {
 func (g *Generator) jsonMethodsFile(sh *parser.Schema) codegen.File {
 	m := &typeMapper{currentPkg: "model", modulePath: g.modulePath}
 	body := g.renderJSONMethods(sh, m)
+
 	return g.factory.Create(&gogen.File{
 		Package: "model",
 		Imports: m.imports,
@@ -39,20 +40,25 @@ func (g *Generator) renderJSONMethods(sh *parser.Schema, m *typeMapper) []byte {
 		field string
 		typ   string
 	}
+
 	var vs []variant
+
 	for _, v := range variants {
 		variantType := m.goType(v)
 		if variantType == "" || variantType == "any" {
 			continue
 		}
+
 		fieldName := goName(refToName(v.Ref))
 		if fieldName == "" {
 			fieldName = variantType
 		}
+
 		vs = append(vs, variant{field: fieldName, typ: variantType})
 	}
 
 	w.Print("func (m *", name, ") UnmarshalJSON(data []byte) error {\n")
+
 	for i, v := range vs {
 		w.Print("\tvar v_", i, " ", v.typ, "\n")
 		w.Print("\tif err := json.Unmarshal(data, &v_", i, "); err == nil {\n")
@@ -60,15 +66,18 @@ func (g *Generator) renderJSONMethods(sh *parser.Schema, m *typeMapper) []byte {
 		w.Print("\t\treturn nil\n")
 		w.Print("\t}\n")
 	}
+
 	w.Print("\treturn fmt.Errorf(\"", name, ": no variant matched\")\n")
 	w.Print("}\n\n")
 
 	w.Print("func (m ", name, ") MarshalJSON() ([]byte, error) {\n")
+
 	for _, v := range vs {
 		w.Print("\tif m.", v.field, " != nil {\n")
 		w.Print("\t\treturn json.Marshal(m.", v.field, ")\n")
 		w.Print("\t}\n")
 	}
+
 	w.Print("\treturn json.Marshal(nil)\n")
 	w.Print("}\n")
 

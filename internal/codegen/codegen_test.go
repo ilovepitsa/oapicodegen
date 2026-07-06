@@ -70,6 +70,7 @@ type captureWriter struct {
 
 func (c *captureWriter) WriteFile(name string, file File) error {
 	c.files[name] = file.Content()
+
 	return nil
 }
 
@@ -139,5 +140,6 @@ func keys(m map[string][]byte) []string {
 	for k := range m {
 		out = append(out, k)
 	}
+
 	return out
 }

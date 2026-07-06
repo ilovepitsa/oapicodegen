@@ -50,15 +50,18 @@ go run ./cmd/oapigen \
 ## Make-таргеты
 
 ```sh
-make build      # go build ./...
-make test       # go test ./...
-make vet        # go vet ./...
-make fmt        # gofmt -s -w .
-make lint       # golangci-lint run (если установлен)
-make generate   # запуск генератора на testdata
-make e2e        # go test -tags=e2e ./...
-make tidy       # go mod tidy
-make clean      # удалить артефакты сборки
+make build         # go build ./...
+make test          # go test ./...
+make vet           # go vet ./...
+make fmt           # gofmt -s -w .
+make lint          # golangci-lint run (требует установленного golangci-lint)
+make generate      # перегенерировать golden-файлы (petstore + minimal e2e) с -update
+make e2e           # запустить e2e-тест генерации
+make golden-check  # верифицировать актуальность golden-файлов (для CI)
+make tidy          # go mod tidy
+make cover         # текстовый отчёт покрытия
+make cover-html    # HTML-отчёт покрытия
+make clean         # удалить артефакты сборки
 ```
 
 ## Структура репозитория

@@ -52,8 +52,10 @@ func Generate(fw codegen.FileWriter, doc *parser.Document, opts ...Option) error
 		if sh.Name == "" {
 			continue
 		}
+
 		sf := g.schemaFile(sh)
 		fname := "model/" + fileName(sh.Name) + ".gen.go"
+
 		if err := fw.WriteFile(fname, sf); err != nil {
 			return fmt.Errorf("write %s: %w", fname, err)
 		}
@@ -61,6 +63,7 @@ func Generate(fw codegen.FileWriter, doc *parser.Document, opts ...Option) error
 		if needsJSONMethods(sh) {
 			jf := g.jsonMethodsFile(sh)
 			jname := "model/" + fileName(sh.Name) + "_json.gen.go"
+
 			if err := fw.WriteFile(jname, jf); err != nil {
 				return fmt.Errorf("write %s: %w", jname, err)
 			}

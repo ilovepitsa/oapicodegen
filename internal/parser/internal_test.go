@@ -125,8 +125,6 @@ paths: {}
 
 func TestParse_WithLocation(t *testing.T) {
 	// Покрывает ветку location != "" в parseBytes (BasePath).
-	_, err := Parse([]byte("openapi: 3.0.3\ninfo:\n  title: t\n  version: '1'\npaths: {}\n"))
-	// Вызовем parseBytes напрямую с location.
-	_, err = parseBytes([]byte("openapi: 3.0.3\ninfo:\n  title: t\n  version: '1'\npaths: {}\n"), "spec.yaml")
+	_, err := parseBytes([]byte("openapi: 3.0.3\ninfo:\n  title: t\n  version: '1'\npaths: {}\n"), "spec.yaml")
 	require.NoError(t, err)
 }

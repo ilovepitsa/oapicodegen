@@ -43,10 +43,12 @@ func (c *Configurator) Create(output string) (codegen.FileWriter, error) {
 	if output == "" {
 		return codegen.NoopFileWriter{}, nil
 	}
+
 	fs := realfs.NewRecommendedReal(realfs.WithBaseDir(output))
 	if err := fs.MkdirAll(".", c.dirPerm); err != nil {
 		return nil, fmt.Errorf("configurator: create output dir %q: %w", output, err)
 	}
+
 	return &fileWriter{fs: fs, dirPerm: c.dirPerm}, nil
 }
 
@@ -63,6 +65,7 @@ func (w *fileWriter) WriteFile(name string, file codegen.File) error {
 			return err
 		}
 	}
+
 	return w.fs.WriteFile(name, file.Content())
 }
 

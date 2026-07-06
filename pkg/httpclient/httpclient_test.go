@@ -57,6 +57,7 @@ func TestClient_Do_SingleInterceptor(t *testing.T) {
 
 	authIntercept := func(ctx context.Context, req *http.Request, invoker Invoker) (*http.Response, error) {
 		req.Header.Set("Authorization", "Bearer token")
+
 		return invoker(ctx, req)
 	}
 
@@ -81,6 +82,7 @@ func TestClient_Do_InterceptorChain(t *testing.T) {
 		order = append(order, "first-before")
 		resp, err := invoker(ctx, req)
 		order = append(order, "first-after")
+
 		return resp, err
 	}
 
@@ -88,6 +90,7 @@ func TestClient_Do_InterceptorChain(t *testing.T) {
 		order = append(order, "second-before")
 		resp, err := invoker(ctx, req)
 		order = append(order, "second-after")
+
 		return resp, err
 	}
 
@@ -127,7 +130,8 @@ func doGet(t *testing.T, c *Client, baseURL string) *http.Response {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodGet, baseURL+"/test", nil)
 	require.NoError(t, err)
-	resp, err := c.Do(context.Background(), req)
+	resp, err := c.Do(t.Context(), req)
 	require.NoError(t, err)
+
 	return resp
 }

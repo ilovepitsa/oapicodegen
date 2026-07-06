@@ -13,6 +13,7 @@ import (
 func (g *Generator) schemaFile(sh *parser.Schema) codegen.File {
 	m := &typeMapper{currentPkg: "model", modulePath: g.modulePath}
 	body := g.renderSchema(sh, m)
+
 	return g.factory.Create(&gogen.File{
 		Package: "model",
 		Imports: m.imports,
@@ -50,9 +51,11 @@ func (g *Generator) renderSchema(sh *parser.Schema, m *typeMapper) []byte {
 
 func (g *Generator) renderStruct(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) {
 	w.Print("type ", name, " struct {\n")
+
 	for _, p := range sh.Properties {
 		g.renderField(w, p, m)
 	}
+
 	w.Print("}\n")
 }
 
@@ -60,6 +63,7 @@ func (g *Generator) renderField(w *codegen.BufferWriter, p *parser.Property, m *
 	if p.Schema != nil && p.Schema.Description != "" {
 		writeDocComment(w, p.Schema.Description)
 	}
+
 	if p.Schema != nil && p.Schema.Deprecated {
 		w.Print("// Deprecated: schema marks this field as deprecated\n")
 	}
@@ -84,9 +88,11 @@ func (g *Generator) renderEnum(w *codegen.BufferWriter, sh *parser.Schema, name 
 	w.Print("type ", name, " ", baseGo, "\n\n")
 
 	w.Print("const (\n")
+
 	for i, v := range sh.Enum {
 		w.Print("\t", enumValueName(name, enumStringValue(v), i), " ", name, " = ", enumLiteral(v, baseGo), "\n")
 	}
+
 	w.Print(")\n")
 }
 
@@ -117,6 +123,7 @@ func enumStringValue(v any) string {
 	if s, ok := v.(string); ok {
 		return s
 	}
+
 	return fmt.Sprint(v)
 }
 
@@ -134,6 +141,7 @@ func (g *Generator) renderArraySchema(w *codegen.BufferWriter, sh *parser.Schema
 	if sh.Items != nil {
 		elem = m.goType(sh.Items)
 	}
+
 	w.Print("type ", name, " []", elem, "\n")
 }
 
@@ -144,22 +152,27 @@ func (g *Generator) renderUnion(w *codegen.BufferWriter, sh *parser.Schema, m *t
 	}
 
 	w.Print("type ", name, " struct {\n")
+
 	for _, v := range variants {
 		variantType := m.goType(v)
 		if variantType == "" || variantType == "any" {
 			continue
 		}
+
 		fieldName := goName(refToName(v.Ref))
 		if fieldName == "" {
 			fieldName = variantType
 		}
+
 		w.Print("\t", fieldName, " *", variantType, " `json:\"-,inline\"`\n")
 	}
+
 	w.Print("}\n")
 }
 
 func (g *Generator) renderAllOf(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) {
 	w.Print("type ", name, " struct {\n")
+
 	for _, part := range sh.AllOf {
 		if part.Ref != "" {
 			w.Print("\t", goName(refToName(part.Ref)), "\n")
@@ -169,6 +182,7 @@ func (g *Generator) renderAllOf(w *codegen.BufferWriter, sh *parser.Schema, m *t
 			}
 		}
 	}
+
 	w.Print("}\n")
 }
 
@@ -181,6 +195,7 @@ func (g *Generator) renderMapAlias(w *codegen.BufferWriter, sh *parser.Schema, m
 	if sh.AdditionalProperties != nil {
 		elem = m.goType(sh.AdditionalProperties)
 	}
+
 	w.Print("type ", name, " map[string]", elem, "\n")
 }
 

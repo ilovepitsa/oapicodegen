@@ -12,6 +12,7 @@ func (g *Generator) clientSugarFile() codegen.File {
 	m.addImport("context", "")
 	m.addImport("fmt", "")
 	body := g.renderClientSugar(m)
+
 	return g.factory.Create(&gogen.File{
 		Package: "client",
 		Imports: m.imports,
@@ -55,28 +56,34 @@ func (g *Generator) renderSugarMethod(w *codegen.BufferWriter, op *parser.Operat
 
 	w.Print("\tresp, err := x.impl.", name, "(ctx, req)\n")
 	w.Print("\tif err != nil {\n")
+
 	if successSchema != nil {
 		w.Print("\t\treturn nil, err\n")
 	} else {
 		w.Print("\t\treturn err\n")
 	}
+
 	w.Print("\t}\n")
 
 	if successCode != "" {
 		field := responseFieldName(successCode)
 		w.Print("\tif resp.", field, " != nil {\n")
+
 		if successSchema != nil {
 			w.Print("\t\treturn resp.", field, ", nil\n")
 		} else {
 			w.Print("\t\treturn nil\n")
 		}
+
 		w.Print("\t}\n")
 	}
 
 	w.Print("\treturn ")
+
 	if successSchema != nil {
 		w.Print("nil, ")
 	}
+
 	w.WriteString(`fmt.Errorf("unexpected status: %d", resp.Code)` + "\n")
 	w.Print("}\n\n")
 }
@@ -89,8 +96,11 @@ func firstSuccessResponse(responses []*parser.Response) (string, *parser.Schema)
 		if !isSuccessCode(code) {
 			continue
 		}
+
 		resp := responseByCode(responses, code)
+
 		return code, responseSchema(resp)
 	}
+
 	return "", nil
 }

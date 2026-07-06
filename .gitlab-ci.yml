@@ -1,0 +1,38 @@
+image: golang:1.26
+
+variables:
+  GOPATH: $CI_PROJECT_DIR/.go
+  CACHE_PATH: .go/pkg/mod
+  GOLANGCI_LINT_VERSION: v1.64.5
+
+before_script:
+  - mkdir -p $GOPATH
+
+cache:
+  key:
+    files:
+      - go.sum
+  paths:
+    - $CACHE_PATH
+
+stages:
+  - build
+  - test
+  - lint
+
+build:
+  stage: build
+  script:
+    - make build
+
+test:
+  stage: test
+  script:
+    - make test
+    - make golden-check
+
+lint:
+  stage: lint
+  script:
+    - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin $GOLANGCI_LINT_VERSION
+    - make lint

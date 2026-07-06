@@ -1,0 +1,406 @@
+run:
+  timeout: 10m
+  go: "1.26"
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  disable-all: true
+  enable:
+    # --- correctness ---
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - stylecheck
+    - bodyclose
+    - errorlint
+    - exhaustive
+    - gocheckcompilerdirectives
+    - gochecksumtype
+    - nilerr
+    - nilnesserr
+    - nilnil
+    - noctx
+    - reassign
+    - rowserrcheck
+    - sqlclosecheck
+    - testifylint
+    - tparallel
+    - unparam
+    - wastedassign
+    - contextcheck
+    - containedctx
+    - fatcontext
+    - durationcheck
+    - errchkjson
+    - errname
+    - forcetypeassert
+    - goprintffuncname
+    - intrange
+    - makezero
+    - mirror
+    - musttag
+    - nakedret
+    - nosprintfhostport
+    - predeclared
+    - protogetter
+    - recvcheck
+    - tparallel
+    - unconvert
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+
+    # --- security ---
+    - gosec
+    - bidichk
+
+    # --- performance ---
+    - prealloc
+    - gocritic
+    - perfsprint
+
+    # --- style / complexity ---
+    - asasalint
+    - asciicheck
+    - canonicalheader
+    - copyloopvar
+    - cyclop
+    - decorder
+    - depguard
+    - dogsled
+    - dupl
+    - dupword
+    - err113
+    - exhaustruct
+    - forbidigo
+    - funlen
+    - gci
+    - ginkgolinter
+    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+    - goconst
+    - gocyclo
+    - godot
+    - godox
+    - gofumpt
+    - goheader
+    - gomoddirectives
+    - gomodguard
+    - grouper
+    - iface
+    - importas
+    - inamedparam
+    - interfacebloat
+    - ireturn
+    - lll
+    - loggercheck
+    - maintidx
+    - mnd
+    - nestif
+    - nlreturn
+    - nolintlint
+    - nonamedreturns
+    - paralleltest
+    - predeclared
+    - promlinter
+    - revive
+    - sloglint
+    - spancheck
+    - tagalign
+    - tagliatelle
+    - testableexamples
+    - testpackage
+    - thelper
+    - varnamelen
+    - whitespace
+    - wrapcheck
+    - wsl
+    - zerologlint
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  errorlint:
+    errorf: true
+    asserts: true
+    comparison: true
+
+  exhaustive:
+    check:
+      - switch
+      - map
+    default-signifies-exhaustive: false
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+      - experimental
+      - opinionated
+    disabled-checks:
+      - hugeParam
+
+  gocyclo:
+    min-complexity: 10
+
+  cyclop:
+    min-complexity: 10
+
+  gocognit:
+    min-complexity: 20
+
+  funlen:
+    lines: 60
+    statements: 40
+    ignore-comments: true
+
+  lll:
+    line-length: 100
+    tab-width: 1
+
+  mnd:
+    checks:
+      - argument
+      - case
+      - condition
+      - operation
+      - return
+      - assign
+    ignored-numbers:
+      - "0"
+      - "1"
+      - "2"
+      - "3"
+    ignored-functions:
+      - make
+      - len
+      - cap
+      - append
+      - strconv.*
+
+  nakedret:
+    max-func-lines: 20
+
+  nestif:
+    min-complexity: 3
+
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: false
+
+  revive:
+    severity: warning
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: duplicated-imports
+      - name: error-naming
+      - name: error-strings
+      - name: error-return
+      - name: errorf
+      - name: exported
+        arguments: ["disableStutteringCheck", "checkPrivateReceivers", "sayRepetitiveInsteadOfStutters"]
+      - name: if-return
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: unnecessary-stmt
+      - name: unreachable-code
+      - name: unused-parameter
+      - name: unused-receiver
+      - name: var-declaration
+      - name: var-naming
+      - name: waitgroup-by-value
+
+  staticcheck:
+    checks: ["all", "-ST1000"]
+
+  stylecheck:
+    checks: ["all", "-ST1003", "-ST1020", "-ST1021", "-ST1022"]
+
+  testifylint:
+    enable:
+      - bool-compare
+      - compares
+      - contains
+      - empty
+      - encoded-compare
+      - error-is-as
+      - error-nil
+      - expected-actual
+      - go-require
+      - len
+      - nil-compare
+      - regexp
+      - suite-broken-parallel
+      - suite-extra-assert-call
+      - suite-subtest-run
+      - useless-assert
+
+  varnamelen:
+    min-name-length: 2
+    check-receiver: true
+    check-return: true
+    check-type-param: true
+    ignore-type-assert-ok: true
+    ignore-map-index-ok: true
+    ignore-chan-recv-ok: true
+    ignore-decls:
+      - w io.Writer
+      - r io.Reader
+      - t *testing.T
+      - m map[string]any
+      - i int
+      - j int
+      - b []byte
+      - c context.Context
+      - ctx context.Context
+      - err error
+      - ok bool
+      - n int
+    ignore-names:
+      - ctx
+      - err
+      - ok
+      - id
+      - db
+      - tx
+      - ip
+      - url
+      - os
+      - fs
+      - pw
+
+  wrapcheck:
+    extra-ignore-sigs:
+      - .Errorf(
+      - errors.New(
+      - errors.Unwrap(
+      - errors.Join(
+      - .Wrap(
+      - .Wrapf(
+      - .WithMessage(
+      - .WithMessagef(
+      - .WithStack(
+      - fmt.Errorf(
+      - context.Canceled
+      - context.DeadlineExceeded
+
+  exhaustruct:
+    include:
+      - ".*"
+    exclude:
+      - ".*\\.testOptions"
+      - ".*testSpec"
+
+  ireturn:
+    allow:
+      - anon
+      - error
+      - empty
+      - stdlib
+      - "(or|er)$"
+
+  wsl:
+    strict-append: true
+    allow-assign-and-call: true
+    allow-assign-and-anything: false
+    allow-multiline-assign: true
+    allow-cuddle-declarations: false
+    allow-cuddle-with-calls:
+      - "Lock"
+      - "RLock"
+    allow-cuddle-with-no-condition: false
+    allow-separated-leading-comment: true
+    force-case-trailing-whitespace: 0
+    force-err-cuddling: true
+    force-short-branch: true
+
+  nolintlint:
+    require-explanation: true
+    require-specific: true
+    allow-unused: false
+
+  depguard:
+    rules:
+      main:
+        deny:
+          - pkg: "reflect"
+            desc: "use codegen helpers instead of reflect where possible"
+
+  tagliatelle:
+    case:
+      rules:
+        json: snake
+        yaml: snake
+        xml: camel
+        bson: snake
+
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(nschugorev/oapigenerator)
+
+  goheader:
+    template: ""
+
+issues:
+  exclude-dirs:
+    - internal/generator/testdata
+    - testdata
+    - ".go"
+  exclude-files:
+    - ".*\\.gen\\.go$"
+    - ".*_gen\\.go$"
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - revive
+        - gosec
+        - dupl
+        - funlen
+        - gocyclo
+        - gocognit
+        - lll
+        - nestif
+        - mnd
+        - wrapcheck
+        - exhaustruct
+        - ireturn
+        - varnamelen
+        - wsl
+        - gochecknoglobals
+        - gochecknoinits
+        - nonamedreturns
+        - cyclop
+        - gocritic
+        - testpackage
+        - goconst
+        - paralleltest
+        - tparallel
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  fix: false
+
+severity:
+  default-severity: warning
+  rules:
+    - linters: [errcheck, govet, staticcheck, unused, ineffassign, nilerr, nilnil, nilnesserr, bodyclose, rowserrcheck, sqlclosecheck, noctx, errorlint, gosec]
+      severity: error

@@ -6,6 +6,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -20,8 +21,10 @@ import (
 func Main() int {
 	if err := run(os.Args[1:], os.Stderr); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "oapigen: %v\n", err)
+
 		return 1
 	}
+
 	return 0
 }
 
@@ -35,6 +38,7 @@ func run(args []string, stderr *os.File) error {
 		importPrefix string
 		dryRun       bool
 	)
+
 	fs.StringVar(&input, "input", "", "path to OpenAPI 3.x spec file")
 	fs.StringVar(&output, "output", "", "output directory for generated Go packages")
 	fs.StringVar(&importPrefix, "import-prefix", "", "Go import path prefix for generated packages (e.g. github.com/foo/bar/gen)")
@@ -48,20 +52,24 @@ func run(args []string, stderr *os.File) error {
 	}
 
 	if input == "" {
-		return fmt.Errorf("-input is required")
+		return errors.New("-input is required")
 	}
+
 	if output == "" && !dryRun {
-		return fmt.Errorf("-output is required (or use -dry-run)")
+		return errors.New("-output is required (or use -dry-run)")
 	}
+
 	if importPrefix == "" {
-		return fmt.Errorf("-import-prefix is required")
+		return errors.New("-import-prefix is required")
 	}
 
 	logger, err := logCfg.Create()
 	if err != nil {
 		return fmt.Errorf("init logger: %w", err)
 	}
+
 	defer func() { _ = logger.Sync() }()
+
 	sugar := logger.Sugar()
 
 	data, err := os.ReadFile(input)
@@ -73,11 +81,13 @@ func run(args []string, stderr *os.File) error {
 	if err != nil {
 		return fmt.Errorf("parse spec %q: %w", input, err)
 	}
+
 	sugar.Infof("parsed spec: %d schemas, %d operations", len(doc.Schemas), len(doc.Operations))
 
 	var fw codegen.FileWriter
 	if dryRun {
 		fw = codegen.NoopFileWriter{}
+
 		sugar.Info("dry-run mode: no files will be written")
 	} else {
 		fw, err = fwCfg.Create(output)
@@ -85,6 +95,7 @@ func run(args []string, stderr *os.File) error {
 			return fmt.Errorf("create file writer: %w", err)
 		}
 	}
+
 	defer func() {
 		if cerr := fw.Close(); cerr != nil {
 			sugar.Errorf("close file writer: %v", cerr)
@@ -96,5 +107,6 @@ func run(args []string, stderr *os.File) error {
 	}
 
 	sugar.Infof("generation complete: output=%s import-prefix=%s", output, importPrefix)
+
 	return nil
 }

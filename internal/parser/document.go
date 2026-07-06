@@ -125,5 +125,6 @@ func ParseFile(fsys fs.FS, path string) (*Document, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return parseBytes(data, path)
 }

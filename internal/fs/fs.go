@@ -63,6 +63,7 @@ func NewRecommendedReal(opts ...Option) *RealFS {
 	for _, opt := range opts {
 		opt(r)
 	}
+
 	return r
 }
 
@@ -70,14 +71,18 @@ func (r *RealFS) resolve(name string) (string, error) {
 	if name == "" {
 		return "", fs.ErrInvalid
 	}
+
 	if r.baseDir == "" {
 		return filepath.Clean(name), nil
 	}
+
 	base := filepath.Clean(r.baseDir)
 	cleaned := filepath.Clean(filepath.Join(base, name))
+
 	if cleaned != base && !strings.HasPrefix(cleaned, base+string(filepath.Separator)) {
 		return "", fmt.Errorf("fs: path %q escapes base dir %q", name, r.baseDir)
 	}
+
 	return cleaned, nil
 }
 
@@ -86,6 +91,7 @@ func (r *RealFS) Open(name string) (fs.File, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return os.Open(p)
 }
 
@@ -94,6 +100,7 @@ func (r *RealFS) Stat(name string) (fs.FileInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return os.Stat(p)
 }
 
@@ -102,6 +109,7 @@ func (r *RealFS) ReadDir(name string) ([]fs.DirEntry, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return os.ReadDir(p)
 }
 
@@ -110,6 +118,7 @@ func (r *RealFS) WriteFile(name string, data []byte) error {
 	if err != nil {
 		return err
 	}
+
 	return os.WriteFile(p, data, 0o644)
 }
 
@@ -118,6 +127,7 @@ func (r *RealFS) MkdirAll(path string, perm os.FileMode) error {
 	if err != nil {
 		return err
 	}
+
 	return os.MkdirAll(p, perm)
 }
 
@@ -126,5 +136,6 @@ func (r *RealFS) Remove(name string) error {
 	if err != nil {
 		return err
 	}
+
 	return os.Remove(p)
 }

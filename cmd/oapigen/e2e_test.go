@@ -72,8 +72,10 @@ func walkFiles(t *testing.T, root string) map[string][]byte {
 			return err
 		}
 		files[filepath.ToSlash(rel)] = data
+
 		return nil
 	})
 	require.NoError(t, err)
+
 	return files
 }
