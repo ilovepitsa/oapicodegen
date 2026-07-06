@@ -66,7 +66,12 @@ func (c *Configurator) Create() (*zap.Logger, error) {
 		return nil, fmt.Errorf("logging: unknown log format %q", c.format)
 	}
 
-	return cfg.Build()
+	logger, err := cfg.Build()
+	if err != nil {
+		return nil, fmt.Errorf("init zap logger: %w", err)
+	}
+
+	return logger, nil
 }
 
 func parseLevel(s string) (zapcore.Level, error) {

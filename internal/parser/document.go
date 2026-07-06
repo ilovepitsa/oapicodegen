@@ -7,7 +7,10 @@
 // update-схемы, common-схемы) намеренно отсутствует — бэклог.
 package parser
 
-import "io/fs"
+import (
+	"fmt"
+	"io/fs"
+)
 
 // Document — распарсенный OpenAPI 3.x документ.
 type Document struct {
@@ -123,7 +126,7 @@ func Parse(data []byte) (*Document, error) {
 func ParseFile(fsys fs.FS, path string) (*Document, error) {
 	data, err := fs.ReadFile(fsys, path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read spec %q: %w", path, err)
 	}
 
 	return parseBytes(data, path)

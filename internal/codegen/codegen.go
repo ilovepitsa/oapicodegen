@@ -91,10 +91,14 @@ type pathWriter struct {
 }
 
 func (p *pathWriter) WriteFile(name string, file File) error {
-	return p.inner.WriteFile(path.Join(p.prefix, name), file)
+	if err := p.inner.WriteFile(path.Join(p.prefix, name), file); err != nil {
+		return fmt.Errorf("write %q: %w", name, err)
+	}
+
+	return nil
 }
 
-func (p *pathWriter) Close() error { return p.inner.Close() }
+func (p *pathWriter) Close() error { return p.inner.Close() } //nolint:wrapcheck // thin delegator
 
 // NoopFileWriter — FileWriter, отбрасывающий все записи. Используется для
 // dry-run генерации.

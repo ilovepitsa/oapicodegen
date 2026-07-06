@@ -64,11 +64,15 @@ type fileWriter struct {
 func (w *fileWriter) WriteFile(name string, file codegen.File) error {
 	if dir := path.Dir(name); dir != "" && dir != "." {
 		if err := w.fs.MkdirAll(dir, w.dirPerm); err != nil {
-			return err
+			return fmt.Errorf("mkdir %q: %w", dir, err)
 		}
 	}
 
-	return w.fs.WriteFile(name, file.Content())
+	if err := w.fs.WriteFile(name, file.Content()); err != nil {
+		return fmt.Errorf("write %q: %w", name, err)
+	}
+
+	return nil
 }
 
 func (w *fileWriter) Close() error { return nil }

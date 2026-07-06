@@ -36,7 +36,7 @@ type ReadOnlyFS interface {
 // ReadFile читает содержимое файла name из fsys. Удобная top-level функция
 // поверх fs.ReadFile, повторяет сигнатуру platform-go/pkg/fs.ReadFile.
 func ReadFile(fsys ReadOnlyFS, name string) ([]byte, error) {
-	return fs.ReadFile(fsys, name)
+	return fs.ReadFile(fsys, name) //nolint:wrapcheck // thin delegator, повторяет сигнатуру platform-go
 }
 
 // RealFS — файловая система поверх os.*. При заданном baseDir все пути
@@ -92,7 +92,9 @@ func (r *RealFS) Open(name string) (fs.File, error) {
 		return nil, err
 	}
 
-	return os.Open(p)
+	f, err := os.Open(p)
+
+	return f, fmt.Errorf("open %q: %w", name, err)
 }
 
 func (r *RealFS) Stat(name string) (fs.FileInfo, error) {
@@ -101,7 +103,9 @@ func (r *RealFS) Stat(name string) (fs.FileInfo, error) {
 		return nil, err
 	}
 
-	return os.Stat(p)
+	info, err := os.Stat(p)
+
+	return info, fmt.Errorf("stat %q: %w", name, err)
 }
 
 func (r *RealFS) ReadDir(name string) ([]fs.DirEntry, error) {
@@ -110,7 +114,9 @@ func (r *RealFS) ReadDir(name string) ([]fs.DirEntry, error) {
 		return nil, err
 	}
 
-	return os.ReadDir(p)
+	entries, err := os.ReadDir(p)
+
+	return entries, fmt.Errorf("readdir %q: %w", name, err)
 }
 
 func (r *RealFS) WriteFile(name string, data []byte) error {
@@ -128,7 +134,7 @@ func (r *RealFS) MkdirAll(path string, perm os.FileMode) error {
 		return err
 	}
 
-	return os.MkdirAll(p, perm)
+	return fmt.Errorf("mkdir %q: %w", path, os.MkdirAll(p, perm))
 }
 
 func (r *RealFS) Remove(name string) error {
@@ -137,5 +143,5 @@ func (r *RealFS) Remove(name string) error {
 		return err
 	}
 
-	return os.Remove(p)
+	return fmt.Errorf("remove %q: %w", name, os.Remove(p))
 }
