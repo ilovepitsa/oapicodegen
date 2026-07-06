@@ -45,7 +45,7 @@ func (g *Generator) renderJSONMethods(sh *parser.Schema, m *typeMapper) []byte {
 
 	for _, v := range variants {
 		variantType := m.goType(v)
-		if variantType == "" || variantType == "any" {
+		if variantType == "" || variantType == goTypeAny {
 			continue
 		}
 

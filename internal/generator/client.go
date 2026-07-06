@@ -83,11 +83,11 @@ func (g *Generator) renderParamField(w *codegen.BufferWriter, p *parser.Paramete
 
 func echoTag(in, name string) string {
 	switch in {
-	case "path":
+	case oapiParamPath:
 		return "param:\"" + name + "\""
-	case "query":
+	case oapiParamQuery:
 		return "query:\"" + name + "\""
-	case "header":
+	case oapiParamHeader:
 		return "header:\"" + name + "\""
 	default:
 		return ""
@@ -183,11 +183,11 @@ func sortedResponseCodes(responses []*parser.Response) []string {
 	}
 
 	sort.Slice(codes, func(i, j int) bool {
-		if codes[i] == "default" {
+		if codes[i] == oapiCodeDefault {
 			return false
 		}
 
-		if codes[j] == "default" {
+		if codes[j] == oapiCodeDefault {
 			return true
 		}
 

@@ -38,9 +38,9 @@ func (g *Generator) renderSchema(sh *parser.Schema, m *typeMapper) []byte {
 		g.renderArraySchema(w, sh, m, name)
 	case len(sh.Enum) > 0:
 		g.renderEnum(w, sh, name)
-	case sh.Type == "object" && len(sh.Properties) == 0:
+	case sh.Type == oapiTypeObject && len(sh.Properties) == 0:
 		g.renderMapAlias(w, sh, m, name)
-	case sh.Type == "object" || len(sh.Properties) > 0:
+	case sh.Type == oapiTypeObject || len(sh.Properties) > 0:
 		g.renderStruct(w, sh, m, name)
 	default:
 		g.renderAlias(w, sh, m, name)
@@ -98,16 +98,16 @@ func (g *Generator) renderEnum(w *codegen.BufferWriter, sh *parser.Schema, name 
 
 func enumBaseType(sh *parser.Schema) string {
 	switch sh.Type {
-	case "integer":
+	case oapiTypeInteger:
 		switch sh.Format {
-		case "int32":
-			return "int32"
-		case "int64":
-			return "int64"
+		case oapiFormatInt32:
+			return oapiFormatInt32
+		case oapiFormatInt64:
+			return oapiFormatInt64
 		default:
 			return "int"
 		}
-	case "number":
+	case oapiTypeNumber:
 		switch sh.Format {
 		case "float":
 			return "float32"
@@ -115,7 +115,7 @@ func enumBaseType(sh *parser.Schema) string {
 			return "float64"
 		}
 	default:
-		return "string"
+		return oapiTypeString
 	}
 }
 
@@ -129,7 +129,7 @@ func enumStringValue(v any) string {
 
 func enumLiteral(v any, baseGo string) string {
 	switch baseGo {
-	case "string":
+	case oapiTypeString:
 		return fmt.Sprintf("%q", fmt.Sprint(v))
 	default:
 		return fmt.Sprint(v)
@@ -137,7 +137,7 @@ func enumLiteral(v any, baseGo string) string {
 }
 
 func (g *Generator) renderArraySchema(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) {
-	elem := "any"
+	elem := goTypeAny
 	if sh.Items != nil {
 		elem = m.goType(sh.Items)
 	}
@@ -155,7 +155,7 @@ func (g *Generator) renderUnion(w *codegen.BufferWriter, sh *parser.Schema, m *t
 
 	for _, v := range variants {
 		variantType := m.goType(v)
-		if variantType == "" || variantType == "any" {
+		if variantType == "" || variantType == goTypeAny {
 			continue
 		}
 
@@ -176,7 +176,7 @@ func (g *Generator) renderAllOf(w *codegen.BufferWriter, sh *parser.Schema, m *t
 	for _, part := range sh.AllOf {
 		if part.Ref != "" {
 			w.Print("\t", goName(refToName(part.Ref)), "\n")
-		} else if part.Type == "object" {
+		} else if part.Type == oapiTypeObject {
 			for _, p := range part.Properties {
 				g.renderField(w, p, m)
 			}
@@ -191,7 +191,7 @@ func (g *Generator) renderAlias(w *codegen.BufferWriter, sh *parser.Schema, m *t
 }
 
 func (g *Generator) renderMapAlias(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) {
-	elem := "any"
+	elem := goTypeAny
 	if sh.AdditionalProperties != nil {
 		elem = m.goType(sh.AdditionalProperties)
 	}

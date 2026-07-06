@@ -125,7 +125,7 @@ func (g *Generator) renderImplServerMethod(w *codegen.BufferWriter, op *parser.O
 
 func (g *Generator) renderImplServerResponse(w *codegen.BufferWriter, op *parser.Operation) {
 	for _, r := range op.Responses {
-		if r.StatusCode == "default" {
+		if r.StatusCode == oapiCodeDefault {
 			continue
 		}
 
@@ -142,7 +142,7 @@ func (g *Generator) renderImplServerResponse(w *codegen.BufferWriter, op *parser
 	}
 
 	for _, r := range op.Responses {
-		if r.StatusCode != "default" {
+		if r.StatusCode != oapiCodeDefault {
 			continue
 		}
 

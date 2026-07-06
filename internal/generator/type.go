@@ -30,7 +30,7 @@ func (m *typeMapper) addImport(path, alias string) {
 // nullable=true → pointer (для примитивов и структур; slices/maps/any — без pointer).
 func (m *typeMapper) goType(s *parser.Schema) string {
 	if s == nil {
-		return "any"
+		return goTypeAny
 	}
 
 	base := m.baseType(s)
@@ -44,7 +44,7 @@ func (m *typeMapper) goType(s *parser.Schema) string {
 // isInherentlyNilable — типы, которые уже имеют нулевое значение nil,
 // поэтому оборачивать в pointer не нужно.
 func isInherentlyNilable(t string) bool {
-	return strings.HasPrefix(t, "[]") || strings.HasPrefix(t, "map[") || t == "any"
+	return strings.HasPrefix(t, "[]") || strings.HasPrefix(t, "map[") || t == goTypeAny
 }
 
 // baseType возвращает Go-тип без учёта nullable.
@@ -58,7 +58,7 @@ func (m *typeMapper) baseType(s *parser.Schema) string {
 			return m.qualifyModelType(s.Name)
 		}
 
-		return "any"
+		return goTypeAny
 	}
 
 	if s.Type == "array" {
@@ -69,7 +69,7 @@ func (m *typeMapper) baseType(s *parser.Schema) string {
 		return "[]any"
 	}
 
-	if s.Type == "object" && len(s.Properties) == 0 {
+	if s.Type == oapiTypeObject && len(s.Properties) == 0 {
 		if s.AdditionalProperties != nil {
 			return "map[string]" + m.goType(s.AdditionalProperties)
 		}
@@ -77,7 +77,7 @@ func (m *typeMapper) baseType(s *parser.Schema) string {
 		return "map[string]any"
 	}
 
-	if s.Type == "object" && s.Name != "" {
+	if s.Type == oapiTypeObject && s.Name != "" {
 		return m.qualifyModelType(s.Name)
 	}
 
@@ -86,7 +86,7 @@ func (m *typeMapper) baseType(s *parser.Schema) string {
 	}
 
 	switch s.Type {
-	case "string":
+	case oapiTypeString:
 		switch s.Format {
 		case "date-time", "date":
 			m.addImport("time", "")
@@ -96,28 +96,28 @@ func (m *typeMapper) baseType(s *parser.Schema) string {
 			return "[]byte"
 		}
 
-		return "string"
-	case "integer":
+		return oapiTypeString
+	case oapiTypeInteger:
 		switch s.Format {
-		case "int32":
-			return "int32"
-		case "int64":
-			return "int64"
+		case oapiFormatInt32:
+			return oapiFormatInt32
+		case oapiFormatInt64:
+			return oapiFormatInt64
 		default:
 			return "int"
 		}
-	case "number":
+	case oapiTypeNumber:
 		switch s.Format {
 		case "float":
 			return "float32"
 		default:
 			return "float64"
 		}
-	case "boolean":
+	case oapiTypeBoolean:
 		return "bool"
 	}
 
-	return "any"
+	return goTypeAny
 }
 
 // qualifyModelType добавляет префикс "model." и импорт, если текущий пакет

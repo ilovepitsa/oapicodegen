@@ -47,7 +47,7 @@ func responseFieldName(code string) string {
 
 // isSuccessCode сообщает, является ли код ответа 2xx.
 func isSuccessCode(code string) bool {
-	if code == "default" {
+	if code == oapiCodeDefault {
 		return false
 	}
 

@@ -40,7 +40,7 @@ func (g *Generator) implClientFile() codegen.File {
 		}
 
 		for _, p := range op.Parameters {
-			if p.In == "path" || p.In == "query" {
+			if p.In == oapiParamPath || p.In == oapiParamQuery {
 				needURL = true
 			}
 		}
@@ -99,7 +99,7 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 	w.Print("\tpath := \"", op.Path, "\"\n")
 
 	for _, p := range op.Parameters {
-		if p.In != "path" {
+		if p.In != oapiParamPath {
 			continue
 		}
 
@@ -110,7 +110,7 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 	hasQuery := false
 
 	for _, p := range op.Parameters {
-		if p.In != "query" {
+		if p.In != oapiParamQuery {
 			continue
 		}
 
@@ -159,7 +159,7 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 	w.Print("\t}\n")
 
 	for _, p := range op.Parameters {
-		if p.In != "header" {
+		if p.In != oapiParamHeader {
 			continue
 		}
 
@@ -191,7 +191,7 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 	var defaultResp *parser.Response
 
 	for _, r := range op.Responses {
-		if r.StatusCode == "default" {
+		if r.StatusCode == oapiCodeDefault {
 			hasDefault = true
 			defaultResp = r
 
@@ -203,7 +203,7 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 
 	if hasDefault {
 		w.Print("\tdefault:\n")
-		g.renderImplResponseBody(w, "default", defaultResp, "ResponseDefault", m)
+		g.renderImplResponseBody(w, oapiCodeDefault, defaultResp, "ResponseDefault", m)
 	} else {
 		w.Print("\tdefault:\n")
 		w.WriteString("\t\treturn nil, fmt.Errorf(\"unexpected status code: %d\", resp.StatusCode)\n")
