@@ -41,7 +41,7 @@ func (g *Generator) renderJSONMethods(sh *parser.Schema, m *typeMapper) []byte {
 		typ   string
 	}
 
-	var vs []variant
+	vs := make([]variant, 0, len(variants))
 
 	for _, v := range variants {
 		variantType := m.goType(v)

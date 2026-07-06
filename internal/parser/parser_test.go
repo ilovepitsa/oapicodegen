@@ -140,7 +140,7 @@ func TestParse_OperationResponses(t *testing.T) {
 	var resp200 *Response
 	var resp4xx *Response
 	for _, r := range listPets.Responses {
-		if r.StatusCode == "200" {
+		if r.StatusCode == "200" { //nolint:usestdlibvars // StatusCode — строковое поле, http.StatusOK не подходит (int)
 			resp200 = r
 		} else {
 			resp4xx = r

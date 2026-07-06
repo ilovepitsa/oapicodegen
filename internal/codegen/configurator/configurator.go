@@ -25,6 +25,8 @@ type Configurator struct {
 	dirPerm os.FileMode
 }
 
+const defaultDirPerm os.FileMode = 0o755
+
 // NewFileWriterConfiguratorFromFlags создаёт Configurator и сохраняет
 // FlagSet для будущего расширения (например, -fw-dir-perm, -fw-file-perm).
 // В первой итерации флаги не регистрируются; используются дефолты:
@@ -32,7 +34,7 @@ type Configurator struct {
 func NewFileWriterConfiguratorFromFlags(fs *flag.FlagSet) *Configurator {
 	return &Configurator{
 		flagSet: fs,
-		dirPerm: 0o755,
+		dirPerm: defaultDirPerm,
 	}
 }
 

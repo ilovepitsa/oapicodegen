@@ -119,7 +119,7 @@ func (r *RealFS) WriteFile(name string, data []byte) error {
 		return err
 	}
 
-	return os.WriteFile(p, data, 0o644)
+	return os.WriteFile(p, data, 0o644) //nolint:gosec // 0o644 — стандартные пермишены для генерируемых Go-файлов (владелец rw, остальные r)
 }
 
 func (r *RealFS) MkdirAll(path string, perm os.FileMode) error {

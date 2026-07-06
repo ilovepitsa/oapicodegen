@@ -122,16 +122,21 @@ func TestClient_Do_InterceptorShortCircuit(t *testing.T) {
 	c, err := NewClient(srv.URL, WithInterceptor(blocking))
 	require.NoError(t, err)
 
-	resp := doGet(t, c, srv.URL)
+	resp := doGet(t, c, srv.URL) //nolint:bodyclose // body закрывается через t.Cleanup в doGet
 	assert.Equal(t, http.StatusTeapot, resp.StatusCode)
 }
 
 func doGet(t *testing.T, c *Client, baseURL string) *http.Response {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodGet, baseURL+"/test", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, baseURL+"/test", nil)
 	require.NoError(t, err)
 	resp, err := c.Do(t.Context(), req)
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		if resp.Body != nil {
+			_ = resp.Body.Close()
+		}
+	})
 
 	return resp
 }

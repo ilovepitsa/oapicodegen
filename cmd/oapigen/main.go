@@ -68,7 +68,7 @@ func run(args []string, stderr *os.File) error {
 		return fmt.Errorf("init logger: %w", err)
 	}
 
-	defer func() { _ = logger.Sync() }()
+	defer func() { _ = logger.Sync() }() //nolint:errcheck // zap.Sync часто падает на stderr/stdout — намеренно игнорируем
 
 	sugar := logger.Sugar()
 

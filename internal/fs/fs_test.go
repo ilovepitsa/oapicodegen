@@ -102,9 +102,9 @@ func TestRealFS_BaseDir_RejectsEscape(t *testing.T) {
 	rfs := NewRecommendedReal(WithBaseDir(base))
 
 	err := rfs.WriteFile("../escape.txt", []byte("x"))
-	assert.Error(t, err)
+	require.Error(t, err)
 	err = rfs.MkdirAll("../escape", 0o755)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestRealFS_BaseDir_RejectsEscape_AllOps(t *testing.T) {
@@ -112,12 +112,12 @@ func TestRealFS_BaseDir_RejectsEscape_AllOps(t *testing.T) {
 	rfs := NewRecommendedReal(WithBaseDir(base))
 
 	_, err := rfs.Open("../escape")
-	assert.Error(t, err)
+	require.Error(t, err)
 	_, err = rfs.ReadDir("../escape")
-	assert.Error(t, err)
-	assert.Error(t, rfs.Remove("../escape"))
+	require.Error(t, err)
+	require.Error(t, rfs.Remove("../escape"))
 	_, err = rfs.Stat("../escape")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestRealFS_BaseDir_NestedDirsCreated(t *testing.T) {
@@ -126,7 +126,7 @@ func TestRealFS_BaseDir_NestedDirsCreated(t *testing.T) {
 
 	// WriteFile не создаёт родительские каталоги
 	err := rfs.WriteFile(filepath.Join("a", "b", "c.txt"), []byte("x"))
-	assert.Error(t, err, "expected failure without parent dirs")
+	require.Error(t, err, "expected failure without parent dirs")
 	require.True(t, isPathError(err), "expected path error for missing parent, got %v", err)
 
 	require.NoError(t, rfs.MkdirAll(filepath.Join("a", "b"), 0o755))

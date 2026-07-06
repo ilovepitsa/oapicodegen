@@ -122,10 +122,7 @@ func TestCreate_RelativeOutputPath(t *testing.T) {
 	// Относительный путь должен работать (через WithBaseDir + MkdirAll).
 	// Используем t.TempDir как cwd, чтобы не засорять репозиторий.
 	tmp := t.TempDir()
-	oldWd, err := os.Getwd()
-	require.NoError(t, err)
-	defer func() { _ = os.Chdir(oldWd) }()
-	require.NoError(t, os.Chdir(tmp))
+	t.Chdir(tmp)
 
 	c := NewFileWriterConfiguratorFromFlags(flag.NewFlagSet("test", flag.ContinueOnError))
 	fw, err := c.Create("out")

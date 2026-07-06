@@ -17,7 +17,7 @@ func goName(s string) string {
 	capitalizeNext := true
 
 	for _, r := range s {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) { //nolint:nestif // 2 уровня — рефакторинг ухудшит читаемость
 			if capitalizeNext {
 				b.WriteRune(unicode.ToUpper(r))
 
@@ -35,13 +35,12 @@ func goName(s string) string {
 	for _, abbr := range []string{"Id", "Url", "Uri", "Http", "Https", "Json", "Xml", "Api", "Uuid", "Ip"} {
 		name = replaceWord(name, abbr, strings.ToUpper(abbr))
 	}
-
 	return name
 }
 
-func replaceWord(s, old, new string) string {
+func replaceWord(s, old, replacement string) string {
 	// заменяет только целые слова (за заглавной буквой следует строчная в old)
-	return strings.ReplaceAll(s, old, new)
+	return strings.ReplaceAll(s, old, replacement)
 }
 
 // fileName конвертирует PascalCase в snake_case для имени файла.
