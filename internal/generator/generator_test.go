@@ -743,6 +743,29 @@ func (c *collectWriter) WriteFile(name string, f codegen.File) error {
 
 func (c *collectWriter) Close() error { return nil }
 
+func TestWithProjectFeatures_DefaultsToZero(t *testing.T) {
+	g := &Generator{}
+	WithProjectFeatures(oapiparser.ProjectFeatures{
+		ServerNoAutoDefaults: oapiparser.ProjectFeature{Value: true},
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+		UseRequiredV2:        oapiparser.ProjectFeature{Value: true},
+		UseUTCForDateTime:    oapiparser.ProjectFeature{Value: true},
+	})(g)
+
+	assert.True(t, g.features.ServerNoAutoDefaults.Value)
+	assert.True(t, g.features.SplitRequestResponse.Value)
+	assert.True(t, g.features.UseRequiredV2.Value)
+	assert.True(t, g.features.UseUTCForDateTime.Value)
+}
+
+func TestWithProjectFeatures_NotCalled_AllFalse(t *testing.T) {
+	g := &Generator{}
+	assert.False(t, g.features.ServerNoAutoDefaults.Value)
+	assert.False(t, g.features.SplitRequestResponse.Value)
+	assert.False(t, g.features.UseRequiredV2.Value)
+	assert.False(t, g.features.UseUTCForDateTime.Value)
+}
+
 func parseSpec(t *testing.T, spec string) *oapiparser.Document {
 	t.Helper()
 	doc, err := oapiparser.Parse([]byte(spec))

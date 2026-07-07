@@ -25,6 +25,7 @@ type Generator struct {
 	doc        *parser.Document
 	modulePath string
 	factory    *gogen.FileFactory
+	features   parser.ProjectFeatures
 }
 
 // Option настраивает Generator.
@@ -35,6 +36,12 @@ type Option func(*Generator)
 // к пакетам model/, interfaces/client/, interfaces/server/.
 func WithModulePath(p string) Option {
 	return func(g *Generator) { g.modulePath = p }
+}
+
+// WithProjectFeatures прокидывает резолвнутые generation flags в Generator.
+// Без вызова option все флаги остаются false (zero value ProjectFeatures).
+func WithProjectFeatures(pf parser.ProjectFeatures) Option {
+	return func(g *Generator) { g.features = pf }
 }
 
 // Generate обходит все схемы и операции, пишет Go-файлы через fw.
