@@ -92,7 +92,7 @@ func (m *typeMapper) baseType(s *parser.Schema) string {
 // primitiveGoType мапит примитивный OpenAPI-тип (string/integer/number/boolean)
 // в Go-тип с учётом format. Возвращает goTypeAny, если тип неизвестен.
 //
-//nolint:gocyclo,cyclop // switch with nested format switch
+//nolint:cyclop // switch with nested format switch
 func (m *typeMapper) primitiveGoType(s *parser.Schema) string {
 	switch s.Type {
 	case oapiTypeString:

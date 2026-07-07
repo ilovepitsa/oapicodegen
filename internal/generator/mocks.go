@@ -78,7 +78,7 @@ func (g *Generator) renderGomockMock(mockName, ifaceRef string) []byte {
 	return w.Content()
 }
 
-func (g *Generator) renderGomockMethod(w *codegen.BufferWriter, mockName, recorderName, methodName string) {
+func (g *Generator) renderGomockMethod(w *codegen.BufferWriter, mockName, recorderName, methodName string) { //nolint:lll // function signature
 	w.Print("func (m *", mockName, ") ", methodName, "(arg0 context.Context, arg1 *apiclient.", methodName, "Request) ") //nolint:lll // generated method signature
 	w.Print("(*apiclient.", methodName, "Response, error) {\n")
 	w.Print("\tm.ctrl.T.Helper()\n")

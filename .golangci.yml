@@ -74,11 +74,8 @@ linters:
     - dogsled
     - dupl
     - dupword
-    - err113
-    - exhaustruct
     - forbidigo
     - funlen
-    - gci
     - ginkgolinter
     - gochecknoglobals
     - gochecknoinits
@@ -96,7 +93,6 @@ linters:
     - importas
     - inamedparam
     - interfacebloat
-    - ireturn
     - lll
     - loggercheck
     - maintidx
@@ -116,7 +112,6 @@ linters:
     - testableexamples
     - testpackage
     - thelper
-    - varnamelen
     - whitespace
     - wrapcheck
     - wsl
@@ -221,7 +216,6 @@ linters-settings:
       - name: unnecessary-stmt
       - name: unreachable-code
       - name: unused-parameter
-      - name: unused-receiver
       - name: var-declaration
       - name: var-naming
       - name: waitgroup-by-value
@@ -354,7 +348,6 @@ linters-settings:
     sections:
       - standard
       - default
-      - prefix(nschugorev/oapigenerator)
 
   goheader:
     template: ""

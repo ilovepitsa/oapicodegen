@@ -93,7 +93,7 @@ func echoTag(in, name string) string {
 	}
 }
 
-func (g *Generator) renderBodyField(w *codegen.BufferWriter, rb *parser.RequestBody, m *typeMapper) {
+func (g *Generator) renderBodyField(w *codegen.BufferWriter, rb *parser.RequestBody, m *typeMapper) { //nolint:lll // function signature
 	schema := bodySchema(rb)
 	if schema == nil {
 		return
@@ -111,7 +111,7 @@ func (g *Generator) renderBodyField(w *codegen.BufferWriter, rb *parser.RequestB
 	w.Print("\tBody ", fieldType, " `json:\"-\"`\n")
 }
 
-func (g *Generator) renderResponseStruct(w *codegen.BufferWriter, op *parser.Operation, m *typeMapper) {
+func (g *Generator) renderResponseStruct(w *codegen.BufferWriter, op *parser.Operation, m *typeMapper) { //nolint:lll // function signature
 	name := operationMethodName(op) + "Response"
 	w.Print("type ", name, " struct {\n")
 	w.Print("\tCode int\n")

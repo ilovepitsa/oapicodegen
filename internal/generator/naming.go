@@ -36,6 +36,7 @@ func goName(s string) string {
 	for _, abbr := range abbreviations {
 		name = replaceWord(name, abbr, strings.ToUpper(abbr))
 	}
+
 	return name
 }
 

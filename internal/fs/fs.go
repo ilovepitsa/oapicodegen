@@ -134,7 +134,11 @@ func (r *RealFS) WriteFile(name string, data []byte) error {
 		return err
 	}
 
-	return os.WriteFile(p, data, 0o644) //nolint:gosec // standard perm for generated Go files
+	if err := os.WriteFile(p, data, 0o644); err != nil { //nolint:gosec,mnd,lll // standard perm for generated Go files
+		return fmt.Errorf("write %q: %w", name, err)
+	}
+
+	return nil
 }
 
 func (r *RealFS) MkdirAll(path string, perm os.FileMode) error {

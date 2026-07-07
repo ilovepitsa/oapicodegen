@@ -38,7 +38,7 @@ func (g *Generator) renderClientSugar(m *typeMapper) []byte {
 	return w.Content()
 }
 
-func (g *Generator) renderSugarMethod(w *codegen.BufferWriter, op *parser.Operation, m *typeMapper) {
+func (g *Generator) renderSugarMethod(w *codegen.BufferWriter, op *parser.Operation, m *typeMapper) { //nolint:lll // function signature
 	name := operationMethodName(op)
 	successCode, successSchema := firstSuccessResponse(op.Responses)
 

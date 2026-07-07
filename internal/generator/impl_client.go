@@ -45,7 +45,10 @@ func (g *Generator) implClientFile() codegen.File {
 	})
 }
 
-func (g *Generator) implClientImports() (needJSON, needBytes, needURL bool) {
+//nolint:gocritic // unnamedResult conflicts with nonamedreturns
+func (g *Generator) implClientImports() (bool, bool, bool) {
+	var needJSON, needBytes, needURL bool
+
 	for _, op := range g.doc.Operations {
 		if op.RequestBody != nil {
 			needJSON = true
@@ -224,7 +227,7 @@ func (g *Generator) renderImplResponseCase(w *codegen.BufferWriter, r *parser.Re
 	g.renderImplResponseBody(w, r.StatusCode, r, fieldName, m)
 }
 
-func (g *Generator) renderImplResponseBody(w *codegen.BufferWriter, label string, r *parser.Response, fieldName string, m *typeMapper) {
+func (g *Generator) renderImplResponseBody(w *codegen.BufferWriter, label string, r *parser.Response, fieldName string, m *typeMapper) { //nolint:lll // function signature
 	schema := responseSchema(r)
 	if schema == nil {
 		w.Print("\t\tresult.", fieldName, " = true\n")

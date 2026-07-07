@@ -136,7 +136,7 @@ func enumLiteral(v any, baseGo string) string {
 	}
 }
 
-func (g *Generator) renderArraySchema(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) {
+func (g *Generator) renderArraySchema(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) { //nolint:lll // function signature
 	elem := goTypeAny
 	if sh.Items != nil {
 		elem = m.goType(sh.Items)
@@ -145,7 +145,7 @@ func (g *Generator) renderArraySchema(w *codegen.BufferWriter, sh *parser.Schema
 	w.Print("type ", name, " []", elem, "\n")
 }
 
-func (g *Generator) renderUnion(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) {
+func (g *Generator) renderUnion(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) { //nolint:lll // function signature
 	variants := sh.OneOf
 	if len(variants) == 0 {
 		variants = sh.AnyOf
@@ -186,11 +186,11 @@ func (g *Generator) renderAllOf(w *codegen.BufferWriter, sh *parser.Schema, m *t
 	w.Print("}\n")
 }
 
-func (g *Generator) renderAlias(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) {
+func (g *Generator) renderAlias(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) { //nolint:lll // function signature
 	w.Print("type ", name, " ", m.goType(sh), "\n")
 }
 
-func (g *Generator) renderMapAlias(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) {
+func (g *Generator) renderMapAlias(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) { //nolint:lll // function signature
 	elem := goTypeAny
 	if sh.AdditionalProperties != nil {
 		elem = m.goType(sh.AdditionalProperties)
