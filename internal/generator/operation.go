@@ -1,9 +1,8 @@
 package generator
 
 import (
-	"strings"
-
 	"nschugorev/oapigenerator/internal/parser"
+	"strings"
 )
 
 // operationMethodName возвращает Go-имя метода интерфейса для операции.

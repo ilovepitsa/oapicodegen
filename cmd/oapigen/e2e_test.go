@@ -1,14 +1,13 @@
 package main
 
 import (
+	"nschugorev/oapigenerator/internal/golden"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"nschugorev/oapigenerator/internal/golden"
 )
 
 const (

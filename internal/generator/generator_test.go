@@ -3,6 +3,8 @@ package generator
 import (
 	"go/parser"
 	"go/token"
+	"nschugorev/oapigenerator/internal/codegen"
+	"nschugorev/oapigenerator/internal/golden"
 	"os"
 	"regexp"
 	"strings"
@@ -11,8 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"nschugorev/oapigenerator/internal/codegen"
-	"nschugorev/oapigenerator/internal/golden"
 	oapiparser "nschugorev/oapigenerator/internal/parser"
 )
 

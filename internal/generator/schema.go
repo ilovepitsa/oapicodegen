@@ -2,11 +2,10 @@ package generator
 
 import (
 	"fmt"
-	"strings"
-
 	"nschugorev/oapigenerator/internal/codegen"
 	"nschugorev/oapigenerator/internal/codegen/gogen"
 	"nschugorev/oapigenerator/internal/parser"
+	"strings"
 )
 
 // schemaFile генерирует Go-файл с определением типа для схемы.

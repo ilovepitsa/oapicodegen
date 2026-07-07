@@ -26,7 +26,8 @@ func TestParse_Schemas(t *testing.T) {
 	for _, s := range doc.Schemas {
 		names = append(names, s.Name)
 	}
-	assert.ElementsMatch(t,
+	assert.ElementsMatch(
+		t,
 		[]string{"Pet", "Error", "PetCollection", "AnyPet", "OnePet", "MergedPet"},
 		names,
 	)

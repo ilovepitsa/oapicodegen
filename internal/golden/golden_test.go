@@ -3,14 +3,13 @@ package golden
 import (
 	"flag"
 	"fmt"
+	"nschugorev/oapigenerator/internal/codegen"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"nschugorev/oapigenerator/internal/codegen"
 )
 
 // fakeT — собирает вызовы Fatal/Fatalf без реального падения теста.

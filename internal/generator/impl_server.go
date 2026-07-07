@@ -1,11 +1,10 @@
 package generator
 
 import (
-	"strings"
-
 	"nschugorev/oapigenerator/internal/codegen"
 	"nschugorev/oapigenerator/internal/codegen/gogen"
 	"nschugorev/oapigenerator/internal/parser"
+	"strings"
 )
 
 // implServerFile генерирует impl/echoserver/server.gen.go:

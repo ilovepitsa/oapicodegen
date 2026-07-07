@@ -1,12 +1,11 @@
 package generator
 
 import (
-	"sort"
-	"strings"
-
 	"nschugorev/oapigenerator/internal/codegen"
 	"nschugorev/oapigenerator/internal/codegen/gogen"
 	"nschugorev/oapigenerator/internal/parser"
+	"sort"
+	"strings"
 )
 
 // clientFile генерирует client.gen.go: интерфейс Client + request/response-структуры.

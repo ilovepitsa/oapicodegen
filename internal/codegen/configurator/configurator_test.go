@@ -2,14 +2,13 @@ package configurator
 
 import (
 	"flag"
+	"nschugorev/oapigenerator/internal/codegen"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"nschugorev/oapigenerator/internal/codegen"
 )
 
 func TestNewFileWriterConfiguratorFromFlags_ReturnsNonNil(t *testing.T) {

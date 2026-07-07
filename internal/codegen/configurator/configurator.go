@@ -12,10 +12,10 @@ package configurator
 import (
 	"flag"
 	"fmt"
+	"nschugorev/oapigenerator/internal/codegen"
 	"os"
 	"path"
 
-	"nschugorev/oapigenerator/internal/codegen"
 	realfs "nschugorev/oapigenerator/internal/fs"
 )
 

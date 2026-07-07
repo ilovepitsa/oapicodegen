@@ -3,7 +3,6 @@ package fs
 import (
 	"errors"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -67,7 +66,7 @@ func TestRealFS_MkdirAll_Remove(t *testing.T) {
 
 	require.NoError(t, rfs.Remove(nested))
 	_, err = rfs.Stat(nested)
-	assert.True(t, os.IsNotExist(err))
+	assert.True(t, errors.Is(err, fs.ErrNotExist))
 }
 
 func TestRealFS_Open_ReadsContent(t *testing.T) {

@@ -11,10 +11,9 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
+	"nschugorev/oapigenerator/internal/codegen"
 	"sort"
 	"strings"
-
-	"nschugorev/oapigenerator/internal/codegen"
 )
 
 // Import описывает одну Go-импорт-спеку: путь и опциональный алиас.

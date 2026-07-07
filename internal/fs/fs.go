@@ -93,8 +93,11 @@ func (r *RealFS) Open(name string) (fs.File, error) {
 	}
 
 	f, err := os.Open(p)
+	if err != nil {
+		return nil, fmt.Errorf("open %q: %w", name, err)
+	}
 
-	return f, fmt.Errorf("open %q: %w", name, err)
+	return f, nil
 }
 
 func (r *RealFS) Stat(name string) (fs.FileInfo, error) {
@@ -104,8 +107,11 @@ func (r *RealFS) Stat(name string) (fs.FileInfo, error) {
 	}
 
 	info, err := os.Stat(p)
+	if err != nil {
+		return nil, fmt.Errorf("stat %q: %w", name, err)
+	}
 
-	return info, fmt.Errorf("stat %q: %w", name, err)
+	return info, nil
 }
 
 func (r *RealFS) ReadDir(name string) ([]fs.DirEntry, error) {
@@ -115,8 +121,11 @@ func (r *RealFS) ReadDir(name string) ([]fs.DirEntry, error) {
 	}
 
 	entries, err := os.ReadDir(p)
+	if err != nil {
+		return nil, fmt.Errorf("readdir %q: %w", name, err)
+	}
 
-	return entries, fmt.Errorf("readdir %q: %w", name, err)
+	return entries, nil
 }
 
 func (r *RealFS) WriteFile(name string, data []byte) error {
@@ -134,7 +143,11 @@ func (r *RealFS) MkdirAll(path string, perm os.FileMode) error {
 		return err
 	}
 
-	return fmt.Errorf("mkdir %q: %w", path, os.MkdirAll(p, perm))
+	if err := os.MkdirAll(p, perm); err != nil {
+		return fmt.Errorf("mkdir %q: %w", path, err)
+	}
+
+	return nil
 }
 
 func (r *RealFS) Remove(name string) error {
@@ -143,5 +156,9 @@ func (r *RealFS) Remove(name string) error {
 		return err
 	}
 
-	return fmt.Errorf("remove %q: %w", name, os.Remove(p))
+	if err := os.Remove(p); err != nil {
+		return fmt.Errorf("remove %q: %w", name, err)
+	}
+
+	return nil
 }

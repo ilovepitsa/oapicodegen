@@ -14,12 +14,11 @@ package golden
 import (
 	"flag"
 	"fmt"
+	"nschugorev/oapigenerator/internal/codegen"
 	"os"
 	"path/filepath"
 
 	"github.com/google/go-cmp/cmp"
-
-	"nschugorev/oapigenerator/internal/codegen"
 )
 
 var updateFlag = flag.Bool("update", false, "update golden files instead of comparing")
@@ -56,7 +55,8 @@ func WithRecreateOnUpdate() Option {
 func NewDir(t interface {
 	Fatal(args ...any)
 	Fatalf(format string, args ...any)
-}, opts ...Option) *Dir {
+}, opts ...Option,
+) *Dir {
 	d := &Dir{t: t, path: "testdata/golden"}
 	for _, opt := range opts {
 		opt(d)
@@ -116,7 +116,8 @@ type CodegenFS struct {
 func NewCodegenFS(t interface {
 	Fatal(args ...any)
 	Fatalf(format string, args ...any)
-}, dir *Dir) *CodegenFS {
+}, dir *Dir,
+) *CodegenFS {
 	return &CodegenFS{t: t, dir: dir}
 }
 

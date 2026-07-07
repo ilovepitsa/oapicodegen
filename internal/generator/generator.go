@@ -15,7 +15,6 @@ package generator
 
 import (
 	"fmt"
-
 	"nschugorev/oapigenerator/internal/codegen"
 	"nschugorev/oapigenerator/internal/codegen/gogen"
 	"nschugorev/oapigenerator/internal/parser"

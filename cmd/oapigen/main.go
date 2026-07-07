@@ -9,13 +9,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
-
 	"nschugorev/oapigenerator/internal/cli/logging"
 	"nschugorev/oapigenerator/internal/codegen"
 	"nschugorev/oapigenerator/internal/codegen/configurator"
 	"nschugorev/oapigenerator/internal/generator"
 	"nschugorev/oapigenerator/internal/parser"
+	"os"
 )
 
 func Main() int {

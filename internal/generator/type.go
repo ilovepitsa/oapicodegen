@@ -1,10 +1,9 @@
 package generator
 
 import (
-	"strings"
-
 	"nschugorev/oapigenerator/internal/codegen/gogen"
 	"nschugorev/oapigenerator/internal/parser"
+	"strings"
 )
 
 // typeMapper мапит parser.Schema → Go-тип, собирая нужные импорты.
