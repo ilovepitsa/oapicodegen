@@ -23,29 +23,7 @@ func (g *Generator) implClientFile() codegen.File {
 		m.addImport(g.modulePath+"/interfaces/client", "apiclient")
 	}
 
-	needJSON := false
-	needBytes := false
-	needURL := false
-
-	for _, op := range g.doc.Operations {
-		if op.RequestBody != nil {
-			needJSON = true
-			needBytes = true
-		}
-
-		for _, r := range op.Responses {
-			if responseSchema(r) != nil {
-				needJSON = true
-			}
-		}
-
-		for _, p := range op.Parameters {
-			if p.In == oapiParamPath || p.In == oapiParamQuery {
-				needURL = true
-			}
-		}
-	}
-
+	needJSON, needBytes, needURL := g.implClientImports()
 	if needJSON {
 		m.addImport("encoding/json", "")
 	}
@@ -65,6 +43,29 @@ func (g *Generator) implClientFile() codegen.File {
 		Imports: m.imports,
 		Body:    body,
 	})
+}
+
+func (g *Generator) implClientImports() (needJSON, needBytes, needURL bool) {
+	for _, op := range g.doc.Operations {
+		if op.RequestBody != nil {
+			needJSON = true
+			needBytes = true
+		}
+
+		for _, r := range op.Responses {
+			if responseSchema(r) != nil {
+				needJSON = true
+			}
+		}
+
+		for _, p := range op.Parameters {
+			if p.In == oapiParamPath || p.In == oapiParamQuery {
+				needURL = true
+			}
+		}
+	}
+
+	return needJSON, needBytes, needURL
 }
 
 func (g *Generator) renderImplClient(m *typeMapper) []byte {
@@ -91,7 +92,7 @@ func (g *Generator) renderImplClient(m *typeMapper) []byte {
 	return w.Content()
 }
 
-func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.Operation, m *typeMapper) {
+func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.Operation, m *typeMapper) { //nolint:gocognit,gocyclo,cyclop,funlen // template-style codegen: path/query/body/header/response секции идут последовательно
 	name := operationMethodName(op)
 
 	w.Print("func (c *Client) ", name, "(ctx context.Context, req *apiclient.", name, "Request) (*apiclient.", name, "Response, error) {\n")

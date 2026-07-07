@@ -27,7 +27,7 @@ func Main() int {
 	return 0
 }
 
-func run(args []string, stderr *os.File) error {
+func run(args []string, stderr *os.File) error { //nolint:gocyclo,cyclop,funlen // CLI-пайплайн: флаги → валидация → read → parse → generate, линейный по природе
 	fs := flag.NewFlagSet("oapigen", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 

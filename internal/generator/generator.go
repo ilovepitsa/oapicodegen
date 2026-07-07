@@ -52,62 +52,58 @@ func Generate(fw codegen.FileWriter, doc *parser.Document, opts ...Option) error
 			continue
 		}
 
-		sf := g.schemaFile(sh)
-		fname := "model/" + fileName(sh.Name) + ".gen.go"
-
-		if err := fw.WriteFile(fname, sf); err != nil {
-			return fmt.Errorf("write %s: %w", fname, err)
-		}
-
-		if needsJSONMethods(sh) {
-			jf := g.jsonMethodsFile(sh)
-			jname := "model/" + fileName(sh.Name) + "_json.gen.go"
-
-			if err := fw.WriteFile(jname, jf); err != nil {
-				return fmt.Errorf("write %s: %w", jname, err)
-			}
+		if err := g.writeSchemaFiles(fw, sh); err != nil {
+			return err
 		}
 	}
 
 	if len(doc.Operations) > 0 {
-		cf := g.clientFile()
-		if err := fw.WriteFile("interfaces/client/client.gen.go", cf); err != nil {
-			return fmt.Errorf("write interfaces/client/client.gen.go: %w", err)
+		if err := g.writeOperationFiles(fw); err != nil {
+			return err
 		}
+	}
 
-		sf := g.clientSugarFile()
-		if err := fw.WriteFile("interfaces/client/client_sugar.gen.go", sf); err != nil {
-			return fmt.Errorf("write interfaces/client/client_sugar.gen.go: %w", err)
+	return nil
+}
+
+func (g *Generator) writeSchemaFiles(fw codegen.FileWriter, sh *parser.Schema) error {
+	sf := g.schemaFile(sh)
+	fname := "model/" + fileName(sh.Name) + ".gen.go"
+
+	if err := fw.WriteFile(fname, sf); err != nil {
+		return fmt.Errorf("write %s: %w", fname, err)
+	}
+
+	if needsJSONMethods(sh) {
+		jf := g.jsonMethodsFile(sh)
+		jname := "model/" + fileName(sh.Name) + "_json.gen.go"
+
+		if err := fw.WriteFile(jname, jf); err != nil {
+			return fmt.Errorf("write %s: %w", jname, err)
 		}
+	}
 
-		srvf := g.serverFile()
-		if err := fw.WriteFile("interfaces/server/server.gen.go", srvf); err != nil {
-			return fmt.Errorf("write interfaces/server/server.gen.go: %w", err)
-		}
+	return nil
+}
 
-		implf := g.implClientFile()
-		if err := fw.WriteFile("impl/httpclient/client.gen.go", implf); err != nil {
-			return fmt.Errorf("write impl/httpclient/client.gen.go: %w", err)
-		}
+func (g *Generator) writeOperationFiles(fw codegen.FileWriter) error {
+	files := []struct {
+		path string
+		gen  func() codegen.File
+	}{
+		{"interfaces/client/client.gen.go", g.clientFile},
+		{"interfaces/client/client_sugar.gen.go", g.clientSugarFile},
+		{"interfaces/server/server.gen.go", g.serverFile},
+		{"impl/httpclient/client.gen.go", g.implClientFile},
+		{"impl/echoserver/server.gen.go", g.implServerFile},
+		{"impl/mocks/client/mocks.gen.go", g.mockClientFile},
+		{"impl/mocks/server/mocks.gen.go", g.mockServerFile},
+		{"sdk/sdk.gen.go", g.sdkFile},
+	}
 
-		srvImplf := g.implServerFile()
-		if err := fw.WriteFile("impl/echoserver/server.gen.go", srvImplf); err != nil {
-			return fmt.Errorf("write impl/echoserver/server.gen.go: %w", err)
-		}
-
-		mockClientF := g.mockClientFile()
-		if err := fw.WriteFile("impl/mocks/client/mocks.gen.go", mockClientF); err != nil {
-			return fmt.Errorf("write impl/mocks/client/mocks.gen.go: %w", err)
-		}
-
-		mockServerF := g.mockServerFile()
-		if err := fw.WriteFile("impl/mocks/server/mocks.gen.go", mockServerF); err != nil {
-			return fmt.Errorf("write impl/mocks/server/mocks.gen.go: %w", err)
-		}
-
-		sdkF := g.sdkFile()
-		if err := fw.WriteFile("sdk/sdk.gen.go", sdkF); err != nil {
-			return fmt.Errorf("write sdk/sdk.gen.go: %w", err)
+	for _, f := range files {
+		if err := fw.WriteFile(f.path, f.gen()); err != nil {
+			return fmt.Errorf("write %s: %w", f.path, err)
 		}
 	}
 

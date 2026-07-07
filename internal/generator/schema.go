@@ -20,7 +20,7 @@ func (g *Generator) schemaFile(sh *parser.Schema) codegen.File {
 	})
 }
 
-func (g *Generator) renderSchema(sh *parser.Schema, m *typeMapper) []byte {
+func (g *Generator) renderSchema(sh *parser.Schema, m *typeMapper) []byte { //nolint:gocyclo,cyclop // dispatch-switch на 7 кейсов по типу схемы, ветвление неотъемлемо
 	w := codegen.NewBufferWriter()
 	name := goName(sh.Name)
 

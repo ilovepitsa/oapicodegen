@@ -35,7 +35,7 @@ func schemaFromProxy(proxy *highbase.SchemaProxy) *Schema {
 }
 
 // fillSchema заполняет поля s из *highbase.Schema.
-func fillSchema(s *Schema, sh *highbase.Schema) {
+func fillSchema(s *Schema, sh *highbase.Schema) { //nolint:gocyclo,cyclop // последовательное заполнение 10+ полей, линейный маппинг
 	s.Description = sh.Description
 	s.Format = sh.Format
 	s.Nullable = boolPtrOrFalse(sh.Nullable)
