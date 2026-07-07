@@ -230,15 +230,82 @@
 - Ветка: `feat/ci-lint`
 - Зависимости: T24
 
-## Бэклог (не в скоупе текущего плана)
+## Вторая итерация — детальные подзадачи
 
-**Вторая итерация — расширения OpenAPI:**
-- T12: `GenerationFlagsLoader` + `generation_flags.yaml` (golang)
-- T14: URLForm encoding, WithDefaults, Update-схемы
+### T24: GenerationFlagsLoader — разбит на T24a–T24g
+
+#### T24a — GenerationFlagsLoader: infrastructure
+- Порт `cmd/mwsapigen/internal/parser/generation_flags_loader.go` (~300 строк)
+- `GenerationFlagConfig` (yaml: name, description, enabled, defaultValue, targetValue, affects, dependsOn, migrateUntil)
+- `ProjectFeatures` struct с 4 флагами: `GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS`, `GOLANG_SPLIT_REQUEST_RESPONSE`, `USE_REQUIRED_V2`, `USE_UTC_FOR_DATE_TIME`
+- `Load(source)` — грузит глобальный `generation_flags.yaml`
+- `GetProjectFeatures(projectPath)` — грузит per-project override, резолвит финальные значения
+- Валидация: affects содержит `golang`, зависимости, migrateUntil
+- Файлы: `internal/parser/generation_flags_loader.go` + тесты + `testdata/generation_flags.yaml`
+- Зависимости: нет
+- Ветка: `feat/genflags-loader`
+
+#### T24b — CLI флаг `--generation-flags-config-path`
+- Добавить флаг в `cmd/oapigen/main.go`
+- Если задан — `GenerationFlagsLoader.Load()` + `GetProjectFeatures()`, передаёт в `Generate()`
+- Если не задан — `ProjectFeatures` с всеми false
+- Зависимости: T24a, T24c
+- Ветка: `feat/genflags-cli`
+
+#### T24c — Wire `ProjectFeatures` into Generator
+- `Generator.features ProjectFeatures` + option `WithProjectFeatures()`
+- Все флаги default false
+- Зависимости: T24a
+- Ветка: `feat/genflags-wire`
+
+#### T24d — `USE_UTC_FOR_DATE_TIME` flag
+- Когда on, `time.Time` поля сериализуются в UTC
+- Вариант A: кастомный тип `UTCTime`; Вариант B: `.UTC()` в marshal/unmarshal
+- Зависимости: T24c
+- Ветка: `feat/genflag-utc`
+
+#### T24e — `GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS` flag
+- Когда on, server request-decoder не вызывает `SetDefaults()` на body
+- Зависимости: T24c, T25a
+- Ветка: `feat/genflag-no-defaults`
+
+#### T24f — `GOLANG_SPLIT_REQUEST_RESPONSE` flag
+- Когда on, генерируются раздельные `<Name>Request` и `<Name>Response` модели
+- Request: без readOnly, с writeOnly; Response: без writeOnly, с readOnly, без defaults
+- Затрагивает почти все generator-файлы
+- Зависимости: T24c
+- Ветка: `feat/genflag-split`
+
+#### T24g — `USE_REQUIRED_V2` flag
+- Поддержка `x-request-required` / `x-response-required` list-атрибутов
+- Зависимости: T24c, T24f
+- Ветка: `feat/genflag-required-v2`
+
+### T25: URLForm, WithDefaults, Update-схемы — разбит на T25a–T25c
+
+#### T25a — WithDefaults: `SetDefaults()` методы
+- Генерация `<Name>SetDefaults()` для schema-struct'ов — заполняет поля из `default` из spec
+- `default_value_visitor.go` + `set_defaults_visitor.go` + `type_default_value_visitor.go` + `schema_with_defaults.go` (~740 строк)
+- Зависимости: нет
+- Ветка: `feat/gen-defaults`
+
+#### T25b — Update-схемы: `Update<Name>` struct для PATCH
+- Все поля `*T` (pointer), без defaults, без validation
+- `update_schema.go` + `update_get_name.go` + `update_set_name.go` + `update_model_getter.go` + `test_update_json_methods.go` (~1370 строк)
+- Getter-методы `Get<Field>() (*T, bool)`
+- Зависимости: нет
+- Ветка: `feat/gen-update-schemas`
+
+#### T25c — URLForm: `MarshalURLForm`/`UnmarshalURLForm`
+- Для schema в `application/x-www-form-urlencoded` request body
+- `url_form_methods.go` (~476 строк)
+- Требует parser-поддержки form-urlencoded content-type
+- Зависимости: нет
+- Ветка: `feat/gen-urlform`
+
+### Глубокий бэклог (без детализации)
 - `ServerAuditData` + `x-audit-data` + audit-data схемы
-- `GenerateConverters` (split Request/Response моделей)
-- Флаг `GOLANG_SPLIT_REQUEST_RESPONSE`
-- `x-request-required` / `x-response-required` / `x-optional-response`
+- `GenerateConverters` (split Request/Response моделей — пересекается с T24f)
 - `x-validations`
 - Кастомные `x-mws-*` расширения и фильтрация в opensourceyaml
 
