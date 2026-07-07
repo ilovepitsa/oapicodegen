@@ -79,7 +79,8 @@ func (g *Generator) renderGomockMock(mockName, ifaceRef string) []byte {
 }
 
 func (g *Generator) renderGomockMethod(w *codegen.BufferWriter, mockName, recorderName, methodName string) {
-	w.Print("func (m *", mockName, ") ", methodName, "(arg0 context.Context, arg1 *apiclient.", methodName, "Request) (*apiclient.", methodName, "Response, error) {\n")
+	w.Print("func (m *", mockName, ") ", methodName, "(arg0 context.Context, arg1 *apiclient.", methodName, "Request) ") //nolint:lll // generated method signature
+	w.Print("(*apiclient.", methodName, "Response, error) {\n")
 	w.Print("\tm.ctrl.T.Helper()\n")
 	w.Print("\tret := m.ctrl.Call(m, \"", methodName, "\", arg0, arg1)\n")
 	w.Print("\tret0, _ := ret[0].(*apiclient.", methodName, "Response)\n")
@@ -89,6 +90,7 @@ func (g *Generator) renderGomockMethod(w *codegen.BufferWriter, mockName, record
 
 	w.Print("func (mr *", recorderName, ") ", methodName, "(arg0, arg1 any) *gomock.Call {\n")
 	w.Print("\tmr.mock.ctrl.T.Helper()\n")
-	w.Print("\treturn mr.mock.ctrl.RecordCallWithMethodType(mr.mock, \"", methodName, "\", reflect.TypeOf((*", mockName, ")(nil).", methodName, "), arg0, arg1)\n")
+	w.Print("\treturn mr.mock.ctrl.RecordCallWithMethodType(mr.mock, \"", methodName, "\", ")
+	w.Print("reflect.TypeOf((*", mockName, ")(nil).", methodName, "), arg0, arg1)\n")
 	w.Print("}\n\n")
 }

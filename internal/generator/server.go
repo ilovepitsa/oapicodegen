@@ -36,7 +36,8 @@ func (g *Generator) renderServer(m *typeMapper) []byte {
 			w.Print("\t// Deprecated: operation is marked as deprecated\n")
 		}
 
-		w.Print("\t", name, "(ctx context.Context, req *", qualifyClient(name, "Request", m), ") (*", qualifyClient(name, "Response", m), ", error)\n")
+		w.Print("\t", name, "(ctx context.Context, req *", qualifyClient(name, "Request", m), ") ")
+		w.Print("(*", qualifyClient(name, "Response", m), ", error)\n")
 	}
 
 	w.Print("}\n")

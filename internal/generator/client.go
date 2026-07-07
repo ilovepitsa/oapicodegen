@@ -33,7 +33,7 @@ func (g *Generator) renderClient(m *typeMapper) []byte {
 			w.Print("\t// Deprecated: operation is marked as deprecated\n")
 		}
 
-		w.Print("\t", name, "(ctx context.Context, req *", name, "Request) (*", name, "Response, error)\n")
+		w.Print("\t", name, "(ctx context.Context, req *", name, "Request) (*", name, "Response, error)\n") //nolint:lll // interface method declaration
 	}
 
 	w.Print("}\n\n")
@@ -46,7 +46,7 @@ func (g *Generator) renderClient(m *typeMapper) []byte {
 	return w.Content()
 }
 
-func (g *Generator) renderRequestStruct(w *codegen.BufferWriter, op *parser.Operation, m *typeMapper) {
+func (g *Generator) renderRequestStruct(w *codegen.BufferWriter, op *parser.Operation, m *typeMapper) { //nolint:lll // function signature with params
 	name := operationMethodName(op) + "Request"
 	w.Print("type ", name, " struct {\n")
 

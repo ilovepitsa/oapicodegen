@@ -92,10 +92,12 @@ func (g *Generator) renderImplClient(m *typeMapper) []byte {
 	return w.Content()
 }
 
-func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.Operation, m *typeMapper) { //nolint:gocognit,gocyclo,cyclop,funlen // template-style codegen: path/query/body/header/response секции идут последовательно
+//nolint:gocognit,gocyclo,cyclop,funlen,lll // template-style codegen, long signature
+func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.Operation, m *typeMapper) {
 	name := operationMethodName(op)
 
-	w.Print("func (c *Client) ", name, "(ctx context.Context, req *apiclient.", name, "Request) (*apiclient.", name, "Response, error) {\n")
+	w.Print("func (c *Client) ", name, "(ctx context.Context, req *apiclient.", name, "Request) ")
+	w.Print("(*apiclient.", name, "Response, error) {\n")
 
 	w.Print("\tpath := \"", op.Path, "\"\n")
 
@@ -105,7 +107,8 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 		}
 
 		fieldName := goName(p.Name)
-		w.Print("\tpath = strings.Replace(path, \"{", p.Name, "}\", url.PathEscape(fmt.Sprint(req.", fieldName, ")), 1)\n")
+		w.Print("\tpath = strings.Replace(path, \"{", p.Name, "}\", ")
+		w.Print("url.PathEscape(fmt.Sprint(req.", fieldName, ")), 1)\n")
 	}
 
 	hasQuery := false
@@ -215,7 +218,7 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 	w.Print("}\n\n")
 }
 
-func (g *Generator) renderImplResponseCase(w *codegen.BufferWriter, r *parser.Response, m *typeMapper) {
+func (g *Generator) renderImplResponseCase(w *codegen.BufferWriter, r *parser.Response, m *typeMapper) { //nolint:lll // function signature
 	w.Print("\tcase ", r.StatusCode, ":\n")
 	fieldName := responseFieldName(r.StatusCode)
 	g.renderImplResponseBody(w, r.StatusCode, r, fieldName, m)

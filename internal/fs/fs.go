@@ -36,7 +36,7 @@ type ReadOnlyFS interface {
 // ReadFile читает содержимое файла name из fsys. Удобная top-level функция
 // поверх fs.ReadFile, повторяет сигнатуру platform-go/pkg/fs.ReadFile.
 func ReadFile(fsys ReadOnlyFS, name string) ([]byte, error) {
-	return fs.ReadFile(fsys, name) //nolint:wrapcheck // thin delegator, повторяет сигнатуру platform-go
+	return fs.ReadFile(fsys, name) //nolint:wrapcheck // thin delegator
 }
 
 // RealFS — файловая система поверх os.*. При заданном baseDir все пути
@@ -134,7 +134,7 @@ func (r *RealFS) WriteFile(name string, data []byte) error {
 		return err
 	}
 
-	return os.WriteFile(p, data, 0o644) //nolint:gosec // 0o644 — стандартные пермишены для генерируемых Go-файлов (владелец rw, остальные r)
+	return os.WriteFile(p, data, 0o644) //nolint:gosec // standard perm for generated Go files
 }
 
 func (r *RealFS) MkdirAll(path string, perm os.FileMode) error {

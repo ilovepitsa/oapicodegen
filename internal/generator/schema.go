@@ -20,7 +20,8 @@ func (g *Generator) schemaFile(sh *parser.Schema) codegen.File {
 	})
 }
 
-func (g *Generator) renderSchema(sh *parser.Schema, m *typeMapper) []byte { //nolint:gocyclo,cyclop // dispatch-switch на 7 кейсов по типу схемы, ветвление неотъемлемо
+//nolint:gocyclo,cyclop // dispatch switch, branching is inherent
+func (g *Generator) renderSchema(sh *parser.Schema, m *typeMapper) []byte {
 	w := codegen.NewBufferWriter()
 	name := goName(sh.Name)
 
@@ -48,7 +49,7 @@ func (g *Generator) renderSchema(sh *parser.Schema, m *typeMapper) []byte { //no
 	return w.Content()
 }
 
-func (g *Generator) renderStruct(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) {
+func (g *Generator) renderStruct(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) { //nolint:lll // function signature with params
 	w.Print("type ", name, " struct {\n")
 
 	for _, p := range sh.Properties {
@@ -79,7 +80,7 @@ func (g *Generator) renderField(w *codegen.BufferWriter, p *parser.Property, m *
 		omitEmpty = ",omitempty"
 	}
 
-	w.Print(fieldName, " ", fieldType, " `json:\"", p.Name, omitEmpty, "\" yaml:\"", p.Name, omitEmpty, "\"`\n")
+	w.Print(fieldName, " ", fieldType, " `json:\"", p.Name, omitEmpty, "\" yaml:\"", p.Name, omitEmpty, "\"`\n") //nolint:lll // struct tag line
 }
 
 func (g *Generator) renderEnum(w *codegen.BufferWriter, sh *parser.Schema, name string) {
@@ -89,7 +90,7 @@ func (g *Generator) renderEnum(w *codegen.BufferWriter, sh *parser.Schema, name 
 	w.Print("const (\n")
 
 	for i, v := range sh.Enum {
-		w.Print("\t", enumValueName(name, enumStringValue(v), i), " ", name, " = ", enumLiteral(v, baseGo), "\n")
+		w.Print("\t", enumValueName(name, enumStringValue(v), i), " ", name, " = ", enumLiteral(v, baseGo), "\n") //nolint:lll // const declaration line
 	}
 
 	w.Print(")\n")
@@ -169,7 +170,7 @@ func (g *Generator) renderUnion(w *codegen.BufferWriter, sh *parser.Schema, m *t
 	w.Print("}\n")
 }
 
-func (g *Generator) renderAllOf(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) {
+func (g *Generator) renderAllOf(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) { //nolint:lll // function signature with params
 	w.Print("type ", name, " struct {\n")
 
 	for _, part := range sh.AllOf {

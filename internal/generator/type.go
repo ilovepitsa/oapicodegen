@@ -47,7 +47,9 @@ func isInherentlyNilable(t string) bool {
 }
 
 // baseType возвращает Go-тип без учёта nullable.
-func (m *typeMapper) baseType(s *parser.Schema) string { //nolint:gocyclo,cyclop // цепочка early-return по типу схемы, каждый кейс отдельная ветка
+//
+//nolint:gocyclo,cyclop // early-return chain by schema type
+func (m *typeMapper) baseType(s *parser.Schema) string {
 	if s.Ref != "" {
 		return m.qualifyModelType(refToName(s.Ref))
 	}
@@ -89,7 +91,9 @@ func (m *typeMapper) baseType(s *parser.Schema) string { //nolint:gocyclo,cyclop
 
 // primitiveGoType мапит примитивный OpenAPI-тип (string/integer/number/boolean)
 // в Go-тип с учётом format. Возвращает goTypeAny, если тип неизвестен.
-func (m *typeMapper) primitiveGoType(s *parser.Schema) string { //nolint:gocyclo,cyclop // switch на 4 кейса с вложенными switch'ами по format
+//
+//nolint:gocyclo,cyclop // switch with nested format switch
+func (m *typeMapper) primitiveGoType(s *parser.Schema) string {
 	switch s.Type {
 	case oapiTypeString:
 		switch s.Format {

@@ -33,7 +33,7 @@ type Invoker func(ctx context.Context, req *http.Request) (*http.Response, error
 // Interceptor — middleware, оборачивает Invoker. Может модифицировать
 // *http.Request (auth, logging), инспектировать *http.Response (retry),
 // или вообще не вызывать invoker (кеширование).
-type Interceptor func(ctx context.Context, req *http.Request, invoker Invoker) (*http.Response, error)
+type Interceptor func(ctx context.Context, req *http.Request, invoker Invoker) (*http.Response, error) //nolint:lll // type alias, single conceptual signature
 
 // NewClient создаёт Client с base URL и опциями.
 func NewClient(serverURL string, opts ...Option) (*Client, error) {

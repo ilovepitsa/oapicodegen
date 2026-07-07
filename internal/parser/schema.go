@@ -35,7 +35,9 @@ func schemaFromProxy(proxy *highbase.SchemaProxy) *Schema {
 }
 
 // fillSchema заполняет поля s из *highbase.Schema.
-func fillSchema(s *Schema, sh *highbase.Schema) { //nolint:gocyclo,cyclop // последовательное заполнение 10+ полей, линейный маппинг
+//
+//nolint:gocyclo,cyclop // field-by-field mapping, linear
+func fillSchema(s *Schema, sh *highbase.Schema) {
 	s.Description = sh.Description
 	s.Format = sh.Format
 	s.Nullable = boolPtrOrFalse(sh.Nullable)
@@ -61,8 +63,9 @@ func fillSchema(s *Schema, sh *highbase.Schema) { //nolint:gocyclo,cyclop // п�
 		s.Items = schemaFromProxy(sh.Items.A)
 	}
 
-	if sh.AdditionalProperties != nil && sh.AdditionalProperties.IsA() && sh.AdditionalProperties.A != nil {
-		s.AdditionalProperties = schemaFromProxy(sh.AdditionalProperties.A)
+	ap := sh.AdditionalProperties
+	if ap != nil && ap.IsA() && ap.A != nil {
+		s.AdditionalProperties = schemaFromProxy(ap.A)
 	}
 
 	if sh.Properties != nil {
@@ -89,7 +92,7 @@ func appendComposites(dst []*Schema, proxies []*highbase.SchemaProxy) []*Schema 
 }
 
 // extractComponentsSchemas проходит components.schemas и наполняет doc.Schemas.
-func extractComponentsSchemas(doc *Document, schemas *orderedmap.Map[string, *highbase.SchemaProxy]) {
+func extractComponentsSchemas(doc *Document, schemas *orderedmap.Map[string, *highbase.SchemaProxy]) { //nolint:lll // generic type signature
 	if schemas == nil {
 		return
 	}

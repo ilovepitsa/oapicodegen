@@ -35,7 +35,7 @@ func NewLoggerConfiguratorFromFlags(fs *flag.FlagSet) *Configurator {
 	}
 	fs.StringVar(&c.level, "log-level", c.level, "log level (debug, info, warn, error, fatal)")
 	fs.StringVar(&c.format, "log-format", c.format, "log format (console, json)")
-	fs.BoolVar(&c.development, "log-development", c.development, "use zap development mode (stacktraces, no sampling)")
+	fs.BoolVar(&c.development, "log-development", c.development, "use zap development mode (stacktraces, no sampling)") //nolint:lll // flag help text
 
 	return c
 }

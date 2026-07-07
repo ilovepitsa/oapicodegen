@@ -27,7 +27,8 @@ func Main() int {
 	return 0
 }
 
-func run(args []string, stderr *os.File) error { //nolint:gocyclo,cyclop,funlen // CLI-пайплайн: флаги → валидация → read → parse → generate, линейный по природе
+//nolint:gocyclo,cyclop,funlen // CLI pipeline, linear by nature
+func run(args []string, stderr *os.File) error {
 	fs := flag.NewFlagSet("oapigen", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
@@ -40,7 +41,7 @@ func run(args []string, stderr *os.File) error { //nolint:gocyclo,cyclop,funlen 
 
 	fs.StringVar(&input, "input", "", "path to OpenAPI 3.x spec file")
 	fs.StringVar(&output, "output", "", "output directory for generated Go packages")
-	fs.StringVar(&importPrefix, "import-prefix", "", "Go import path prefix for generated packages (e.g. github.com/foo/bar/gen)")
+	fs.StringVar(&importPrefix, "import-prefix", "", "Go import path prefix for generated packages")
 	fs.BoolVar(&dryRun, "dry-run", false, "parse and generate without writing to filesystem")
 
 	logCfg := logging.NewLoggerConfiguratorFromFlags(fs)
@@ -67,7 +68,7 @@ func run(args []string, stderr *os.File) error { //nolint:gocyclo,cyclop,funlen 
 		return fmt.Errorf("init logger: %w", err)
 	}
 
-	defer func() { _ = logger.Sync() }() //nolint:errcheck // zap.Sync часто падает на stderr/stdout — намеренно игнорируем
+	defer func() { _ = logger.Sync() }() //nolint:errcheck // zap.Sync often fails on stderr/stdout
 
 	sugar := logger.Sugar()
 

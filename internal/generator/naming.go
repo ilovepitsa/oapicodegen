@@ -17,7 +17,7 @@ func goName(s string) string {
 	capitalizeNext := true
 
 	for _, r := range s {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) { //nolint:nestif // 2 уровня — рефакторинг ухудшит читаемость
+		if unicode.IsLetter(r) || unicode.IsDigit(r) { //nolint:nestif,lll // 2 levels, refactor worsens readability
 			if capitalizeNext {
 				b.WriteRune(unicode.ToUpper(r))
 
@@ -32,7 +32,8 @@ func goName(s string) string {
 
 	name := b.String()
 	// common abbreviations → uppercase
-	for _, abbr := range []string{"Id", "Url", "Uri", "Http", "Https", "Json", "Xml", "Api", "Uuid", "Ip"} {
+	abbreviations := []string{"Id", "Url", "Uri", "Http", "Https", "Json", "Xml", "Api", "Uuid", "Ip"}
+	for _, abbr := range abbreviations {
 		name = replaceWord(name, abbr, strings.ToUpper(abbr))
 	}
 	return name
