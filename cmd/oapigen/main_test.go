@@ -101,3 +101,112 @@ components:
     Pet: {type: object, properties: {name: {type: string}}}
     Pets: {type: array, items: {$ref: '#/components/schemas/Pet'}}
 `
+
+const validGlobalFlagsConfig = `- name: GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS
+  enabled: true
+  defaultValue: false
+  targetValue: true
+  affects: [golang]
+
+- name: GOLANG_SPLIT_REQUEST_RESPONSE
+  enabled: true
+  defaultValue: false
+  targetValue: true
+  affects: [golang]
+
+- name: USE_REQUIRED_V2
+  enabled: true
+  defaultValue: false
+  targetValue: true
+  dependsOn:
+    GOLANG_SPLIT_REQUEST_RESPONSE: true
+  affects: [golang]
+
+- name: USE_UTC_FOR_DATE_TIME
+  enabled: false
+  defaultValue: false
+  targetValue: false
+  affects: [golang]
+`
+
+func TestRun_GenerationFlagsConfig_LoadsDefaults(t *testing.T) {
+	tmp := t.TempDir()
+	spec := filepath.Join(tmp, "spec.yaml")
+	require.NoError(t, os.WriteFile(spec, []byte(minimalSpec), 0o644))
+
+	cfgPath := filepath.Join(tmp, "generation_flags.yaml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte(validGlobalFlagsConfig), 0o644))
+
+	output := filepath.Join(tmp, "gen")
+	stderr := os.NewFile(0, "/dev/null")
+	err := run([]string{
+		"-input", spec,
+		"-output", output,
+		"-import-prefix", "github.com/foo/bar/gen",
+		"-generation-flags-config-path", cfgPath,
+	}, stderr)
+	require.NoError(t, err)
+
+	files, err := filepath.Glob(filepath.Join(output, "*", "*.gen.go"))
+	require.NoError(t, err)
+	assert.NotEmpty(t, files)
+}
+
+func TestRun_GenerationFlagsConfig_WithProjectOverride(t *testing.T) {
+	tmp := t.TempDir()
+	spec := filepath.Join(tmp, "spec.yaml")
+	require.NoError(t, os.WriteFile(spec, []byte(minimalSpec), 0o644))
+
+	cfgPath := filepath.Join(tmp, "generation_flags.yaml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte(validGlobalFlagsConfig), 0o644))
+
+	projectFlags := "GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS: true\nGOLANG_SPLIT_REQUEST_RESPONSE: true\nUSE_REQUIRED_V2: true\n"
+	pfPath := filepath.Join(tmp, "project_flags.yaml")
+	require.NoError(t, os.WriteFile(pfPath, []byte(projectFlags), 0o644))
+
+	output := filepath.Join(tmp, "gen")
+	stderr := os.NewFile(0, "/dev/null")
+	err := run([]string{
+		"-input", spec,
+		"-output", output,
+		"-import-prefix", "github.com/foo/bar/gen",
+		"-generation-flags-config-path", cfgPath,
+		"-project-flags-path", pfPath,
+	}, stderr)
+	require.NoError(t, err)
+}
+
+func TestRun_ProjectFlagsPathRequiresGlobalConfig(t *testing.T) {
+	tmp := t.TempDir()
+	spec := filepath.Join(tmp, "spec.yaml")
+	require.NoError(t, os.WriteFile(spec, []byte(minimalSpec), 0o644))
+
+	stderr := os.NewFile(0, "/dev/null")
+	err := run([]string{
+		"-input", spec,
+		"-output", filepath.Join(tmp, "gen"),
+		"-import-prefix", "github.com/foo/bar/gen",
+		"-project-flags-path", filepath.Join(tmp, "project_flags.yaml"),
+	}, stderr)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "-project-flags-path requires -generation-flags-config-path")
+}
+
+func TestRun_GenerationFlagsConfig_BadConfig(t *testing.T) {
+	tmp := t.TempDir()
+	spec := filepath.Join(tmp, "spec.yaml")
+	require.NoError(t, os.WriteFile(spec, []byte(minimalSpec), 0o644))
+
+	cfgPath := filepath.Join(tmp, "generation_flags.yaml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte("not valid yaml {{{"), 0o644))
+
+	stderr := os.NewFile(0, "/dev/null")
+	err := run([]string{
+		"-input", spec,
+		"-output", filepath.Join(tmp, "gen"),
+		"-import-prefix", "github.com/foo/bar/gen",
+		"-generation-flags-config-path", cfgPath,
+	}, stderr)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "load generation flags")
+}

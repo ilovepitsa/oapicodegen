@@ -12,6 +12,7 @@ import (
 	"nschugorev/oapigenerator/internal/cli/logging"
 	"nschugorev/oapigenerator/internal/codegen"
 	"nschugorev/oapigenerator/internal/codegen/configurator"
+	"nschugorev/oapigenerator/internal/fs"
 	"nschugorev/oapigenerator/internal/generator"
 	"nschugorev/oapigenerator/internal/parser"
 	"os"
@@ -33,16 +34,26 @@ func run(args []string, stderr *os.File) error {
 	fs.SetOutput(stderr)
 
 	var (
-		input        string
-		output       string
-		importPrefix string
-		dryRun       bool
+		input                 string
+		output                string
+		importPrefix          string
+		dryRun                bool
+		generationFlagsConfig string
+		projectFlagsPath      string
 	)
 
 	fs.StringVar(&input, "input", "", "path to OpenAPI 3.x spec file")
 	fs.StringVar(&output, "output", "", "output directory for generated Go packages")
 	fs.StringVar(&importPrefix, "import-prefix", "", "Go import path prefix for generated packages")
 	fs.BoolVar(&dryRun, "dry-run", false, "parse and generate without writing to filesystem")
+	fs.StringVar(
+		&generationFlagsConfig, "generation-flags-config-path", "",
+		"path to global generation_flags.yaml",
+	)
+	fs.StringVar(
+		&projectFlagsPath, "project-flags-path", "",
+		"path to per-project generation flags override",
+	)
 
 	logCfg := logging.NewLoggerConfiguratorFromFlags(fs)
 	fwCfg := configurator.NewFileWriterConfiguratorFromFlags(fs)
@@ -61,6 +72,10 @@ func run(args []string, stderr *os.File) error {
 
 	if importPrefix == "" {
 		return errors.New("-import-prefix is required")
+	}
+
+	if projectFlagsPath != "" && generationFlagsConfig == "" {
+		return errors.New("-project-flags-path requires -generation-flags-config-path")
 	}
 
 	logger, err := logCfg.Create()
@@ -102,11 +117,43 @@ func run(args []string, stderr *os.File) error {
 		}
 	}()
 
-	if err := generator.Generate(fw, doc, generator.WithModulePath(importPrefix)); err != nil {
+	genOpts := []generator.Option{generator.WithModulePath(importPrefix)}
+
+	if generationFlagsConfig != "" {
+		pf, err := loadProjectFeatures(generationFlagsConfig, projectFlagsPath)
+		if err != nil {
+			return fmt.Errorf("load generation flags: %w", err)
+		}
+
+		genOpts = append(genOpts, generator.WithProjectFeatures(pf))
+		sugar.Infof(
+			"generation flags: no-auto-defaults=%v split=%v required-v2=%v utc=%v",
+			pf.ServerNoAutoDefaults.Value, pf.SplitRequestResponse.Value,
+			pf.UseRequiredV2.Value, pf.UseUTCForDateTime.Value,
+		)
+	}
+
+	if err := generator.Generate(fw, doc, genOpts...); err != nil {
 		return fmt.Errorf("generate: %w", err)
 	}
 
 	sugar.Infof("generation complete: output=%s import-prefix=%s", output, importPrefix)
 
 	return nil
+}
+
+func loadProjectFeatures(configPath, projectFlagsPath string) (parser.ProjectFeatures, error) {
+	loader := parser.NewGenerationFlagsLoader(fs.NewRealFS())
+	if err := loader.Load(configPath); err != nil {
+		return parser.ProjectFeatures{}, fmt.Errorf(
+			"load generation flags config %q: %w", configPath, err,
+		)
+	}
+
+	pf, err := loader.GetProjectFeatures(projectFlagsPath)
+	if err != nil {
+		return parser.ProjectFeatures{}, fmt.Errorf("resolve project features: %w", err)
+	}
+
+	return pf, nil
 }

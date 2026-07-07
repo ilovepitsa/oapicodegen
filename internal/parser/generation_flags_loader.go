@@ -159,6 +159,10 @@ func validateOverride(
 }
 
 func (l *GenerationFlagsLoader) loadProjectFlags(path string) (map[string]bool, error) {
+	if path == "" {
+		return map[string]bool{}, nil
+	}
+
 	file, err := l.fsys.Open(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
