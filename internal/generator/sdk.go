@@ -10,7 +10,7 @@ import (
 // NewSDK строит impl-клиент из baseURL + opts; NewSDKFromClient принимает
 // готовую реализацию (например, mock) для тестов.
 func (g *Generator) sdkFile() codegen.File {
-	m := &typeMapper{currentPkg: "sdk", modulePath: g.modulePath}
+	m := g.newTypeMapper("sdk")
 	m.addImport("fmt", "")
 
 	const httpclientPkg = "nschugorev/oapigenerator/pkg/httpclient"

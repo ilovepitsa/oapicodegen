@@ -8,7 +8,7 @@ import (
 
 // clientSugarFile генерирует client_sugar.gen.go: ClientSugared обёртка над Client.
 func (g *Generator) clientSugarFile() codegen.File {
-	m := &typeMapper{currentPkg: "client", modulePath: g.modulePath}
+	m := g.newTypeMapper("client")
 	m.addImport("context", "")
 	m.addImport("fmt", "")
 	body := g.renderClientSugar(m)

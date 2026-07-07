@@ -8,7 +8,7 @@ import (
 // serverFile генерирует server.gen.go: интерфейс Server.
 // Переиспользует request/response-структуры из interfaces/client.
 func (g *Generator) serverFile() codegen.File {
-	m := &typeMapper{currentPkg: "server", modulePath: g.modulePath}
+	m := g.newTypeMapper("server")
 	m.addImport("context", "")
 
 	if g.modulePath != "" {

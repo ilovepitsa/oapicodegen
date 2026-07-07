@@ -10,7 +10,7 @@ import (
 
 // clientFile генерирует client.gen.go: интерфейс Client + request/response-структуры.
 func (g *Generator) clientFile() codegen.File {
-	m := &typeMapper{currentPkg: "client", modulePath: g.modulePath}
+	m := g.newTypeMapper("client")
 	m.addImport("context", "")
 	body := g.renderClient(m)
 

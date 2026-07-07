@@ -10,7 +10,7 @@ import (
 
 // schemaFile генерирует Go-файл с определением типа для схемы.
 func (g *Generator) schemaFile(sh *parser.Schema) codegen.File {
-	m := &typeMapper{currentPkg: "model", modulePath: g.modulePath}
+	m := g.newTypeMapper("model")
 	body := g.renderSchema(sh, m)
 
 	return g.factory.Create(&gogen.File{

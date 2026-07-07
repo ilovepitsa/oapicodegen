@@ -12,7 +12,17 @@ import (
 type typeMapper struct {
 	currentPkg string
 	modulePath string
+	utcTime    bool
 	imports    []gogen.Import
+}
+
+// newTypeMapper создаёт typeMapper с флагами из Generator.
+func (g *Generator) newTypeMapper(pkg string) *typeMapper {
+	return &typeMapper{
+		currentPkg: pkg,
+		modulePath: g.modulePath,
+		utcTime:    g.features.UseUTCForDateTime.Value,
+	}
 }
 
 func (m *typeMapper) addImport(path, alias string) {
@@ -91,21 +101,10 @@ func (m *typeMapper) baseType(s *parser.Schema) string {
 
 // primitiveGoType мапит примитивный OpenAPI-тип (string/integer/number/boolean)
 // в Go-тип с учётом format. Возвращает goTypeAny, если тип неизвестен.
-//
-//nolint:cyclop // switch with nested format switch
 func (m *typeMapper) primitiveGoType(s *parser.Schema) string {
 	switch s.Type {
 	case oapiTypeString:
-		switch s.Format {
-		case "date-time", "date":
-			m.addImport("time", "")
-
-			return "time.Time"
-		case "binary":
-			return "[]byte"
-		}
-
-		return oapiTypeString
+		return m.stringGoType(s)
 	case oapiTypeInteger:
 		switch s.Format {
 		case oapiFormatInt32:
@@ -129,6 +128,28 @@ func (m *typeMapper) primitiveGoType(s *parser.Schema) string {
 	return goTypeAny
 }
 
+// stringGoType мапит строковый OpenAPI-тип в Go-тип с учётом format и флага UTC.
+func (m *typeMapper) stringGoType(s *parser.Schema) string {
+	switch s.Format {
+	case "date-time":
+		if m.utcTime {
+			return m.qualifyUTCTime()
+		}
+
+		m.addImport("time", "")
+
+		return "time.Time"
+	case "date":
+		m.addImport("time", "")
+
+		return "time.Time"
+	case "binary":
+		return "[]byte"
+	}
+
+	return oapiTypeString
+}
+
 // qualifyModelType добавляет префикс "model." и импорт, если текущий пакет
 // не "model". name — Go-имя схемы (до квалификации).
 func (m *typeMapper) qualifyModelType(name string) string {
@@ -140,6 +161,18 @@ func (m *typeMapper) qualifyModelType(name string) string {
 	m.addImport(m.modulePath+"/model", "model")
 
 	return "model." + goName
+}
+
+// qualifyUTCTime возвращает имя UTCTime-типа для текущего пакета.
+// В model — просто UTCTime; в остальных — model.UTCTime + импорт.
+func (m *typeMapper) qualifyUTCTime() string {
+	if m.currentPkg == "model" || m.modulePath == "" {
+		return "UTCTime"
+	}
+
+	m.addImport(m.modulePath+"/model", "model")
+
+	return "model.UTCTime"
 }
 
 func refToName(ref string) string {

@@ -64,6 +64,10 @@ func Generate(fw codegen.FileWriter, doc *parser.Document, opts ...Option) error
 		}
 	}
 
+	if err := g.writeUTCTimeFile(fw); err != nil {
+		return err
+	}
+
 	if len(doc.Operations) > 0 {
 		if err := g.writeOperationFiles(fw); err != nil {
 			return err
@@ -88,6 +92,22 @@ func (g *Generator) writeSchemaFiles(fw codegen.FileWriter, sh *parser.Schema) e
 		if err := fw.WriteFile(jname, jf); err != nil {
 			return fmt.Errorf("write %s: %w", jname, err)
 		}
+	}
+
+	return nil
+}
+
+// writeUTCTimeFile пишет model/utc_time.gen.go, если включён флаг
+// USE_UTC_FOR_DATE_TIME. Вызывается один раз за генерацию.
+func (g *Generator) writeUTCTimeFile(fw codegen.FileWriter) error {
+	if !g.features.UseUTCForDateTime.Value {
+		return nil
+	}
+
+	const fname = "model/utc_time.gen.go"
+
+	if err := fw.WriteFile(fname, g.utcTimeFile()); err != nil {
+		return fmt.Errorf("write %s: %w", fname, err)
 	}
 
 	return nil

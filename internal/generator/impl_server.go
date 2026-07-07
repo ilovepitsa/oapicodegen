@@ -10,7 +10,7 @@ import (
 // implServerFile генерирует impl/echoserver/server.gen.go:
 // Echo-обработчики, делегирующие в apiserver.Server.
 func (g *Generator) implServerFile() codegen.File {
-	m := &typeMapper{currentPkg: "implserver", modulePath: g.modulePath}
+	m := g.newTypeMapper("implserver")
 
 	m.addImport("github.com/labstack/echo/v4", "")
 

@@ -211,6 +211,68 @@ components:
 	assert.Contains(t, got, `"time"`)
 }
 
+func TestGenerate_DateTime_UTCTimeFlag(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Event:
+      type: object
+      properties: {at: {type: string, format: date-time}}
+`)
+	pf := oapiparser.ProjectFeatures{UseUTCForDateTime: oapiparser.ProjectFeature{Value: true}}
+	files := generateFilesWithFeatures(t, doc, pf)
+
+	got := string(files["model/event.gen.go"])
+	assert.True(t, containsCollapsed(got, "At *UTCTime"))
+	assert.NotContains(t, got, `"time"`)
+
+	utcFile, ok := files["model/utc_time.gen.go"]
+	require.True(t, ok, "expected model/utc_time.gen.go to be generated")
+	utc := string(utcFile)
+	assert.Contains(t, utc, "type UTCTime time.Time")
+	assert.Contains(t, utc, "func (u UTCTime) MarshalJSON")
+	assert.Contains(t, utc, "func (u *UTCTime) UnmarshalJSON")
+	assert.Contains(t, utc, ".UTC()")
+}
+
+func TestGenerate_DateTime_UTCTimeFlagOff_NoUTCTimeFile(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Event:
+      type: object
+      properties: {at: {type: string, format: date-time}}
+`)
+	files := generateFiles(t, doc)
+	_, ok := files["model/utc_time.gen.go"]
+	assert.False(t, ok, "utc_time.gen.go should not be generated when flag is off")
+}
+
+func TestGenerate_Date_NotAffectedByUTCTimeFlag(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Event:
+      type: object
+      properties: {on: {type: string, format: date}}
+`)
+	pf := oapiparser.ProjectFeatures{UseUTCForDateTime: oapiparser.ProjectFeature{Value: true}}
+	files := generateFilesWithFeatures(t, doc, pf)
+
+	got := string(files["model/event.gen.go"])
+	assert.True(t, containsCollapsed(got, "On *time.Time"))
+	assert.Contains(t, got, `"time"`)
+}
+
 func TestGenerate_MapObject(t *testing.T) {
 	doc := parseSpec(t, `
 openapi: 3.0.3
@@ -778,6 +840,18 @@ func generateFiles(t *testing.T, doc *oapiparser.Document) map[string][]byte {
 	t.Helper()
 	fw := &collectWriter{files: map[string][]byte{}}
 	require.NoError(t, Generate(fw, doc, WithModulePath(testModulePath)))
+
+	return fw.files
+}
+
+func generateFilesWithFeatures(
+	t *testing.T,
+	doc *oapiparser.Document,
+	pf oapiparser.ProjectFeatures,
+) map[string][]byte {
+	t.Helper()
+	fw := &collectWriter{files: map[string][]byte{}}
+	require.NoError(t, Generate(fw, doc, WithModulePath(testModulePath), WithProjectFeatures(pf)))
 
 	return fw.files
 }

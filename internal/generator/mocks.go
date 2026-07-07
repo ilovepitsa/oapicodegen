@@ -18,7 +18,7 @@ func (g *Generator) mockServerFile() codegen.File {
 }
 
 func (g *Generator) mockFile(side, mockName, ifaceRef string) codegen.File {
-	m := &typeMapper{currentPkg: "mock" + side, modulePath: g.modulePath}
+	m := g.newTypeMapper("mock" + side)
 	m.addImport("context", "")
 	m.addImport("reflect", "")
 	m.addImport("go.uber.org/mock/gomock", "")
