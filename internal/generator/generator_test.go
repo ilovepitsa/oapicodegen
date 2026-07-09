@@ -6,6 +6,8 @@ import (
 	"nschugorev/oapigenerator/internal/codegen"
 	"nschugorev/oapigenerator/internal/golden"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -733,6 +735,514 @@ components:
 	files := generateFiles(t, doc)
 	got := string(files["model/matrix.gen.go"])
 	assert.True(t, containsCollapsed(got, "Rows [][]int"))
+}
+
+func TestGenerate_SetDefaults(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Config:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string, default: fallback}
+        retries: {type: integer, format: int32, default: 3}
+        enabled: {type: boolean, default: true}
+        ratio: {type: number, format: float, default: 0.5}
+        withoutDefault: {type: string}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/config.gen.go"])
+
+	assert.Contains(t, got, "func (m *Config) SetDefaults() {")
+	// required string default — zero-value check `== ""`
+	assert.True(t, containsCollapsed(got, `if m.Name == "" {`))
+	assert.True(t, containsCollapsed(got, `m.Name = "fallback"`))
+	// optional int32 default — nil check (pointer) + `v := <literal>; m.Field = &v` pattern
+	assert.True(t, containsCollapsed(got, "if m.Retries == nil {"))
+	assert.True(t, containsCollapsed(got, "v := int32(3)"))
+	assert.True(t, containsCollapsed(got, "m.Retries = &v"))
+	// optional bool default — nil check
+	assert.True(t, containsCollapsed(got, "if m.Enabled == nil {"))
+	assert.True(t, containsCollapsed(got, "v := true"))
+	assert.True(t, containsCollapsed(got, "m.Enabled = &v"))
+	// optional float32 default — nil check + float32 cast
+	assert.True(t, containsCollapsed(got, "if m.Ratio == nil {"))
+	assert.True(t, containsCollapsed(got, "v := float32(0.5)"))
+	assert.True(t, containsCollapsed(got, "m.Ratio = &v"))
+	// field without default must not appear in SetDefaults
+	setDefaultsBody := extractFunc(got, "Config) SetDefaults")
+	assert.NotContains(t, setDefaultsBody, "WithoutDefault")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "config.gen.go", files["model/config.gen.go"], parser.AllErrors)
+	require.NoError(t, err, "generated file should parse as valid Go")
+}
+
+func TestGenerate_SetDefaults_EnumField(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Status:
+      type: string
+      enum: [active, inactive]
+      default: active
+    Item:
+      type: object
+      properties:
+        status: {$ref: '#/components/schemas/Status'}
+`)
+	files := generateFiles(t, doc)
+	itemGot := string(files["model/item.gen.go"])
+	assert.Contains(t, itemGot, "func (m *Item) SetDefaults() {")
+	assert.True(t, containsCollapsed(itemGot, "if m.Status == nil {"))
+	assert.True(t, containsCollapsed(itemGot, "v := StatusActive"))
+	assert.True(t, containsCollapsed(itemGot, "m.Status = &v"))
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "item.gen.go", files["model/item.gen.go"], parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestGenerate_SetDefaults_RequiredInt64(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Settings:
+      type: object
+      required: [timeout]
+      properties:
+        timeout: {type: integer, format: int64, default: 30}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/settings.gen.go"])
+	assert.Contains(t, got, "func (m *Settings) SetDefaults() {")
+	// required int64 — zero-value check `== 0`, no nil
+	assert.True(t, containsCollapsed(got, "if m.Timeout == 0 {"))
+	assert.True(t, containsCollapsed(got, "m.Timeout = int64(30)"))
+}
+
+func TestGenerate_SetDefaults_NoMethodWhenNoDefaults(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Plain:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/plain.gen.go"])
+	assert.NotContains(t, got, "SetDefaults")
+}
+
+func TestGenerate_SetDefaults_ServerAutoDefaultsFlag(t *testing.T) {
+	spec := `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /config:
+    post:
+      operationId: createConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Config'}
+      responses:
+        '201': {description: created}
+components:
+  schemas:
+    Config:
+      type: object
+      properties:
+        name: {type: string, default: fallback}
+`
+
+	t.Run("ServerNoAutoDefaults=false calls SetDefaults", func(t *testing.T) {
+		doc := parseSpec(t, spec)
+		pf := oapiparser.ProjectFeatures{} // ServerNoAutoDefaults=false
+		files := generateFilesWithFeatures(t, doc, pf)
+		got := string(files["impl/echoserver/server.gen.go"])
+		assert.Contains(t, got, "req.Body.SetDefaults()")
+	})
+
+	t.Run("ServerNoAutoDefaults=true skips SetDefaults", func(t *testing.T) {
+		doc := parseSpec(t, spec)
+		pf := oapiparser.ProjectFeatures{
+			ServerNoAutoDefaults: oapiparser.ProjectFeature{Value: true},
+		}
+		files := generateFilesWithFeatures(t, doc, pf)
+		got := string(files["impl/echoserver/server.gen.go"])
+		assert.NotContains(t, got, "SetDefaults")
+	})
+}
+
+func TestGenerate_SetDefaults_SplitRequestVariant(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: integer, format: int64, default: 42, readOnly: true}
+        name: {type: string, default: unnamed}
+`)
+	pf := oapiparser.ProjectFeatures{
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+	}
+	files := generateFilesWithFeatures(t, doc, pf)
+	got := string(files["model/pet.gen.go"])
+
+	// PetRequest: id (readOnly) excluded, name kept → SetDefaults for name only.
+	// name is optional (not in required) → pointer → `v := ...; m.Field = &v` pattern.
+	assert.Contains(t, got, "func (m *PetRequest) SetDefaults() {")
+	reqSection := extractFunc(got, "PetRequest) SetDefaults")
+	assert.Contains(t, reqSection, `v := "unnamed"`)
+	assert.Contains(t, reqSection, "m.Name = &v")
+	assert.NotContains(t, reqSection, "ID")
+
+	// PetResponse: both id and name kept → SetDefaults for both.
+	// Both optional (not in required) → pointer → `v := ...; m.Field = &v` pattern.
+	assert.Contains(t, got, "func (m *PetResponse) SetDefaults() {")
+	respSection := extractFunc(got, "PetResponse) SetDefaults")
+	assert.Contains(t, respSection, "v := int64(42)")
+	assert.Contains(t, respSection, "m.ID = &v")
+	assert.Contains(t, respSection, `v := "unnamed"`)
+	assert.Contains(t, respSection, "m.Name = &v")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet.gen.go", files["model/pet.gen.go"], parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestGenerate_SetDefaults_RequiredEnumInt(t *testing.T) {
+	// B1: required enum-поле с non-string base type (Code int32) не должно
+	// генерировать `if m.Code == ""` — zero-value должен быть `0` по schema type.
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Code:
+      type: integer
+      format: int32
+      enum: [1, 2, 3]
+      default: 2
+    Item:
+      type: object
+      required: [code]
+      properties:
+        code: {$ref: '#/components/schemas/Code'}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/item.gen.go"])
+
+	assert.Contains(t, got, "func (m *Item) SetDefaults() {")
+	// required integer-enum: zero-value `0` (untyped int constant совместим с Code).
+	assert.True(t, containsCollapsed(got, "if m.Code == 0 {"))
+	assert.True(t, containsCollapsed(got, "m.Code = Code2"))
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "item.gen.go", files["model/item.gen.go"], parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestGenerate_SetDefaults_RequiredEnumString(t *testing.T) {
+	// B1 (string-enum): required string-enum — zero-value `""`.
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Status:
+      type: string
+      enum: [active, inactive]
+      default: active
+    Item:
+      type: object
+      required: [status]
+      properties:
+        status: {$ref: '#/components/schemas/Status'}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/item.gen.go"])
+
+	assert.Contains(t, got, "func (m *Item) SetDefaults() {")
+	assert.True(t, containsCollapsed(got, `if m.Status == "" {`))
+	assert.True(t, containsCollapsed(got, "m.Status = StatusActive"))
+}
+
+func TestGenerate_SetDefaults_DateTimeSkipped(t *testing.T) {
+	// B2: required date-time поле с default — SetDefaults-ветка НЕ генерируется
+	// (присваивание строкового литерала time.Time не компилируется).
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Event:
+      type: object
+      required: [at]
+      properties:
+        at: {type: string, format: date-time, default: '2024-01-01T00:00:00Z'}
+        name: {type: string, default: unnamed}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/event.gen.go"])
+
+	// SetDefaults всё ещё генерируется (есть name с default).
+	assert.Contains(t, got, "func (m *Event) SetDefaults() {")
+	setDefaultsBody := extractFunc(got, "Event) SetDefaults")
+	// date-time поле НЕ должно появляться в SetDefaults.
+	assert.NotContains(t, setDefaultsBody, "m.At")
+	// name с default должен присутствовать (optional → pointer → v-then-and-v pattern).
+	assert.Contains(t, setDefaultsBody, `v := "unnamed"`)
+	assert.Contains(t, setDefaultsBody, "m.Name = &v")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "event.gen.go", files["model/event.gen.go"], parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestGenerate_SetDefaults_NestedObjectRef(t *testing.T) {
+	// M3: Outer.inner — $ref на Inner с defaults. Outer.SetDefaults()
+	// должен вызывать m.Inner.SetDefaults().
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Inner:
+      type: object
+      properties:
+        level: {type: integer, default: 5}
+    Outer:
+      type: object
+      required: [inner]
+      properties:
+        inner: {$ref: '#/components/schemas/Inner'}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/outer.gen.go"])
+
+	assert.Contains(t, got, "func (m *Outer) SetDefaults() {")
+	// required nested object: прямой вызов без nil-check.
+	assert.True(t, containsCollapsed(got, "m.Inner.SetDefaults()"))
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "outer.gen.go", files["model/outer.gen.go"], parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestGenerate_SetDefaults_NestedOptionalObjectRef(t *testing.T) {
+	// M3 (optional nested): Outer.inner optional (pointer) — вызов под nil-check.
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Inner:
+      type: object
+      properties:
+        level: {type: integer, default: 5}
+    Outer:
+      type: object
+      properties:
+        inner: {$ref: '#/components/schemas/Inner'}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/outer.gen.go"])
+
+	assert.Contains(t, got, "func (m *Outer) SetDefaults() {")
+	// optional nested object: nil-check перед вызовом.
+	assert.True(t, containsCollapsed(got, "if m.Inner != nil {"))
+	assert.True(t, containsCollapsed(got, "m.Inner.SetDefaults()"))
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "outer.gen.go", files["model/outer.gen.go"], parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestGenerate_SetDefaults_NestedObjectNoDefaultsSkipped(t *testing.T) {
+	// M3: если nested object не имеет defaults (ни прямых, ни вложенных),
+	// Outer.SetDefaults не должен генерировать пустой вызов.
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Inner:
+      type: object
+      properties:
+        level: {type: integer}
+    Outer:
+      type: object
+      properties:
+        inner: {$ref: '#/components/schemas/Inner'}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/outer.gen.go"])
+	// Outer сам не имеет defaults и Inner тоже — SetDefaults не нужен.
+	assert.NotContains(t, got, "SetDefaults")
+}
+
+func TestSchemaTreeHasDefaults_CyclicRefTerminates(t *testing.T) {
+	// M3 (cyclic, unit): schemaTreeHasDefaults должен завершиться на циклических
+	// $ref (A → B → A) благодаря visited-set. Парсер libopenapi с
+	// ExtractRefsSequentially не может распарсить циклические spec, поэтому
+	// тестируем логику напрямую, минуя парсинг.
+	inner := &oapiparser.Schema{
+		Name: "Inner",
+		Type: oapiTypeObject,
+		Properties: []*oapiparser.Property{
+			{Name: "level", Schema: &oapiparser.Schema{Type: oapiTypeInteger, Default: 5}},
+		},
+	}
+	// A.a → A (self-ref via $ref на себя же).
+	aSchema := &oapiparser.Schema{
+		Name: "A",
+		Type: oapiTypeObject,
+		Properties: []*oapiparser.Property{
+			{Name: "inner", Schema: &oapiparser.Schema{Ref: "#/components/schemas/Inner"}},
+		},
+	}
+	g := &Generator{doc: &oapiparser.Document{Schemas: []*oapiparser.Schema{inner, aSchema}}}
+
+	// Цикл: aSchema → inner ($ref Inner) → Inner.level (default). Должно вернуться true.
+	assert.True(t, g.schemaTreeHasDefaults(aSchema, nil, map[string]bool{aSchema.Name: true}))
+
+	// Без defaults — visited-set предотвращает бесконечную рекурсию.
+	emptyA := &oapiparser.Schema{Name: "EmptyA", Type: oapiTypeObject}
+	emptyB := &oapiparser.Schema{Name: "EmptyB", Type: oapiTypeObject}
+	emptyA.Properties = []*oapiparser.Property{
+		{Name: "b", Schema: &oapiparser.Schema{Ref: "#/components/schemas/EmptyB"}},
+	}
+	emptyB.Properties = []*oapiparser.Property{
+		{Name: "a", Schema: &oapiparser.Schema{Ref: "#/components/schemas/EmptyA"}},
+	}
+	g2 := &Generator{doc: &oapiparser.Document{Schemas: []*oapiparser.Schema{emptyA, emptyB}}}
+
+	assert.False(t, g2.schemaTreeHasDefaults(emptyA, nil, map[string]bool{emptyA.Name: true}))
+}
+
+// TestGenerate_SetDefaults_Compiles является end-to-end проверкой того, что
+// сгенерированный SetDefaults-код компилируется Go-компилятором (типы), а не
+// только проходит go/parser (синтаксис). Покрывает регрессии B1 (int/string
+// enum zero-value), B2 (date-time skip), M3 (nested SetDefaults call) и
+// optional-pointer-default (BLOCKER: `m.Field = &v` pattern для *int/*string/
+// *bool/*float64/*<Enum>).
+//
+// Код записывается в изолированный временный модуль (t.TempDir + go.mod),
+// затем запускается `go build ./model`. Тест требует установленного go в PATH.
+func TestGenerate_SetDefaults_Compiles(t *testing.T) {
+	if testing.Short() {
+		t.Skip("compile test skipped in short mode")
+	}
+
+	// Пропускаем, если go недоступен в PATH.
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go binary not in PATH, skipping compile test")
+	}
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Code:
+      type: integer
+      format: int32
+      enum: [1, 2, 3]
+      default: 2
+    Status:
+      type: string
+      enum: [active, inactive]
+      default: active
+    Inner:
+      type: object
+      required: [level]
+      properties:
+        level: {type: integer, default: 5}
+    Outer:
+      type: object
+      required: [code, status, inner, at, name]
+      properties:
+        code: {$ref: '#/components/schemas/Code'}
+        status: {$ref: '#/components/schemas/Status'}
+        inner: {$ref: '#/components/schemas/Inner'}
+        at: {type: string, format: date-time, default: '2024-01-01T00:00:00Z'}
+        name: {type: string, default: unnamed}
+        # Optional pointer-fields with defaults — BLOCKER regression coverage.
+        # All must be NON-required (pointer), so SetDefaults uses the
+        # v-then-and-v pattern (v := literal; m.Field = andv).
+        count: {type: integer, default: 5}
+        label: {type: string, default: hello}
+        active: {type: boolean, default: true}
+        rate: {type: number, format: double, default: 3.14}
+        statusCode: {$ref: '#/components/schemas/Code'}
+`)
+	files := generateFiles(t, doc)
+
+	dir := t.TempDir()
+	modelDir := filepath.Join(dir, "model")
+	require.NoError(t, os.MkdirAll(modelDir, 0o755))
+
+	// go.mod для изолированного модуля.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module compiletest\n\ngo 1.26\n"), 0o644))
+
+	for name, content := range files {
+		// Нас интересует только model-пакет (там SetDefaults).
+		if !strings.HasPrefix(name, "model/") {
+			continue
+		}
+
+		require.NoError(t, os.WriteFile(filepath.Join(modelDir, filepath.Base(name)), content, 0o644))
+	}
+
+	// go build ./model — компиляция с проверкой типов.
+	cmd := exec.Command("go", "build", "./model")
+	cmd.Dir = dir
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generated model package did not compile: %v\n--- output ---\n%s", err, out)
+	}
+}
+
+func extractFunc(source, funcName string) string {
+	idx := strings.Index(source, funcName)
+	if idx < 0 {
+		return ""
+	}
+
+	end := strings.Index(source[idx:], "\n}\n")
+	if end < 0 {
+		return ""
+	}
+
+	return source[idx : idx+end]
 }
 
 func TestGenerate_RendersValidGo(t *testing.T) {

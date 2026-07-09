@@ -96,6 +96,29 @@ func (g *Generator) renderFilteredStruct(
 	}
 
 	w.Print("}\n\n")
+
+	if filteredSchemaHasDefaults(g, sh, keep) {
+		g.renderSetDefaultsMethod(w, sh, m, name, keep)
+	}
+}
+
+// filteredSchemaHasDefaults сообщает, есть ли default хотя бы у одного
+// property, проходящего фильтр keep, или у вложенной object-схемы через
+// $ref. Используется для решения, генерировать ли SetDefaults для
+// конкретного <Name>Request/<Name>Response варианта.
+//
+// Рекурсивный обход через g.schemaTreeHasDefaults учитывает nested $ref
+// на object-схемы с defaults (M3). visited-set ограничивает циклические refs.
+func filteredSchemaHasDefaults(
+	g *Generator,
+	sh *parser.Schema,
+	keep func(*parser.Property) bool,
+) bool {
+	if sh == nil {
+		return false
+	}
+
+	return g.schemaTreeHasDefaults(sh, keep, map[string]bool{sh.Name: true})
 }
 
 func (g *Generator) renderStruct(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) { //nolint:lll // function signature with params
@@ -105,7 +128,11 @@ func (g *Generator) renderStruct(w *codegen.BufferWriter, sh *parser.Schema, m *
 		g.renderField(w, p, m)
 	}
 
-	w.Print("}\n")
+	w.Print("}\n\n")
+
+	if filteredSchemaHasDefaults(g, sh, nil) {
+		g.renderSetDefaultsMethod(w, sh, m, name, nil)
+	}
 }
 
 func (g *Generator) renderField(w *codegen.BufferWriter, p *parser.Property, m *typeMapper) {
@@ -120,7 +147,7 @@ func (g *Generator) renderField(w *codegen.BufferWriter, p *parser.Property, m *
 	fieldName := goName(p.Name)
 	fieldType := m.goType(p.Schema)
 
-	if !p.Required && !strings.HasPrefix(fieldType, "*") && !isInherentlyNilable(fieldType) {
+	if fieldIsOptional(p, fieldType) {
 		fieldType = "*" + fieldType
 	}
 
@@ -130,6 +157,13 @@ func (g *Generator) renderField(w *codegen.BufferWriter, p *parser.Property, m *
 	}
 
 	w.Print(fieldName, " ", fieldType, " `json:\"", p.Name, omitEmpty, "\" yaml:\"", p.Name, omitEmpty, "\"`\n") //nolint:lll // struct tag line
+}
+
+// fieldIsOptional сообщает, нужно ли оборачивать поле в pointer.
+// Поле optional, если оно не required и его Go-тип уже не nilable
+// (не slice/map/any и не pointer).
+func fieldIsOptional(p *parser.Property, fieldType string) bool {
+	return !p.Required && !strings.HasPrefix(fieldType, "*") && !isInherentlyNilable(fieldType)
 }
 
 func (g *Generator) renderEnum(w *codegen.BufferWriter, sh *parser.Schema, name string) {

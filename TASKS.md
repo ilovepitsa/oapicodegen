@@ -20,7 +20,7 @@
 **Поддерживается через generation flags (включаются в `generation_flags.yaml`):**
 - `GOLANG_SPLIT_REQUEST_RESPONSE` — раздельные `<Name>Request`/`<Name>Response` модели (T24f — DONE)
 - `USE_UTC_FOR_DATE_TIME` — принудительная UTC-сериализация `time.Time` через тип `UTCTime` (T24d — DONE)
-- `GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS` — флаг заведён в `ProjectFeatures` (T24e — partial, см. ниже)
+- `GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS` — когда off, server request-decoder вызывает `req.Body.SetDefaults()` (T24e — DONE, требует T25a)
 - `USE_REQUIRED_V2` — флаг заведён в `ProjectFeatures`, генераторной поддержки пока нет (T24g — pending)
 
 **Не поддерживается (бэклог):**
@@ -30,7 +30,7 @@
 - URL-form encoding (`application/x-www-form-urlencoded`)
 - Конвертёры между Request/Response-моделями (требуют split + T25)
 - Update-схемы (`*_update`) — T25b
-- `SetDefaults()` методы — T25a (блокирует полную реализацию T24e)
+- `SetDefaults()` методы — T25a DONE
 
 Это значит: задачи T13, T14, T16 (audit), T18 (HTTP server для audit) упрощаются или откладываются. См. раздел «Корректировки задач» ниже.
 
@@ -278,13 +278,13 @@
 - Зависимости: T24c
 - Ветка: `feat/genflag-utc`
 
-#### T24e — `GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS` flag — PARTIAL (blocked на T25a)
-- Флаг заведён в `ProjectFeatures` и проходит через CLI/logging, но **не влияет на генератор**:
-  генератор не вызывает `SetDefaults()` в server request-decoder, потому что сам `SetDefaults()`
-  (T25a) ещё не реализован. Нечего отключать.
-- Статус: partial — конфиг-инфраструктура готова, генераторная логика ожидает T25a.
-- Зависимости: T24c, T25a (блокер)
-- Ветка: `feat/genflag-no-defaults` (генераторная часть отложена)
+#### T24e — `GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS` flag — DONE
+- Когда флаг off (по умолчанию), server request-decoder вызывает `req.Body.SetDefaults()` после `c.Bind(req)`.
+- Когда флаг on — вызов `SetDefaults()` не генерируется.
+- Решение принимается на этапе codegen (нет runtime-проверки флага в сгенерированном коде).
+- `shouldCallSetDefaults(op)` проверяет: body-схема существует (через `resolveBodySchema` — $ref lookup или inline), является object, имеет defaults в Request-фильтре (split-aware).
+- Зависимости: T24c, T25a
+- Ветка: `feat/genflag-no-defaults`
 
 #### T24f — `GOLANG_SPLIT_REQUEST_RESPONSE` flag — DONE
 - Когда on, генерируются раздельные `<Name>Request` и `<Name>Response` модели
@@ -305,9 +305,17 @@
 
 ### T25: URLForm, WithDefaults, Update-схемы — разбит на T25a–T25c
 
-#### T25a — WithDefaults: `SetDefaults()` методы
-- Генерация `<Name>SetDefaults()` для schema-struct'ов — заполняет поля из `default` из spec
-- `default_value_visitor.go` + `set_defaults_visitor.go` + `type_default_value_visitor.go` + `schema_with_defaults.go` (~740 строк)
+#### T25a — WithDefaults: `SetDefaults()` методы — DONE
+- Генерация `func (m *<Name>) SetDefaults()` для schema-struct'ов — заполняет поля из `default` из spec.
+- Прямой codegen (НЕ visitor pattern из mwsapi) — ~210 строк в `internal/generator/set_defaults.go`.
+- Покрытые типы: string, integer (int/int32/int64), number (float32/float64), boolean, enum (константное имя).
+- Optional pointer-поля: `if m.Field == nil { v := <literal>; m.Field = &v }`.
+- Required value-поля: `if m.Field == <zero> { m.Field = <literal> }`.
+- `date-time`/`date`/`binary` форматы — skip (TODO: `time.Parse`).
+- Nested object `$ref`: рекурсивный `m.Inner.SetDefaults()` (required) / `if m.Inner != nil { m.Inner.SetDefaults() }` (optional). Циклические $ref разрываются visited-set.
+- Split-aware (T24f): `filteredSchemaHasDefaults` с keep-фильтром — Request-вариант исключает readOnly defaults.
+- Compile-тест `TestGenerate_SetDefaults_Compiles` запускает `go build` на сгенерированном коде (проверка типов, не только синтаксис).
+- Отложено: array items, oneOf/anyOf/allOf variants, allOf flattened fields, date-time/date/binary defaults.
 - Зависимости: нет
 - Ветка: `feat/gen-defaults`
 

@@ -112,6 +112,14 @@ func (g *Generator) renderImplServerMethod(w *codegen.BufferWriter, op *parser.O
 	w.Print("\t\treturn err\n")
 	w.Print("\t}\n")
 
+	// SetDefaults вызывается только когда флаг ServerNoAutoDefaults выключен
+	// и body-схема имеет default-поля, попадающие в request-фильтр (не readOnly).
+	// При включённом split метод генерируется для <Name>Request варианта;
+	// проверка requestDefaultsCovered гарантирует, что метод существует.
+	if !g.features.ServerNoAutoDefaults.Value && g.shouldCallSetDefaults(op) {
+		w.Print("\treq.Body.SetDefaults()\n")
+	}
+
 	w.Print("\tresp, err := s.impl.", name, "(c.Request().Context(), req)\n")
 	w.Print("\tif err != nil {\n")
 	w.Print("\t\treturn err\n")
@@ -120,6 +128,73 @@ func (g *Generator) renderImplServerMethod(w *codegen.BufferWriter, op *parser.O
 	g.renderImplServerResponse(w, op)
 
 	w.Print("}\n\n")
+}
+
+// shouldCallSetDefaults сообщает, нужно ли генерировать req.Body.SetDefaults()
+// для операции. True только если body-схема разрешается в object-схему с
+// default-полями, попадающими в request-фильтр (не readOnly). При включённом
+// GOLANG_SPLIT_REQUEST_RESPONSE учитывается Request-фильтр, чтобы метод
+// SetDefaults гарантированно существовал на <Name>Request.
+func (g *Generator) shouldCallSetDefaults(op *parser.Operation) bool {
+	if op.RequestBody == nil {
+		return false
+	}
+
+	sh := g.resolveBodySchema(op.RequestBody)
+	if sh == nil || sh.Name == "" {
+		return false
+	}
+
+	keep := func(*parser.Property) bool { return true }
+	if g.features.SplitRequestResponse.Value {
+		keep = func(p *parser.Property) bool {
+			return p.Schema == nil || !p.Schema.ReadOnly
+		}
+	}
+
+	return filteredSchemaHasDefaults(g, sh, keep)
+}
+
+// resolveBodySchema возвращает object-схему тела запроса. Если body — $ref,
+// ищет схему по имени в doc.Schemas; иначе возвращает inline-схему.
+// Возвращает nil для не-object схем (array/alias/enum) — SetDefaults
+// для них не генерируется.
+func (g *Generator) resolveBodySchema(rb *parser.RequestBody) *parser.Schema {
+	sh := bodySchema(rb)
+	if sh == nil {
+		return nil
+	}
+
+	if sh.Ref != "" {
+		name := refToName(sh.Ref)
+		for _, s := range g.doc.Schemas {
+			if s.Name == name {
+				return s
+			}
+		}
+
+		return nil
+	}
+
+	return sh
+}
+
+// resolveRefSchema возвращает схему из doc.Schemas по $ref.
+// Если s — не $ref (inline-схема) или имя не найдено — возвращает nil.
+// Используется в SetDefaults для разрешения вложенных object-схем (M3).
+func (g *Generator) resolveRefSchema(s *parser.Schema) *parser.Schema {
+	if s == nil || s.Ref == "" {
+		return nil
+	}
+
+	name := refToName(s.Ref)
+	for _, sh := range g.doc.Schemas {
+		if sh.Name == name {
+			return sh
+		}
+	}
+
+	return nil
 }
 
 func (g *Generator) renderImplServerResponse(w *codegen.BufferWriter, op *parser.Operation) {
