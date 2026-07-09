@@ -50,6 +50,8 @@ func (g *Generator) renderRequestStruct(w *codegen.BufferWriter, op *parser.Oper
 	name := operationMethodName(op) + "Request"
 	w.Print("type ", name, " struct {\n")
 
+	m.mode = modeRequest
+
 	for _, p := range op.Parameters {
 		g.renderParamField(w, p, m)
 	}
@@ -115,6 +117,8 @@ func (g *Generator) renderResponseStruct(w *codegen.BufferWriter, op *parser.Ope
 	name := operationMethodName(op) + "Response"
 	w.Print("type ", name, " struct {\n")
 	w.Print("\tCode int\n")
+
+	m.mode = modeResponse
 
 	codes := sortedResponseCodes(op.Responses)
 	for _, code := range codes {

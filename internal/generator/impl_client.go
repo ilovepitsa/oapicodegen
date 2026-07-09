@@ -235,7 +235,12 @@ func (g *Generator) renderImplResponseBody(w *codegen.BufferWriter, label string
 		return
 	}
 
+	prevMode := m.mode
+	m.mode = modeResponse
 	typ := m.goType(schema)
+
+	m.mode = prevMode
+
 	w.Print("\t\tvar v ", typ, "\n")
 	w.Print("\t\tif err := json.NewDecoder(resp.Body).Decode(&v); err != nil {\n")
 	w.Print("\t\t\treturn nil, fmt.Errorf(\"decode ", label, ": %w\", err)\n")

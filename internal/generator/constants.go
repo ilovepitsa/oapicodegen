@@ -17,4 +17,7 @@ const (
 	oapiCodeDefault = "default"
 
 	goTypeAny = "any"
+
+	modeRequest  = "Request"
+	modeResponse = "Response"
 )

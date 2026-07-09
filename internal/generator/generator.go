@@ -26,6 +26,11 @@ type Generator struct {
 	modulePath string
 	factory    *gogen.FileFactory
 	features   parser.ProjectFeatures
+
+	// splittable — имена object-схем, которые при включённом
+	// GOLANG_SPLIT_REQUEST_RESPONSE рендерятся как <Name>Request + <Name>Response.
+	// nil, если флаг выключен.
+	splittable map[string]bool
 }
 
 // Option настраивает Generator.
@@ -52,6 +57,10 @@ func Generate(fw codegen.FileWriter, doc *parser.Document, opts ...Option) error
 	}
 	for _, opt := range opts {
 		opt(g)
+	}
+
+	if g.features.SplitRequestResponse.Value {
+		g.splittable = computeSplittable(doc)
 	}
 
 	for _, sh := range doc.Schemas {
@@ -111,6 +120,64 @@ func (g *Generator) writeUTCTimeFile(fw codegen.FileWriter) error {
 	}
 
 	return nil
+}
+
+// computeSplittable возвращает map имён object-схем с properties —
+// тех, которые при включённом GOLANG_SPLIT_REQUEST_RESPONSE рендерятся
+// как <Name>Request + <Name>Response.
+//
+// Схема исключается из split, если на неё ссылается composite-контекст
+// (oneOf/anyOf/allOf/items/additionalProperties) любой другой схемы:
+// эти рендеры идут с mode=="", поэтому splittable-ссылка породила бы
+// несуществующий идентификатор (есть только <Name>Request/<Name>Response).
+// Ссылки из properties других splittable-схем безопасны — renderSplitStruct
+// выставляет mode. Ссылки из operation body/response тоже безопасны —
+// они рендерятся в renderRequestStruct/renderResponseStruct с mode.
+func computeSplittable(doc *parser.Document) map[string]bool {
+	out := make(map[string]bool)
+
+	for _, sh := range doc.Schemas {
+		if sh.Name == "" {
+			continue
+		}
+
+		if sh.Type == oapiTypeObject && len(sh.Properties) > 0 &&
+			len(sh.OneOf) == 0 && len(sh.AnyOf) == 0 && len(sh.AllOf) == 0 {
+			out[sh.Name] = true
+		}
+	}
+
+	for _, sh := range doc.Schemas {
+		excludeReferencedByComposite(sh, out)
+	}
+
+	return out
+}
+
+// excludeReferencedByComposite удаляет из out имена схем, на которые
+// ссылается sh через oneOf/anyOf/allOf/items/additionalProperties.
+// Эти контексты рендерятся с mode=="", поэтому splittable-ссылка
+// породила бы несуществующий идентификатор.
+func excludeReferencedByComposite(sh *parser.Schema, out map[string]bool) {
+	for _, v := range sh.OneOf {
+		delete(out, refToName(v.Ref))
+	}
+
+	for _, v := range sh.AnyOf {
+		delete(out, refToName(v.Ref))
+	}
+
+	for _, v := range sh.AllOf {
+		delete(out, refToName(v.Ref))
+	}
+
+	if sh.Items != nil {
+		delete(out, refToName(sh.Items.Ref))
+	}
+
+	if sh.AdditionalProperties != nil {
+		delete(out, refToName(sh.AdditionalProperties.Ref))
+	}
 }
 
 func (g *Generator) writeOperationFiles(fw codegen.FileWriter) error {

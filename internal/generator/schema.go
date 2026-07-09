@@ -29,6 +29,12 @@ func (g *Generator) renderSchema(sh *parser.Schema, m *typeMapper) []byte {
 		writeDocComment(w, sh.Description)
 	}
 
+	if g.features.SplitRequestResponse.Value && g.splittable[sh.Name] {
+		g.renderSplitStruct(w, sh, m, name)
+
+		return w.Content()
+	}
+
 	switch {
 	case len(sh.OneOf) > 0 || len(sh.AnyOf) > 0:
 		g.renderUnion(w, sh, m, name)
@@ -47,6 +53,47 @@ func (g *Generator) renderSchema(sh *parser.Schema, m *typeMapper) []byte {
 	}
 
 	return w.Content()
+}
+
+// renderSplitStruct рендерит <Name>Request и <Name>Response вместо одного
+// <Name>, когда включён GOLANG_SPLIT_REQUEST_RESPONSE.
+// Request: свойства с ReadOnly=false (writeOnly + regular).
+// Response: свойства с WriteOnly=false (readOnly + regular).
+func (g *Generator) renderSplitStruct(
+	w *codegen.BufferWriter,
+	sh *parser.Schema,
+	m *typeMapper,
+	name string,
+) {
+	m.mode = modeRequest
+	g.renderFilteredStruct(w, sh, m, name+"Request", func(p *parser.Property) bool {
+		return p.Schema == nil || !p.Schema.ReadOnly
+	})
+
+	m.mode = modeResponse
+	g.renderFilteredStruct(w, sh, m, name+"Response", func(p *parser.Property) bool {
+		return p.Schema == nil || !p.Schema.WriteOnly
+	})
+}
+
+func (g *Generator) renderFilteredStruct(
+	w *codegen.BufferWriter,
+	sh *parser.Schema,
+	m *typeMapper,
+	name string,
+	keep func(*parser.Property) bool,
+) {
+	w.Print("type ", name, " struct {\n")
+
+	for _, p := range sh.Properties {
+		if !keep(p) {
+			continue
+		}
+
+		g.renderField(w, p, m)
+	}
+
+	w.Print("}\n\n")
 }
 
 func (g *Generator) renderStruct(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) { //nolint:lll // function signature with params

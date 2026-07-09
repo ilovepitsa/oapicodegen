@@ -49,7 +49,13 @@ func (g *Generator) renderSugarMethod(w *codegen.BufferWriter, op *parser.Operat
 	w.Print("func (x *ClientSugared) ", name, "(ctx context.Context, req *", name, "Request) (")
 
 	if successSchema != nil {
-		w.Print("*", m.goType(successSchema), ", error) {\n")
+		prevMode := m.mode
+		m.mode = modeResponse
+		typ := m.goType(successSchema)
+
+		m.mode = prevMode
+
+		w.Print("*", typ, ", error) {\n")
 	} else {
 		w.Print("error) {\n")
 	}

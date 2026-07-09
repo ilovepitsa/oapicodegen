@@ -9,10 +9,14 @@ import (
 // typeMapper мапит parser.Schema → Go-тип, собирая нужные импорты.
 // currentPkg — пакет, в который сейчас рендерится код ("model" / "client" / "server").
 // modulePath — Go import-path корня генерируемого кода (для ссылок на model).
+// mode — "" / "Request" / "Response": суффикс для splittable schema-ссылок
+// при включённом GOLANG_SPLIT_REQUEST_RESPONSE.
 type typeMapper struct {
 	currentPkg string
 	modulePath string
 	utcTime    bool
+	mode       string
+	splittable map[string]bool
 	imports    []gogen.Import
 }
 
@@ -22,6 +26,7 @@ func (g *Generator) newTypeMapper(pkg string) *typeMapper {
 		currentPkg: pkg,
 		modulePath: g.modulePath,
 		utcTime:    g.features.UseUTCForDateTime.Value,
+		splittable: g.splittable,
 	}
 }
 
@@ -152,8 +157,14 @@ func (m *typeMapper) stringGoType(s *parser.Schema) string {
 
 // qualifyModelType добавляет префикс "model." и импорт, если текущий пакет
 // не "model". name — Go-имя схемы (до квалификации).
+// При включённом split и заданном mode добавляет суффикс "Request"/"Response"
+// для splittable схем.
 func (m *typeMapper) qualifyModelType(name string) string {
 	goName := goName(name)
+	if m.mode != "" && m.isSplittable(name) {
+		goName += m.mode
+	}
+
 	if m.currentPkg == "model" || m.modulePath == "" {
 		return goName
 	}
@@ -161,6 +172,13 @@ func (m *typeMapper) qualifyModelType(name string) string {
 	m.addImport(m.modulePath+"/model", "model")
 
 	return "model." + goName
+}
+
+// isSplittable проверяет, есть ли схема в splittable-наборе Generator.
+// typeMapper не имеет прямой ссылки на Generator, поэтому поле splittable
+// прокидывается через typeMapper.
+func (m *typeMapper) isSplittable(name string) bool {
+	return m.splittable != nil && m.splittable[name]
 }
 
 // qualifyUTCTime возвращает имя UTCTime-типа для текущего пакета.

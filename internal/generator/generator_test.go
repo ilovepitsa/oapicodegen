@@ -273,6 +273,314 @@ components:
 	assert.Contains(t, got, `"time"`)
 }
 
+func TestGenerate_SplitRequestResponse(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, format: int64, readOnly: true}
+        name: {type: string}
+        secret: {type: string, writeOnly: true}
+`)
+	pf := oapiparser.ProjectFeatures{
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+	}
+	files := generateFilesWithFeatures(t, doc, pf)
+	got := string(files["model/pet.gen.go"])
+
+	assert.Contains(t, got, "type PetRequest struct {")
+	assert.Contains(t, got, "type PetResponse struct {")
+	assert.NotContains(t, got, "type Pet struct {")
+
+	// Request: no readOnly (id), has writeOnly (secret) + regular (name)
+	reqSection := extractStruct(got, "PetRequest")
+	assert.Contains(t, reqSection, "Name")
+	assert.Contains(t, reqSection, "Secret")
+	assert.NotContains(t, reqSection, "ID")
+
+	// Response: no writeOnly (secret), has readOnly (id) + regular (name)
+	respSection := extractStruct(got, "PetResponse")
+	assert.Contains(t, respSection, "ID")
+	assert.Contains(t, respSection, "Name")
+	assert.NotContains(t, respSection, "Secret")
+}
+
+func TestGenerate_SplitFlagOff_SingleStruct(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/pet.gen.go"])
+
+	assert.Contains(t, got, "type Pet struct {")
+	assert.NotContains(t, got, "PetRequest")
+	assert.NotContains(t, got, "PetResponse")
+}
+
+func TestGenerate_Split_NestedSchemaRef(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+    Owner:
+      type: object
+      properties:
+        pet: {$ref: '#/components/schemas/Pet'}
+`)
+	pf := oapiparser.ProjectFeatures{
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+	}
+	files := generateFilesWithFeatures(t, doc, pf)
+
+	ownerGot := string(files["model/owner.gen.go"])
+	// In OwnerRequest, pet field should be *PetRequest
+	reqSection := extractStruct(ownerGot, "OwnerRequest")
+	assert.True(t, containsCollapsed(reqSection, "Pet *PetRequest"))
+	// In OwnerResponse, pet field should be *PetResponse
+	respSection := extractStruct(ownerGot, "OwnerResponse")
+	assert.True(t, containsCollapsed(respSection, "Pet *PetResponse"))
+}
+
+func extractStruct(source, structName string) string {
+	startMarker := "type " + structName + " struct {"
+	idx := strings.Index(source, startMarker)
+	if idx < 0 {
+		return ""
+	}
+
+	end := strings.Index(source[idx:], "\n}\n")
+	if end < 0 {
+		return ""
+	}
+
+	return source[idx : idx+end]
+}
+
+func TestGenerate_Split_OneOfRefExcludesFromSplit(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+    PetKind:
+      oneOf:
+        - {$ref: '#/components/schemas/Pet'}
+`)
+	pf := oapiparser.ProjectFeatures{
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+	}
+	files := generateFilesWithFeatures(t, doc, pf)
+
+	petGot := string(files["model/pet.gen.go"])
+	assert.Contains(t, petGot, "type Pet struct {", "Pet must NOT be split when referenced by oneOf")
+	assert.NotContains(t, petGot, "type PetRequest struct {")
+	assert.NotContains(t, petGot, "type PetResponse struct {")
+
+	kindGot := string(files["model/pet_kind.gen.go"])
+	assert.Contains(t, kindGot, "type PetKind struct {")
+	assert.Contains(t, kindGot, "Pet *Pet")
+}
+
+func TestGenerate_Split_AllOfRefExcludesFromSplit(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+    Composite:
+      allOf:
+        - {$ref: '#/components/schemas/Pet'}
+        - type: object
+          properties:
+            extra: {type: string}
+`)
+	pf := oapiparser.ProjectFeatures{
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+	}
+	files := generateFilesWithFeatures(t, doc, pf)
+
+	petGot := string(files["model/pet.gen.go"])
+	assert.Contains(t, petGot, "type Pet struct {", "Pet must NOT be split when referenced by allOf")
+	assert.NotContains(t, petGot, "type PetRequest struct {")
+
+	compositeGot := string(files["model/composite.gen.go"])
+	assert.Contains(t, compositeGot, "type Composite struct {")
+}
+
+func TestGenerate_Split_ItemsRefExcludesFromSplit(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+    PetList:
+      type: array
+      items:
+        $ref: '#/components/schemas/Pet'
+`)
+	pf := oapiparser.ProjectFeatures{
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+	}
+	files := generateFilesWithFeatures(t, doc, pf)
+
+	petGot := string(files["model/pet.gen.go"])
+	assert.Contains(t, petGot, "type Pet struct {", "Pet must NOT be split when used as array items")
+	assert.NotContains(t, petGot, "type PetRequest struct {")
+
+	listGot := string(files["model/pet_list.gen.go"])
+	assert.Contains(t, listGot, "type PetList []Pet")
+}
+
+func TestGenerate_Split_OperationBodyAndResponseUseSuffix(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Pet'
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string, writeOnly: true}
+`)
+	pf := oapiparser.ProjectFeatures{
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+	}
+	files := generateFilesWithFeatures(t, doc, pf)
+
+	clientGot := string(files["interfaces/client/client.gen.go"])
+	assert.Contains(t, clientGot, "Body model.PetRequest", "request body must use PetRequest")
+	assert.Contains(t, clientGot, "*model.PetResponse", "response must use PetResponse")
+	assert.NotContains(t, clientGot, "model.Pet ", "no bare Pet type reference")
+	assert.NotContains(t, clientGot, "model.Pet)")
+	assert.NotContains(t, clientGot, "model.Pet`")
+}
+
+func TestGenerate_Split_SugarAndImplUseResponseSuffix(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets/{id}:
+    get:
+      operationId: getPet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: integer}
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+`)
+	pf := oapiparser.ProjectFeatures{
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+	}
+	files := generateFilesWithFeatures(t, doc, pf)
+
+	sugarGot := string(files["interfaces/client/client_sugar.gen.go"])
+	assert.Contains(t, sugarGot, "*model.PetResponse", "sugar return type must use PetResponse")
+
+	implGot := string(files["impl/httpclient/client.gen.go"])
+	assert.Contains(t, implGot, "var v model.PetResponse", "impl decode target must use PetResponse")
+}
+
+func TestGenerate_Split_EmptyAfterFilter(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    WriteOnly:
+      type: object
+      properties:
+        secret: {type: string, writeOnly: true}
+`)
+	pf := oapiparser.ProjectFeatures{
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+	}
+	files := generateFilesWithFeatures(t, doc, pf)
+	got := string(files["model/write_only.gen.go"])
+
+	assert.Contains(t, got, "type WriteOnlyRequest struct {")
+	assert.Contains(t, got, "type WriteOnlyResponse struct {")
+	// Response keeps `secret` (writeOnly allowed in response-filter? no: response excludes writeOnly)
+	// Request keeps `secret` (writeOnly is allowed in request)
+	reqSection := extractStruct(got, "WriteOnlyRequest")
+	assert.Contains(t, reqSection, "Secret", "Request must include writeOnly field")
+	respSection := extractStruct(got, "WriteOnlyResponse")
+	assert.NotContains(t, respSection, "Secret", "Response must exclude writeOnly field")
+}
+
 func TestGenerate_MapObject(t *testing.T) {
 	doc := parseSpec(t, `
 openapi: 3.0.3
