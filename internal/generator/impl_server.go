@@ -128,20 +128,7 @@ func (g *Generator) renderImplServerResponse(w *codegen.BufferWriter, op *parser
 			continue
 		}
 
-		fieldName := responseFieldName(r.StatusCode)
-		hasHeaders := hasResponseHeaders(r)
-
-		if responseSchema(r) == nil {
-			w.Print("\tif resp.", fieldName, " {\n")
-			g.renderHeaderSet(w, fieldName, hasHeaders)
-			w.Print("\t\treturn c.NoContent(", r.StatusCode, ")\n")
-			w.Print("\t}\n")
-		} else {
-			w.Print("\tif resp.", fieldName, " != nil {\n")
-			g.renderHeaderSet(w, fieldName, hasHeaders)
-			w.Print("\t\treturn c.JSON(", r.StatusCode, ", resp.", fieldName, ")\n")
-			w.Print("\t}\n")
-		}
+		g.renderImplServerStatusCodeResponse(w, r, responseFieldName(r.StatusCode))
 	}
 
 	for _, r := range op.Responses {
@@ -149,37 +136,87 @@ func (g *Generator) renderImplServerResponse(w *codegen.BufferWriter, op *parser
 			continue
 		}
 
-		fieldName := "ResponseDefault"
-		hasHeaders := hasResponseHeaders(r)
-
-		if responseSchema(r) == nil {
-			w.Print("\tif resp.", fieldName, " {\n")
-			g.renderHeaderSet(w, fieldName, hasHeaders)
-			w.Print("\t\treturn c.NoContent(resp.Code)\n")
-			w.Print("\t}\n")
-		} else {
-			w.Print("\tif resp.", fieldName, " != nil {\n")
-			g.renderHeaderSet(w, fieldName, hasHeaders)
-			w.Print("\t\treturn c.JSON(resp.Code, resp.", fieldName, ")\n")
-			w.Print("\t}\n")
-		}
+		g.renderImplServerStatusCodeResponse(w, r, "ResponseDefault")
 	}
 
 	w.WriteString("\treturn c.NoContent(resp.Code)\n")
 }
 
-// renderHeaderSet копирует заголовки из Response-структуры в HTTP-ответ echo.
+// renderImplServerStatusCodeResponse рендерит ветку ответа для конкретного status code.
+// Четыре случая по наличию headers и schema:
+//  1. Нет headers, нет schema → bool-поле, NoContent.
+//  2. Нет headers, есть schema → указатель, JSON.
+//  3. Есть headers, нет schema → указатель, renderHeaderSet + NoContent
+//     (без c.JSON — body пустой, только заголовки).
+//  4. Есть headers, есть schema → указатель, renderHeaderSet + JSON
+//     (c.JSON вызовет MarshalJSON обёртки, который маршалит Payload).
+//
+// Для default-ответа (StatusCode == oapiCodeDefault) используется resp.Code
+// вместо литерала.
+func (g *Generator) renderImplServerStatusCodeResponse(
+	w *codegen.BufferWriter,
+	r *parser.Response,
+	fieldName string,
+) {
+	hasHeaders := hasResponseHeaders(r)
+	hasSchema := responseSchema(r) != nil
+
+	if !hasHeaders && !hasSchema {
+		// Случай 1: bool-поле.
+		w.Print("\tif resp.", fieldName, " {\n")
+		g.renderStatusCodeReturn(w, r, "NoContent", "")
+		w.Print("\t}\n")
+
+		return
+	}
+
+	// Случаи 2-4: указатель, проверка != nil.
+	w.Print("\tif resp.", fieldName, " != nil {\n")
+	g.renderHeaderSet(w, fieldName, hasHeaders)
+
+	if hasSchema {
+		g.renderStatusCodeReturn(w, r, "JSON", "resp."+fieldName)
+	} else {
+		g.renderStatusCodeReturn(w, r, "NoContent", "")
+	}
+
+	w.Print("\t}\n")
+}
+
+// renderStatusCodeReturn рендерит `return c.<Method>(<code>, <field>)`.
+// codeExpr — литерал status code (для не-default) или resp.Code (для default).
+// field — выражение для второго аргумента (пустая строка для NoContent).
+func (g *Generator) renderStatusCodeReturn(
+	w *codegen.BufferWriter,
+	r *parser.Response,
+	method, field string,
+) {
+	codeExpr := r.StatusCode
+	if r.StatusCode == oapiCodeDefault {
+		codeExpr = "resp.Code"
+	}
+
+	if field == "" {
+		w.Print("\t\treturn c.", method, "(", codeExpr, ")\n")
+
+		return
+	}
+
+	w.Print("\t\treturn c.", method, "(", codeExpr, ", ", field, ")\n")
+}
+
+// renderHeaderSet копирует заголовки из PayloadWithHeaders-обёртки в HTTP-ответ echo.
+// Вызывается внутри уже проверенного `if resp.<Field> != nil { ... }` блока,
+// поэтому дополнительная nil-проверка не требуется.
+// Метод Headers() возвращает map[string]string (одна строка на заголовок),
+// поэтому используется Header().Set, а не Header().Add.
 func (g *Generator) renderHeaderSet(w *codegen.BufferWriter, fieldName string, hasHeaders bool) {
 	if !hasHeaders {
 		return
 	}
 
-	w.Print("\t\tif resp.", fieldName, "Headers != nil {\n")
-	w.Print("\t\t\tfor k, vs := range resp.", fieldName, "Headers {\n")
-	w.Print("\t\t\t\tfor _, v := range vs {\n")
-	w.Print("\t\t\t\t\tc.Response().Header().Add(k, v)\n")
-	w.Print("\t\t\t\t}\n")
-	w.Print("\t\t\t}\n")
+	w.Print("\t\tfor k, v := range resp.", fieldName, ".Headers() {\n")
+	w.Print("\t\t\tc.Response().Header().Set(k, v)\n")
 	w.Print("\t\t}\n")
 }
 

@@ -36,6 +36,10 @@ func (g *Generator) implClientFile() codegen.File {
 		m.addImport("net/url", "")
 	}
 
+	if g.implClientNeedsStrconv() {
+		m.addImport("strconv", "")
+	}
+
 	body := g.renderImplClient(m)
 
 	return g.factory.Create(&gogen.File{
@@ -69,6 +73,22 @@ func (g *Generator) implClientImports() (bool, bool, bool) {
 	}
 
 	return needJSON, needBytes, needURL
+}
+
+// implClientNeedsStrconv проверяет, есть ли хотя бы один header с не-string типом —
+// тогда декодер использует strconv и нужен импорт.
+func (g *Generator) implClientNeedsStrconv() bool {
+	for _, op := range g.doc.Operations {
+		for _, r := range op.Responses {
+			for _, hdr := range r.Headers {
+				if headerGoBaseType(hdr.Schema) != goTypeString {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
 }
 
 func (g *Generator) renderImplClient(m *typeMapper) []byte {
@@ -193,24 +213,21 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 	w.Print("\tresult := &apiclient.", name, "Response{Code: resp.StatusCode}\n")
 	w.Print("\tswitch resp.StatusCode {\n")
 
-	hasDefault := false
-
 	var defaultResp *parser.Response
 
 	for _, r := range op.Responses {
 		if r.StatusCode == oapiCodeDefault {
-			hasDefault = true
 			defaultResp = r
 
 			continue
 		}
 
-		g.renderImplResponseCase(w, r, m)
+		g.renderImplResponseCase(w, op, r, m)
 	}
 
-	if hasDefault {
+	if defaultResp != nil {
 		w.Print("\tdefault:\n")
-		g.renderImplResponseBody(w, oapiCodeDefault, defaultResp, "ResponseDefault", m)
+		g.renderImplResponseBody(w, op, oapiCodeDefault, defaultResp, "ResponseDefault", m)
 	} else {
 		w.Print("\tdefault:\n")
 		w.WriteString("\t\treturn nil, fmt.Errorf(\"unexpected status code: %d\", resp.StatusCode)\n")
@@ -221,42 +238,71 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 	w.Print("}\n\n")
 }
 
-func (g *Generator) renderImplResponseCase(w *codegen.BufferWriter, r *parser.Response, m *typeMapper) { //nolint:lll // function signature
+func (g *Generator) renderImplResponseCase(w *codegen.BufferWriter, op *parser.Operation, r *parser.Response, m *typeMapper) { //nolint:lll // function signature
 	w.Print("\tcase ", r.StatusCode, ":\n")
 	fieldName := responseFieldName(r.StatusCode)
-	g.renderImplResponseBody(w, r.StatusCode, r, fieldName, m)
+	g.renderImplResponseBody(w, op, r.StatusCode, r, fieldName, m)
 }
 
-func (g *Generator) renderImplResponseBody(w *codegen.BufferWriter, label string, r *parser.Response, fieldName string, m *typeMapper) { //nolint:lll // function signature
+func (g *Generator) renderImplResponseBody(w *codegen.BufferWriter, op *parser.Operation, label string, r *parser.Response, fieldName string, m *typeMapper) { //nolint:lll // function signature
 	schema := responseSchema(r)
-	hasHeaders := hasResponseHeaders(r)
 
-	if schema == nil {
-		w.Print("\t\tresult.", fieldName, " = true\n")
-		g.renderHeaderCapture(w, fieldName, hasHeaders)
+	if !hasResponseHeaders(r) {
+		if schema == nil {
+			w.Print("\t\tresult.", fieldName, " = true\n")
+
+			return
+		}
+
+		prevMode := m.mode
+		m.mode = modeResponse
+		typ := m.goType(schema)
+
+		m.mode = prevMode
+
+		w.Print("\t\tvar v ", typ, "\n")
+		w.Print("\t\tif err := json.NewDecoder(resp.Body).Decode(&v); err != nil {\n")
+		w.Print("\t\t\treturn nil, fmt.Errorf(\"decode ", label, ": %w\", err)\n")
+		w.Print("\t\t}\n")
+		w.Print("\t\tresult.", fieldName, " = &v\n")
 
 		return
 	}
 
-	prevMode := m.mode
-	m.mode = modeResponse
-	typ := m.goType(schema)
+	// Responses with headers: construct PayloadWithHeaders struct, then decode.
+	typeName := payloadWithHeadersTypeName(op, r.StatusCode)
+	w.Print("\t\tresult.", fieldName, " = &", typeName, "{}\n")
 
-	m.mode = prevMode
+	if schema != nil {
+		prevMode := m.mode
+		m.mode = modeResponse
+		typ := m.goType(schema)
+		m.mode = prevMode
 
-	w.Print("\t\tvar v ", typ, "\n")
-	w.Print("\t\tif err := json.NewDecoder(resp.Body).Decode(&v); err != nil {\n")
-	w.Print("\t\t\treturn nil, fmt.Errorf(\"decode ", label, ": %w\", err)\n")
-	w.Print("\t\t}\n")
-	w.Print("\t\tresult.", fieldName, " = &v\n")
-	g.renderHeaderCapture(w, fieldName, hasHeaders)
-}
-
-// renderHeaderCapture добавляет захват HTTP-заголовков ответа в Response-структуру.
-func (g *Generator) renderHeaderCapture(w *codegen.BufferWriter, field string, hasHeaders bool) { //nolint:lll // function signature
-	if !hasHeaders {
-		return
+		w.Print("\t\tvar v ", typ, "\n")
+		w.Print("\t\tif err := json.NewDecoder(resp.Body).Decode(&v); err != nil {\n")
+		w.Print("\t\t\treturn nil, fmt.Errorf(\"decode ", label, ": %w\", err)\n")
+		w.Print("\t\t}\n")
+		w.Print("\t\tresult.", fieldName, ".Payload = &v\n")
+	} else {
+		w.Print("\t\tresult.", fieldName, ".Payload = true\n")
 	}
 
-	w.Print("\t\tresult.", field, "Headers = resp.Header.Clone()\n")
+	for _, hdr := range sortedHeaders(r.Headers) {
+		hdrType := headerGoBaseType(hdr.Schema)
+		field := goName(hdr.Name)
+		expr, needsErr := headerDecodeExpr(hdr.Name, hdrType)
+
+		if needsErr {
+			w.Print("\t\t{\n")
+			w.Print("\t\t\traw, err := ", expr, "\n")
+			w.Print("\t\t\tif err != nil {\n")
+			w.Print("\t\t\t\treturn nil, fmt.Errorf(\"decode header ", hdr.Name, ": %w\", err)\n")
+			w.Print("\t\t\t}\n")
+			w.Print("\t\t\tresult.", fieldName, ".", field, " = ", headerDecodeConvert("raw", hdrType), "\n")
+			w.Print("\t\t}\n")
+		} else {
+			w.Print("\t\tresult.", fieldName, ".", field, " = ", expr, "\n")
+		}
+	}
 }

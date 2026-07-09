@@ -649,16 +649,27 @@ components:
 	files := generateFiles(t, doc)
 
 	clientGot := string(files["interfaces/client/client.gen.go"])
-	assert.True(t, containsCollapsed(clientGot, "Response200 *[]string"))
-	assert.True(t, containsCollapsed(clientGot, "Response200Headers http.Header"))
-	assert.Contains(t, clientGot, "\"net/http\"")
+	assert.True(t, containsCollapsed(clientGot, "Response200 *ListPetsResponse200PayloadWithHeaders"))
+	assert.True(t, containsCollapsed(clientGot, "Payload *[]string"))
+	assert.True(t, containsCollapsed(clientGot, "XTotalCount int"))
+	assert.Contains(t, clientGot, "func (m ListPetsResponse200PayloadWithHeaders) MarshalJSON() ([]byte, error) {")
+	assert.True(t, containsCollapsed(clientGot,
+		`func (m ListPetsResponse200PayloadWithHeaders) Headers() map[string]string {`))
+	assert.True(t, containsCollapsed(clientGot, `"X-Total-Count": fmt.Sprintf("%v", m.XTotalCount)`))
+	assert.Contains(t, clientGot, "\"encoding/json\"")
+	assert.Contains(t, clientGot, "\"fmt\"")
 
 	implGot := string(files["impl/httpclient/client.gen.go"])
-	assert.Contains(t, implGot, "result.Response200Headers = resp.Header.Clone()")
+	assert.Contains(t, implGot, "result.Response200 = &ListPetsResponse200PayloadWithHeaders{}")
+	assert.Contains(t, implGot, "result.Response200.Payload = &v")
+	assert.Contains(t, implGot, `strconv.Atoi(resp.Header.Get("X-Total-Count"))`)
+	assert.Contains(t, implGot, "result.Response200.XTotalCount = raw")
 
 	serverGot := string(files["impl/echoserver/server.gen.go"])
-	assert.Contains(t, serverGot, "resp.Response200Headers != nil")
-	assert.Contains(t, serverGot, "c.Response().Header().Add(k, v)")
+	assert.Contains(t, serverGot, "if resp.Response200 != nil {")
+	assert.Contains(t, serverGot, "for k, v := range resp.Response200.Headers() {")
+	assert.Contains(t, serverGot, "c.Response().Header().Set(k, v)")
+	assert.Contains(t, serverGot, "return c.JSON(200, resp.Response200)")
 }
 
 func TestGenerate_SugarFallbackToDefault(t *testing.T) {

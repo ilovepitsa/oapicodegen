@@ -9,6 +9,7 @@ const (
 
 	oapiFormatInt32 = "int32"
 	oapiFormatInt64 = "int64"
+	oapiFormatFloat = "float"
 
 	oapiParamPath   = "path"
 	oapiParamQuery  = "query"
@@ -17,7 +18,14 @@ const (
 
 	oapiCodeDefault = "default"
 
-	goTypeAny = "any"
+	goTypeAny     = "any"
+	goTypeString  = "string"
+	goTypeBool    = "bool"
+	goTypeInt     = "int"
+	goTypeInt32   = "int32"
+	goTypeInt64   = "int64"
+	goTypeFloat32 = "float32"
+	goTypeFloat64 = "float64"
 
 	modeRequest  = "Request"
 	modeResponse = "Response"

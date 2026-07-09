@@ -167,10 +167,10 @@ func enumBaseType(sh *parser.Schema) string {
 		}
 	case oapiTypeNumber:
 		switch sh.Format {
-		case "float":
-			return "float32"
+		case oapiFormatFloat:
+			return goTypeFloat32
 		default:
-			return "float64"
+			return goTypeFloat64
 		}
 	default:
 		return oapiTypeString
@@ -264,7 +264,7 @@ func (g *Generator) renderMapAlias(w *codegen.BufferWriter, sh *parser.Schema, m
 }
 
 func writeDocComment(w *codegen.BufferWriter, desc string) {
-	for _, line := range strings.Split(desc, "\n") {
+	for line := range strings.SplitSeq(desc, "\n") {
 		w.Print("// ", line, "\n")
 	}
 }

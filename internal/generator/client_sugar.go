@@ -42,28 +42,24 @@ func (g *Generator) renderSugarMethod(w *codegen.BufferWriter, op *parser.Operat
 	name := operationMethodName(op)
 	successCode, successSchema := firstSuccessResponse(op.Responses)
 
+	retType, hasReturn := sugarReturnType(op, successCode, successSchema, m)
+
 	if op.Deprecated {
 		w.Print("// Deprecated: operation is marked as deprecated\n")
 	}
 
-	w.Print("func (x *ClientSugared) ", name, "(ctx context.Context, req *", name, "Request) (")
+	w.Print("func (x *ClientSugared) ", name, "(ctx context.Context, req *", name, "Request) ")
 
-	if successSchema != nil {
-		prevMode := m.mode
-		m.mode = modeResponse
-		typ := m.goType(successSchema)
-
-		m.mode = prevMode
-
-		w.Print("*", typ, ", error) {\n")
+	if hasReturn {
+		w.Print("(", retType, ", error) {\n")
 	} else {
-		w.Print("error) {\n")
+		w.Print("error {\n")
 	}
 
 	w.Print("\tresp, err := x.impl.", name, "(ctx, req)\n")
 	w.Print("\tif err != nil {\n")
 
-	if successSchema != nil {
+	if hasReturn {
 		w.Print("\t\treturn nil, err\n")
 	} else {
 		w.Print("\t\treturn err\n")
@@ -75,7 +71,7 @@ func (g *Generator) renderSugarMethod(w *codegen.BufferWriter, op *parser.Operat
 		field := responseFieldName(successCode)
 		w.Print("\tif resp.", field, " != nil {\n")
 
-		if successSchema != nil {
+		if hasReturn {
 			w.Print("\t\treturn resp.", field, ", nil\n")
 		} else {
 			w.Print("\t\treturn nil\n")
@@ -86,12 +82,43 @@ func (g *Generator) renderSugarMethod(w *codegen.BufferWriter, op *parser.Operat
 
 	w.Print("\treturn ")
 
-	if successSchema != nil {
+	if hasReturn {
 		w.Print("nil, ")
 	}
 
 	w.WriteString(`fmt.Errorf("unexpected status: %d", resp.Code)` + "\n")
 	w.Print("}\n\n")
+}
+
+// sugarReturnType возвращает Go-тип возвращаемого значения sugar-метода
+// (без ", error") и флаг hasReturn — есть ли возвращаемое значение помимо error.
+//
+// Если у success-ответа есть типизированные headers — возвращает
+// *<Name><Code>PayloadWithHeaders. Иначе — body-тип (*<SchemaType>).
+// Для ответа без body и без headers возвращает пустую строку (только error).
+func sugarReturnType(
+	op *parser.Operation,
+	successCode string,
+	successSchema *parser.Schema,
+	m *typeMapper,
+) (string, bool) {
+	if successCode != "" {
+		resp := responseByCode(op.Responses, successCode)
+		if hasResponseHeaders(resp) {
+			return "*" + payloadWithHeadersTypeName(op, successCode), true
+		}
+	}
+
+	if successSchema != nil {
+		prevMode := m.mode
+		m.mode = modeResponse
+		typ := m.goType(successSchema)
+		m.mode = prevMode
+
+		return "*" + typ, true
+	}
+
+	return "", false
 }
 
 // firstSuccessResponse возвращает код и схему первого 2xx-ответа.

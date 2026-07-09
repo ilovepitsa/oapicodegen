@@ -11,35 +11,46 @@
 **Поддерживаются только стандартные конструкции OpenAPI 3.x:**
 - `paths`, `parameters` (path/query/header/cookie), `requestBody`, `responses`
 - `schemas`: `object`, `array`, `string`/`integer`/`number`/`boolean`/`null`, `$ref`
-- `oneOf`, `anyOf`, `allOf`, `discriminator`
-- `required`, `enum`, `format`, `default`, `nullable`, `deprecated`
+- `oneOf`, `anyOf`, `allOf` (включая `allOf` из одного non-object элемента → alias), `discriminator`
+- `required`, `enum` (с дедупликацией), `format`, `default`, `nullable`, `deprecated`
+- `additionalProperties: false` → генерируется `struct{}` (закрытая структура)
 - стандартные `securitySchemes` (только как метаданные, без кодогенерации мидлвэйров)
+- типизированные response headers (через `<Name><Code>PayloadWithHeaders`)
 
-**Не поддерживается в первой итерации (бэклог):**
+**Поддерживается через generation flags (включаются в `generation_flags.yaml`):**
+- `GOLANG_SPLIT_REQUEST_RESPONSE` — раздельные `<Name>Request`/`<Name>Response` модели (T24f — DONE)
+- `USE_UTC_FOR_DATE_TIME` — принудительная UTC-сериализация `time.Time` через тип `UTCTime` (T24d — DONE)
+- `GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS` — флаг заведён в `ProjectFeatures` (T24e — partial, см. ниже)
+- `USE_REQUIRED_V2` — флаг заведён в `ProjectFeatures`, генераторной поддержки пока нет (T24g — pending)
+
+**Не поддерживается (бэклог):**
 - Кастомные расширения `x-*` (`x-request-required`, `x-response-required`, `x-optional-response`, `x-validations`, `x-audit-data`, `x-mws-*` и пр.)
 - Кастомные валидации (x-validations)
-- Split Request/Response (флаг `GOLANG_SPLIT_REQUEST_RESPONSE` — сначала мономодель)
 - `audit-data` схемы и связанный код
 - URL-form encoding (`application/x-www-form-urlencoded`)
-- Конвертёры между Request/Response-моделями (требуют split)
-- Generation flags, влияющие только на kotlin/typescript
-- Update-схемы (`*_update`)
+- Конвертёры между Request/Response-моделями (требуют split + T25)
+- Update-схемы (`*_update`) — T25b
+- `SetDefaults()` методы — T25a (блокирует полную реализацию T24e)
 
 Это значит: задачи T13, T14, T16 (audit), T18 (HTTP server для audit) упрощаются или откладываются. См. раздел «Корректировки задач» ниже.
 
 ## Корректировки задач под первую итерацию
 
-- **T13 Schema + JSON-методы** — оставляем, но без `x-*`-специфики и без `GenerateConverters`
-- **T14 URLForm, WithDefaults, Update-схемы** → **в бэклог** (требует URL-form encoding и update-схемы)
-- **T15 Client interfaces + sugar** — оставляем, без x-validations
-- **T16 Server interfaces + audit** → **урезать до `ServerInterface`**, `ServerAuditData` и `audit_data`-схемы — в бэклог
-- **T17 HTTP client** — оставляем, без URL-form
-- **T18 HTTP server** — оставляем базовый роутинг, без audit-data обработки
-- **T19 Mocks** — оставляем
-- **T20 SDK** — оставляем
+- **T13 Schema + JSON-методы** — DONE (без `x-*`-специфики и без `GenerateConverters`)
+- **T14 URLForm, WithDefaults, Update-схемы** → **в бэклог** (требует URL-form encoding и update-схемы); см. T25a–T25c
+- **T15 Client interfaces + sugar** — DONE (без x-validations)
+- **T16 Server interfaces + audit** — DONE (без `ServerAuditData`/`audit_data`-схемы — в бэклоге)
+- **T17 HTTP client** — DONE (без URL-form)
+- **T18 HTTP server** — DONE (базовый роутинг, без audit-data; типизированные response headers — DONE)
+- **T19 Mocks** — DONE
+- **T20 SDK** — DONE
 - **T21 cmdtreegenerator** → **глубокий бэклог** (не нужен в первой итерации; весь функционал завязан на `x-cli` расширения, CRUD-эвристики и multi-service parser — пересмотреть при появлении реального требования к CLI)
 - **T22 opensourceyaml** → **глубокий бэклог** (не нужен в первой итерации; публикацией спеки управляет внешняя инфраструктура, не генератор)
-- **T12 GenerationFlagsLoader** → **в бэклог** (все флаги в первой итерации off/hardcoded)
+- **T12 GenerationFlagsLoader** → **реализован как T24a** (загрузчик `internal/parser/generation_flags.go` + `generation_flags_loader.go`); глобальный `generation_flags.yaml` + per-project override
+- **T23 `cmd/oapigen`** — DONE
+- **T24 e2e-тесты** — DONE
+- **T25 CI, линтеры** — частично: Makefile-таргеты есть; `.gitlab-ci.yml`/`.golangci.yml` см. репозиторий
+- **Типизированные response headers** (новая задача, вне исходной нумерации) — DONE: `internal/generator/response_headers.go`, `PayloadWithHeaders`-паттерн, типизированные header-поля (string/int/int32/int64/float32/float64/bool), client-decoder с `strconv` + error propagation, server-side `Headers()` метод
 
 ## Карта замен `platform-go`
 
@@ -132,7 +143,7 @@
 
 ## Этап 2 — парсер OpenAPI
 
-### T11 — `internal/parser` — портирование парсера OpenAPI (стандартный OpenAPI)
+### T11 — `internal/parser` — портирование парсера OpenAPI (стандартный OpenAPI) — DONE
 - `ResourcesSet`, `ProjectSet`, `Project`, `Schema`, `Paths`, `Service`, `Method`, `Imports`
 - `ResourcesLoader`, `ProjectLoader`, `AugmentProjectSet`
 - Чтение OpenAPI через `github.com/pb33f/libopenapi`
@@ -140,15 +151,16 @@
 - Ветка: `feat/parser`
 - Зависимости: T3, T4, T5
 
-### T12 — GenerationFlagsLoader — ~~текущая итерация~~ → БЭКЛОГ
-- В первой итерации все generation flags захардкожены в off/default значения
-- Ветка откладывается до второго этапа, когда появятся `x-*` фичи
+### T12 — GenerationFlagsLoader — DONE (реализован как T24a)
+- Реализован в `internal/parser/generation_flags.go` + `generation_flags_loader.go`
+- Грузит глобальный `generation_flags.yaml` + per-project override
+- См. T24a для деталей
 
 ## Этап 3 — генераторы
 
 > Все генераторы портируются из `cmd/mwsapigen/internal/generator` без kotlin/terraform-специфики.
 
-### T13 — generator: Schema + JSON-методы (стандартный OpenAPI)
+### T13 — generator: Schema + JSON-методы (стандартный OpenAPI) — DONE
 - `NewSchema` (object/array/primitive/oneOf/anyOf/allOf/$ref), `NewJSONMethods`, `NewSchemaOneOfResource`, `NewSchemaOneOfResourceJSON`
 - Без `GenerateConverters` (требует split request/response — бэклог)
 - Без обработки `x-*` расширений
@@ -159,34 +171,34 @@
 - Требует URL-form encoding и update-схемы (кастомная семантика)
 - Откладываем до второй итерации
 
-### T15 — generator: Client interfaces + sugar (стандартный OpenAPI)
+### T15 — generator: Client interfaces + sugar (стандартный OpenAPI) — DONE
 - `ClientOptions`, `ClientInterface`, `ClientSugar`, `TestSugarMethods`
 - Без x-validations
 - Ветка: `feat/gen-client-iface`
 - Зависимости: T13
 
-### T16 — generator: Server interfaces (без audit)
+### T16 — generator: Server interfaces (без audit) — DONE
 - `ServerInterface`, `ServerAllServicesInterface`, `TestServer`
 - ~~`ServerAuditData`~~ → бэклог (требует x-audit-data)
 - Ветка: `feat/gen-server-iface`
 - Зависимости: T13
 
-### T17 — generator: HTTP client
+### T17 — generator: HTTP client — DONE
 - `HTTPClientInit`, `HTTPClientMethods`, `HTTPClientDecoder`
 - Ветка: `feat/gen-http-client`
 - Зависимости: T15
 
-### T18 — generator: HTTP server
+### T18 — generator: HTTP server — DONE
 - `HTTPServer`, `HTTPServerAllServices`, `NewHTTPServerFeatures`
 - Ветка: `feat/gen-http-server`
 - Зависимости: T16
 
-### T19 — generator: Mocks
+### T19 — generator: Mocks — DONE
 - `Mock` (client + server), AllServices mock
 - Ветка: `feat/gen-mocks`
 - Зависимости: T15, T16
 
-### T20 — generator: SDK
+### T20 — generator: SDK — DONE
 - `SDK`, `SDKService`
 - Ветка: `feat/gen-sdk`
 - Зависимости: T15
@@ -207,9 +219,8 @@
 
 ## Этап 4 — точка входа
 
-### T23 — `cmd/oapigen` — точка входа генератора
-- `main.go`: флаги (`output`, `input`, `import-prefix`, `common-params-path`, `debug-json`, `dry-run`, `public`)
-- ~~`generation-flags-config-path`~~ → бэклог (T12)
+### T23 — `cmd/oapigen` — точка входа генератора — DONE
+- `main.go`: флаги (`output`, `input`, `import-prefix`, `dry-run`, `generation-flags-config-path`, `project-flags-path`, `log-*`)
 - ~~`new-validator`~~ → бэклог (секция валидатора)
 - Связка: parser → generator (Schema/Client/Server/HTTP/Mock/SDK)
 - Ветка: `feat/oapigen-main`
@@ -217,7 +228,7 @@
 
 ## Этап 5 — тесты и инфраструктура
 
-### T24 — e2e-тесты генерации (стандартный OpenAPI)
+### T24 — e2e-тесты генерации (стандартный OpenAPI) — DONE
 - `testdata/minimal/` — эталонная мини-спека **только со стандартными конструкциями** (object/array/oneOf/$ref, без `x-*`)
 - Сравнение вывода с golden-файлами через `internal/golden`
 - Ветка: `feat/e2e-tests`
@@ -234,50 +245,61 @@
 
 ### T24: GenerationFlagsLoader — разбит на T24a–T24g
 
-#### T24a — GenerationFlagsLoader: infrastructure
-- Порт `cmd/mwsapigen/internal/parser/generation_flags_loader.go` (~300 строк)
+#### T24a — GenerationFlagsLoader: infrastructure — DONE
+- Реализовано: `internal/parser/generation_flags.go` (флаги, `ProjectFeatures`, `ProjectFeature`) + `internal/parser/generation_flags_loader.go` (загрузка, валидация, per-project override)
 - `GenerationFlagConfig` (yaml: name, description, enabled, defaultValue, targetValue, affects, dependsOn, migrateUntil)
 - `ProjectFeatures` struct с 4 флагами: `GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS`, `GOLANG_SPLIT_REQUEST_RESPONSE`, `USE_REQUIRED_V2`, `USE_UTC_FOR_DATE_TIME`
 - `Load(source)` — грузит глобальный `generation_flags.yaml`
 - `GetProjectFeatures(projectPath)` — грузит per-project override, резолвит финальные значения
 - Валидация: affects содержит `golang`, зависимости, migrateUntil
-- Файлы: `internal/parser/generation_flags_loader.go` + тесты + `testdata/generation_flags.yaml`
+- Файлы: `internal/parser/generation_flags.go`, `internal/parser/generation_flags_loader.go` + тесты + testdata
 - Зависимости: нет
 - Ветка: `feat/genflags-loader`
 
-#### T24b — CLI флаг `--generation-flags-config-path`
-- Добавить флаг в `cmd/oapigen/main.go`
-- Если задан — `GenerationFlagsLoader.Load()` + `GetProjectFeatures()`, передаёт в `Generate()`
+#### T24b — CLI флаг `--generation-flags-config-path` — DONE
+- Добавлены флаги `-generation-flags-config-path` и `-project-flags-path` в `cmd/oapigen/main.go`
+- Если задан config-path — `GenerationFlagsLoader.Load()` + `GetProjectFeatures()`, передаёт в `Generate()` через `WithProjectFeatures`
 - Если не задан — `ProjectFeatures` с всеми false
+- `-project-flags-path` требует `-generation-flags-config-path` (валидация в CLI)
 - Зависимости: T24a, T24c
 - Ветка: `feat/genflags-cli`
 
-#### T24c — Wire `ProjectFeatures` into Generator
-- `Generator.features ProjectFeatures` + option `WithProjectFeatures()`
-- Все флаги default false
+#### T24c — Wire `ProjectFeatures` into Generator — DONE
+- `Generator.features ProjectFeatures` + option `WithProjectFeatures(parser.ProjectFeatures)`
+- Все флаги default false (zero value `ProjectFeatures`)
 - Зависимости: T24a
 - Ветка: `feat/genflags-wire`
 
-#### T24d — `USE_UTC_FOR_DATE_TIME` flag
-- Когда on, `time.Time` поля сериализуются в UTC
-- Вариант A: кастомный тип `UTCTime`; Вариант B: `.UTC()` в marshal/unmarshal
+#### T24d — `USE_UTC_FOR_DATE_TIME` flag — DONE
+- Реализован вариант A: кастомный тип `UTCTime` (обёртка над `time.Time`)
+- Когда флаг on, `typeMapper` мапит `date-time` строки в `model.UTCTime` (или `UTCTime` внутри model-пакета)
+- `internal/generator/utc_time.go` генерирует `model/utc_time.gen.go` с `MarshalJSON`/`UnmarshalJSON`, принудительно вызывающими `.UTC()`
+- Файл `utc_time.gen.go` генерируется только когда флаг включён
 - Зависимости: T24c
 - Ветка: `feat/genflag-utc`
 
-#### T24e — `GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS` flag
-- Когда on, server request-decoder не вызывает `SetDefaults()` на body
-- Зависимости: T24c, T25a
-- Ветка: `feat/genflag-no-defaults`
+#### T24e — `GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS` flag — PARTIAL (blocked на T25a)
+- Флаг заведён в `ProjectFeatures` и проходит через CLI/logging, но **не влияет на генератор**:
+  генератор не вызывает `SetDefaults()` в server request-decoder, потому что сам `SetDefaults()`
+  (T25a) ещё не реализован. Нечего отключать.
+- Статус: partial — конфиг-инфраструктура готова, генераторная логика ожидает T25a.
+- Зависимости: T24c, T25a (блокер)
+- Ветка: `feat/genflag-no-defaults` (генераторная часть отложена)
 
-#### T24f — `GOLANG_SPLIT_REQUEST_RESPONSE` flag
+#### T24f — `GOLANG_SPLIT_REQUEST_RESPONSE` flag — DONE
 - Когда on, генерируются раздельные `<Name>Request` и `<Name>Response` модели
-- Request: без readOnly, с writeOnly; Response: без writeOnly, с readOnly, без defaults
-- Затрагивает почти все generator-файлы
+- Request: без `readOnly`, с `writeOnly`; Response: без `writeOnly`, с `readOnly`, без defaults
+- `typeMapper` с режимами `modeRequest`/`modeResponse` (см. `internal/generator/constants.go`, `type.go`)
+- `computeSplittable` (`internal/generator/generator.go`) сужает split для composites:
+  схемы, на которые ссылаются `oneOf`/`anyOf`/`allOf`/`items`/`additionalProperties`, исключаются
+  (эти контексты рендерятся с `mode==""`, splittable-ссылка породила бы несуществующий идентификатор)
 - Зависимости: T24c
 - Ветка: `feat/genflag-split`
 
-#### T24g — `USE_REQUIRED_V2` flag
-- Поддержка `x-request-required` / `x-response-required` list-атрибутов
+#### T24g — `USE_REQUIRED_V2` flag — PENDING
+- Флаг заведён в `ProjectFeatures` и резолвится лоадером, но **генераторной поддержки нет**:
+  парсер пока не читает `x-request-required`/`x-response-required`, генератор не использует `UseRequiredV2`.
+- Поддержка `x-request-required` / `x-response-required` list-атрибутов — будущая работа.
 - Зависимости: T24c, T24f
 - Ветка: `feat/genflag-required-v2`
 
@@ -302,6 +324,17 @@
 - Требует parser-поддержки form-urlencoded content-type
 - Зависимости: нет
 - Ветка: `feat/gen-urlform`
+
+### Typyped response headers (вне исходной нумерации) — DONE
+- `internal/generator/response_headers.go` — генерация `<Name><Code>PayloadWithHeaders` struct
+- Поля: `Payload` (body, типизированный через `typeMapper` в `modeResponse`) + типизированные header-поля
+- Header-типы (`headerGoBaseType`): string, int, int32, int64, float32, float64, bool
+- `MarshalJSON()` маршалит только `Payload` (headers не входят в JSON-body)
+- `Headers() map[string]string` — для server-side установки заголовков в HTTP-ответ
+- Client decoder (`internal/generator/impl_client.go`) использует `strconv` для не-string headers с error propagation
+- Server impl (`internal/generator/impl_server.go`) — 4-вариантная логика (headers × schema):
+  NoContent для пустых body, JSON для body, `renderHeaderSet` для заголовков
+- Ветка: см. git log
 
 ### Глубокий бэклог (без детализации)
 - `ServerAuditData` + `x-audit-data` + audit-data схемы

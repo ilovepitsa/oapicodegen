@@ -125,10 +125,10 @@ func (m *typeMapper) primitiveGoType(s *parser.Schema) string {
 		}
 	case oapiTypeNumber:
 		switch s.Format {
-		case "float":
-			return "float32"
+		case oapiFormatFloat:
+			return goTypeFloat32
 		default:
-			return "float64"
+			return goTypeFloat64
 		}
 	case oapiTypeBoolean:
 		return "bool"

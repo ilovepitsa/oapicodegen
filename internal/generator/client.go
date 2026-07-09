@@ -13,8 +13,13 @@ func (g *Generator) clientFile() codegen.File {
 	m := g.newTypeMapper("client")
 	m.addImport("context", "")
 
-	if g.clientNeedsHTTPImport() {
-		m.addImport("net/http", "")
+	needJSON, needFmt := g.clientExtraImports()
+	if needJSON {
+		m.addImport("encoding/json", "")
+	}
+
+	if needFmt {
+		m.addImport("fmt", "")
 	}
 
 	body := g.renderClient(m)
@@ -26,18 +31,30 @@ func (g *Generator) clientFile() codegen.File {
 	})
 }
 
-// clientNeedsHTTPImport проверяет, есть ли хотя бы один ответ с headers —
-// тогда в response-структурах используется http.Header и нужен импорт net/http.
-func (g *Generator) clientNeedsHTTPImport() bool {
+// clientExtraImports проверяет, нужны ли импорты encoding/json и fmt
+// для PayloadWithHeaders-структур (MarshalJSON и Headers() метод).
+//
+//nolint:gocritic // unnamedResult conflicts with nonamedreturns
+func (g *Generator) clientExtraImports() (bool, bool) {
+	var needJSON, needFmt bool
+
 	for _, op := range g.doc.Operations {
 		for _, r := range op.Responses {
-			if hasResponseHeaders(r) {
-				return true
+			if !hasResponseHeaders(r) {
+				continue
+			}
+
+			needJSON = true
+
+			for _, hdr := range r.Headers {
+				if headerGoBaseType(hdr.Schema) != goTypeString {
+					needFmt = true
+				}
 			}
 		}
 	}
 
-	return false
+	return needJSON, needFmt
 }
 
 func (g *Generator) renderClient(m *typeMapper) []byte {
@@ -148,15 +165,26 @@ func (g *Generator) renderResponseStruct(w *codegen.BufferWriter, op *parser.Ope
 	for _, code := range codes {
 		resp := responseByCode(op.Responses, code)
 		fieldName := responseFieldName(code)
-		payloadType := responsePayloadType(resp, m)
-		w.Print("\t", fieldName, " ", payloadType, "\n")
 
 		if hasResponseHeaders(resp) {
-			w.Print("\t", fieldName, "Headers http.Header `json:\"-\"`\n")
+			typeName := payloadWithHeadersTypeName(op, code)
+			w.Print("\t", fieldName, " *", typeName, "\n")
+		} else {
+			payloadType := responsePayloadType(resp, m)
+			w.Print("\t", fieldName, " ", payloadType, "\n")
 		}
 	}
 
 	w.Print("}\n\n")
+
+	for _, code := range codes {
+		resp := responseByCode(op.Responses, code)
+		if !hasResponseHeaders(resp) {
+			continue
+		}
+
+		g.renderPayloadWithHeadersType(w, op, code, resp, m)
+	}
 }
 
 // hasResponseHeaders сообщает, есть ли у ответа описанные headers.
@@ -169,7 +197,7 @@ func hasResponseHeaders(resp *parser.Response) bool {
 func responsePayloadType(resp *parser.Response, m *typeMapper) string {
 	schema := responseSchema(resp)
 	if schema == nil {
-		return "bool"
+		return goTypeBool
 	}
 
 	return "*" + m.goType(schema)
