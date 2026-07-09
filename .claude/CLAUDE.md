@@ -136,3 +136,42 @@ Deliver production-grade software with:
 - security
 - maintainability
 - performance
+
+---
+
+## Execution Modes
+
+This project supports two execution modes, controlled by the `full-command` skill
+(see `.claude/skills/full-command/SKILL.md`).
+
+### Full Mode — invoke `/full-command`
+
+Use for complex tasks, new features, architecture changes, or any work requiring
+the full engineering organization.
+
+Pipeline:
+
+```
+User → Project Manager → Tech Lead → Engineering Execution
+    → Quality Gates (Code Reviewer → QA Engineer)
+    → Project Manager → User
+```
+
+The user communicates **only** with the Project Manager. The Project Manager
+never makes technical decisions. The Tech Lead never changes business requirements.
+
+### Default Mode — no skill invoked
+
+When `/full-command` is not invoked, or the task is not global/complex, follow
+**minimum viable team** rules: the Tech Lead selects the smallest team capable
+of completing the task safely. Never involve specialists whose expertise is not
+required.
+
+Typical default workflows:
+
+- **Documentation update:** PM → Tech Lead → Relevant Engineer → PM
+- **Simple backend bug:** PM → Tech Lead → Backend Go → Code Reviewer → QA → PM
+- **New API endpoint:** PM → Tech Lead → API Designer → Backend Go → Code Reviewer → QA → PM
+- **Large feature:** PM → BA → SA → Software Architect → Tech Lead → Engineers → Code Reviewer → QA → Optional Specialists → PM
+
+Prefer the simplest workflow that safely solves the task.
