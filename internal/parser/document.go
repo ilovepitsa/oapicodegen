@@ -115,6 +115,9 @@ type Schema struct {
 	AnyOf                []*Schema
 	Ref                  string
 	AdditionalProperties *Schema
+	// AdditionalPropertiesFalse true, если в spec указано
+	// additionalProperties: false — закрытая структура без доп. полей.
+	AdditionalPropertiesFalse bool
 }
 
 // Parse парсит OpenAPI 3.x документ из байтов.

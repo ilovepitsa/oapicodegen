@@ -12,6 +12,11 @@ import (
 func (g *Generator) clientFile() codegen.File {
 	m := g.newTypeMapper("client")
 	m.addImport("context", "")
+
+	if g.clientNeedsHTTPImport() {
+		m.addImport("net/http", "")
+	}
+
 	body := g.renderClient(m)
 
 	return g.factory.Create(&gogen.File{
@@ -19,6 +24,20 @@ func (g *Generator) clientFile() codegen.File {
 		Imports: m.imports,
 		Body:    body,
 	})
+}
+
+// clientNeedsHTTPImport проверяет, есть ли хотя бы один ответ с headers —
+// тогда в response-структурах используется http.Header и нужен импорт net/http.
+func (g *Generator) clientNeedsHTTPImport() bool {
+	for _, op := range g.doc.Operations {
+		for _, r := range op.Responses {
+			if hasResponseHeaders(r) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (g *Generator) renderClient(m *typeMapper) []byte {
@@ -131,9 +150,18 @@ func (g *Generator) renderResponseStruct(w *codegen.BufferWriter, op *parser.Ope
 		fieldName := responseFieldName(code)
 		payloadType := responsePayloadType(resp, m)
 		w.Print("\t", fieldName, " ", payloadType, "\n")
+
+		if hasResponseHeaders(resp) {
+			w.Print("\t", fieldName, "Headers http.Header `json:\"-\"`\n")
+		}
 	}
 
 	w.Print("}\n\n")
+}
+
+// hasResponseHeaders сообщает, есть ли у ответа описанные headers.
+func hasResponseHeaders(resp *parser.Response) bool {
+	return resp != nil && len(resp.Headers) > 0
 }
 
 // responsePayloadType возвращает Go-тип поля для ответа.

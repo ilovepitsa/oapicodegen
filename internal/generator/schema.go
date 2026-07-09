@@ -38,6 +38,8 @@ func (g *Generator) renderSchema(sh *parser.Schema, m *typeMapper) []byte {
 	switch {
 	case len(sh.OneOf) > 0 || len(sh.AnyOf) > 0:
 		g.renderUnion(w, sh, m, name)
+	case len(sh.AllOf) == 1 && sh.AllOf[0].Ref == "" && sh.AllOf[0].Type != oapiTypeObject:
+		g.renderAlias(w, sh.AllOf[0], m, name)
 	case len(sh.AllOf) > 0:
 		g.renderAllOf(w, sh, m, name)
 	case sh.Type == "array":
@@ -247,6 +249,12 @@ func (g *Generator) renderAlias(w *codegen.BufferWriter, sh *parser.Schema, m *t
 }
 
 func (g *Generator) renderMapAlias(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) { //nolint:lll // function signature
+	if sh.AdditionalPropertiesFalse {
+		w.Print("type ", name, " struct{}\n")
+
+		return
+	}
+
 	elem := goTypeAny
 	if sh.AdditionalProperties != nil {
 		elem = m.goType(sh.AdditionalProperties)

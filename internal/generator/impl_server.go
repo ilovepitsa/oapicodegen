@@ -129,12 +129,16 @@ func (g *Generator) renderImplServerResponse(w *codegen.BufferWriter, op *parser
 		}
 
 		fieldName := responseFieldName(r.StatusCode)
+		hasHeaders := hasResponseHeaders(r)
+
 		if responseSchema(r) == nil {
 			w.Print("\tif resp.", fieldName, " {\n")
+			g.renderHeaderSet(w, fieldName, hasHeaders)
 			w.Print("\t\treturn c.NoContent(", r.StatusCode, ")\n")
 			w.Print("\t}\n")
 		} else {
 			w.Print("\tif resp.", fieldName, " != nil {\n")
+			g.renderHeaderSet(w, fieldName, hasHeaders)
 			w.Print("\t\treturn c.JSON(", r.StatusCode, ", resp.", fieldName, ")\n")
 			w.Print("\t}\n")
 		}
@@ -146,18 +150,37 @@ func (g *Generator) renderImplServerResponse(w *codegen.BufferWriter, op *parser
 		}
 
 		fieldName := "ResponseDefault"
+		hasHeaders := hasResponseHeaders(r)
+
 		if responseSchema(r) == nil {
 			w.Print("\tif resp.", fieldName, " {\n")
+			g.renderHeaderSet(w, fieldName, hasHeaders)
 			w.Print("\t\treturn c.NoContent(resp.Code)\n")
 			w.Print("\t}\n")
 		} else {
 			w.Print("\tif resp.", fieldName, " != nil {\n")
+			g.renderHeaderSet(w, fieldName, hasHeaders)
 			w.Print("\t\treturn c.JSON(resp.Code, resp.", fieldName, ")\n")
 			w.Print("\t}\n")
 		}
 	}
 
 	w.WriteString("\treturn c.NoContent(resp.Code)\n")
+}
+
+// renderHeaderSet копирует заголовки из Response-структуры в HTTP-ответ echo.
+func (g *Generator) renderHeaderSet(w *codegen.BufferWriter, fieldName string, hasHeaders bool) {
+	if !hasHeaders {
+		return
+	}
+
+	w.Print("\t\tif resp.", fieldName, "Headers != nil {\n")
+	w.Print("\t\t\tfor k, vs := range resp.", fieldName, "Headers {\n")
+	w.Print("\t\t\t\tfor _, v := range vs {\n")
+	w.Print("\t\t\t\t\tc.Response().Header().Add(k, v)\n")
+	w.Print("\t\t\t\t}\n")
+	w.Print("\t\t\t}\n")
+	w.Print("\t\t}\n")
 }
 
 // echoPath конвертирует OpenAPI path в Echo path: {param} → :param.

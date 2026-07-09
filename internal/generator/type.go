@@ -86,6 +86,10 @@ func (m *typeMapper) baseType(s *parser.Schema) string {
 	}
 
 	if s.Type == oapiTypeObject && len(s.Properties) == 0 {
+		if s.AdditionalPropertiesFalse {
+			return "struct{}"
+		}
+
 		if s.AdditionalProperties != nil {
 			return "map[string]" + m.goType(s.AdditionalProperties)
 		}

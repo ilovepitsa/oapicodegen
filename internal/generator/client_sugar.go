@@ -95,17 +95,21 @@ func (g *Generator) renderSugarMethod(w *codegen.BufferWriter, op *parser.Operat
 }
 
 // firstSuccessResponse возвращает код и схему первого 2xx-ответа.
+// Если 2xx нет —fallback на default-ответ (если у него есть схема).
 // Если у ответа нет content — schema будет nil (пустой ответ).
 func firstSuccessResponse(responses []*parser.Response) (string, *parser.Schema) {
 	codes := sortedResponseCodes(responses)
+
 	for _, code := range codes {
-		if !isSuccessCode(code) {
-			continue
+		if isSuccessCode(code) {
+			resp := responseByCode(responses, code)
+
+			return code, responseSchema(resp)
 		}
+	}
 
-		resp := responseByCode(responses, code)
-
-		return code, responseSchema(resp)
+	if resp := responseByCode(responses, oapiCodeDefault); resp != nil {
+		return oapiCodeDefault, responseSchema(resp)
 	}
 
 	return "", nil

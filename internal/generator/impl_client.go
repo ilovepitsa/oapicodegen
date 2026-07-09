@@ -229,8 +229,11 @@ func (g *Generator) renderImplResponseCase(w *codegen.BufferWriter, r *parser.Re
 
 func (g *Generator) renderImplResponseBody(w *codegen.BufferWriter, label string, r *parser.Response, fieldName string, m *typeMapper) { //nolint:lll // function signature
 	schema := responseSchema(r)
+	hasHeaders := hasResponseHeaders(r)
+
 	if schema == nil {
 		w.Print("\t\tresult.", fieldName, " = true\n")
+		g.renderHeaderCapture(w, fieldName, hasHeaders)
 
 		return
 	}
@@ -246,4 +249,14 @@ func (g *Generator) renderImplResponseBody(w *codegen.BufferWriter, label string
 	w.Print("\t\t\treturn nil, fmt.Errorf(\"decode ", label, ": %w\", err)\n")
 	w.Print("\t\t}\n")
 	w.Print("\t\tresult.", fieldName, " = &v\n")
+	g.renderHeaderCapture(w, fieldName, hasHeaders)
+}
+
+// renderHeaderCapture добавляет захват HTTP-заголовков ответа в Response-структуру.
+func (g *Generator) renderHeaderCapture(w *codegen.BufferWriter, field string, hasHeaders bool) { //nolint:lll // function signature
+	if !hasHeaders {
+		return
+	}
+
+	w.Print("\t\tresult.", field, "Headers = resp.Header.Clone()\n")
 }

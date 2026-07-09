@@ -581,6 +581,112 @@ components:
 	assert.NotContains(t, respSection, "Secret", "Response must exclude writeOnly field")
 }
 
+func TestGenerate_AllOfSinglePrimitiveRendersAlias(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    StringWrapper:
+      allOf:
+        - type: string
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/string_wrapper.gen.go"])
+	assert.Contains(t, got, "type StringWrapper string")
+}
+
+func TestGenerate_AdditionalPropertiesFalse(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Closed:
+      type: object
+      additionalProperties: false
+      properties:
+        name: {type: string}
+    Empty:
+      type: object
+      additionalProperties: false
+`)
+	files := generateFiles(t, doc)
+
+	closedGot := string(files["model/closed.gen.go"])
+	assert.Contains(t, closedGot, "type Closed struct {")
+	assert.NotContains(t, closedGot, "map[string]", "closed struct must not be a map")
+
+	emptyGot := string(files["model/empty.gen.go"])
+	assert.Contains(t, emptyGot, "type Empty struct{}")
+	assert.NotContains(t, emptyGot, "map[string]")
+}
+
+func TestGenerate_ResponseHeaders(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      responses:
+        '200':
+          description: ok
+          headers:
+            X-Total-Count:
+              schema: {type: integer}
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {type: string}
+components:
+  schemas: {}
+`)
+	files := generateFiles(t, doc)
+
+	clientGot := string(files["interfaces/client/client.gen.go"])
+	assert.True(t, containsCollapsed(clientGot, "Response200 *[]string"))
+	assert.True(t, containsCollapsed(clientGot, "Response200Headers http.Header"))
+	assert.Contains(t, clientGot, "\"net/http\"")
+
+	implGot := string(files["impl/httpclient/client.gen.go"])
+	assert.Contains(t, implGot, "result.Response200Headers = resp.Header.Clone()")
+
+	serverGot := string(files["impl/echoserver/server.gen.go"])
+	assert.Contains(t, serverGot, "resp.Response200Headers != nil")
+	assert.Contains(t, serverGot, "c.Response().Header().Add(k, v)")
+}
+
+func TestGenerate_SugarFallbackToDefault(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets/{id}:
+    delete:
+      operationId: deletePet
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: integer}}
+      responses:
+        default:
+          description: error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  schemas:
+    Error: {type: object, properties: {code: {type: integer}}}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["interfaces/client/client_sugar.gen.go"])
+	assert.Contains(t, got, "*model.Error, error)", "sugar must fall back to default schema")
+}
+
 func TestGenerate_MapObject(t *testing.T) {
 	doc := parseSpec(t, `
 openapi: 3.0.3
