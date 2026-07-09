@@ -3,6 +3,6 @@
 package model
 
 type Event struct {
-	CreatedEvent *CreatedEvent `json:"-,inline"`
-	DeletedEvent *DeletedEvent `json:"-,inline"`
+	CreatedEvent *CreatedEvent `json:"-"`
+	DeletedEvent *DeletedEvent `json:"-"`
 }

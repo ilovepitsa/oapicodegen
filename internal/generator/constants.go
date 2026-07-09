@@ -13,6 +13,7 @@ const (
 	oapiParamPath   = "path"
 	oapiParamQuery  = "query"
 	oapiParamHeader = "header"
+	oapiParamCookie = "cookie"
 
 	oapiCodeDefault = "default"
 

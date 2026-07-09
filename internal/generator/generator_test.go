@@ -141,8 +141,8 @@ components:
 
 	got := string(files["model/either.gen.go"])
 	assert.Contains(t, got, "type Either struct {")
-	assert.True(t, containsCollapsed(got, "Pet *Pet `json:\"-,inline\"`"))
-	assert.True(t, containsCollapsed(got, "Error *Error `json:\"-,inline\"`"))
+	assert.True(t, containsCollapsed(got, "Pet *Pet `json:\"-\"`"))
+	assert.True(t, containsCollapsed(got, "Error *Error `json:\"-\"`"))
 
 	jgot := string(files["model/either_json.gen.go"])
 	assert.Contains(t, jgot, "func (m *Either) UnmarshalJSON(data []byte) error {")

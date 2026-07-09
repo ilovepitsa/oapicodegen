@@ -3,6 +3,6 @@
 package model
 
 type PetKind struct {
-	Pet    *Pet    `json:"-,inline"`
-	NewPet *NewPet `json:"-,inline"`
+	Pet    *Pet    `json:"-"`
+	NewPet *NewPet `json:"-"`
 }

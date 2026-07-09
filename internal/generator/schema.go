@@ -136,8 +136,17 @@ func (g *Generator) renderEnum(w *codegen.BufferWriter, sh *parser.Schema, name 
 
 	w.Print("const (\n")
 
+	seen := make(map[string]bool, len(sh.Enum))
+
 	for i, v := range sh.Enum {
-		w.Print("\t", enumValueName(name, enumStringValue(v), i), " ", name, " = ", enumLiteral(v, baseGo), "\n") //nolint:lll // const declaration line
+		valStr := enumStringValue(v)
+		if seen[valStr] {
+			continue
+		}
+
+		seen[valStr] = true
+
+		w.Print("\t", enumValueName(name, valStr, i), " ", name, " = ", enumLiteral(v, baseGo), "\n") //nolint:lll // const declaration line
 	}
 
 	w.Print(")\n")
@@ -208,10 +217,10 @@ func (g *Generator) renderUnion(w *codegen.BufferWriter, sh *parser.Schema, m *t
 
 		fieldName := goName(refToName(v.Ref))
 		if fieldName == "" {
-			fieldName = variantType
+			fieldName = inlineVariantName(variantType)
 		}
 
-		w.Print("\t", fieldName, " *", variantType, " `json:\"-,inline\"`\n")
+		w.Print("\t", fieldName, " *", variantType, " `json:\"-\"`\n")
 	}
 
 	w.Print("}\n")

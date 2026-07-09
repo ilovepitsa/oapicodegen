@@ -75,7 +75,10 @@ func (g *Generator) renderParamField(w *codegen.BufferWriter, p *parser.Paramete
 	fieldName := goName(p.Name)
 	fieldType := m.goType(p.Schema)
 
-	if !p.Required && !strings.HasPrefix(fieldType, "*") && !isInherentlyNilable(fieldType) {
+	// Path-параметры по OAS всегда required — рендерим без pointer,
+	// чтобы fmt.Sprint(req.Field) в impl_client не дал "<nil>".
+	required := p.Required || p.In == oapiParamPath
+	if !required && !strings.HasPrefix(fieldType, "*") && !isInherentlyNilable(fieldType) {
 		fieldType = "*" + fieldType
 	}
 
@@ -90,6 +93,8 @@ func echoTag(in, name string) string {
 		return "query:\"" + name + "\""
 	case oapiParamHeader:
 		return "header:\"" + name + "\""
+	case oapiParamCookie:
+		return "cookie:\"" + name + "\""
 	default:
 		return ""
 	}

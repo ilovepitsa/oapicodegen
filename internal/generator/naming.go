@@ -81,3 +81,19 @@ func enumValueName(prefix, value string, _ int) string {
 
 	return prefix + goName(value)
 }
+
+// inlineVariantName генерирует PascalCase-имя поля для inline-варианта union
+// (когда у варианта нет $ref). "map[string]any" → "MapStringAny",
+// "[]int" → "SliceInt", "string" → "String".
+func inlineVariantName(typ string) string {
+	replacer := strings.NewReplacer(
+		"[]", "Slice_",
+		"map[", "Map_",
+		"]", "_",
+		"*", "",
+		"(", "",
+		")", "",
+	)
+
+	return goName(replacer.Replace(typ))
+}

@@ -51,7 +51,7 @@ func (g *Generator) renderJSONMethods(sh *parser.Schema, m *typeMapper) []byte {
 
 		fieldName := goName(refToName(v.Ref))
 		if fieldName == "" {
-			fieldName = variantType
+			fieldName = inlineVariantName(variantType)
 		}
 
 		vs = append(vs, variant{field: fieldName, typ: variantType})
