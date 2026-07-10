@@ -1147,6 +1147,141 @@ func TestSchemaTreeHasDefaults_CyclicRefTerminates(t *testing.T) {
 	assert.False(t, g2.schemaTreeHasDefaults(emptyA, nil, map[string]bool{emptyA.Name: true}))
 }
 
+// requiredV2Spec — общий spec для тестов USE_REQUIRED_V2:
+// required: [id], x-request-required: [id, name], x-response-required: [id].
+// id readOnly, name writeOnly, label regular.
+const requiredV2Spec = `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [id]
+      x-request-required: [id, name]
+      x-response-required: [id]
+      properties:
+        id: {type: integer, format: int64, readOnly: true}
+        name: {type: string, writeOnly: true}
+        label: {type: string}
+`
+
+func TestGenerate_UseRequiredV2_SplitRequest(t *testing.T) {
+	doc := parseSpec(t, requiredV2Spec)
+	pf := oapiparser.ProjectFeatures{
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+		UseRequiredV2:        oapiparser.ProjectFeature{Value: true},
+	}
+	files := generateFilesWithFeatures(t, doc, pf)
+	got := string(files["model/pet.gen.go"])
+
+	// Request: id excluded (readOnly), name required (x-request-required), label optional.
+	reqSection := extractStruct(got, "PetRequest")
+	assert.NotContains(t, reqSection, "ID")
+	assert.True(t, containsCollapsed(reqSection, `Name string`), "name must be required (no pointer, no omitempty)")
+	assert.True(t, containsCollapsed(reqSection, `Label *string`), "label must be optional (pointer)")
+
+	// Response: name excluded (writeOnly), id required (x-response-required), label optional.
+	respSection := extractStruct(got, "PetResponse")
+	assert.NotContains(t, respSection, "Name")
+	assert.True(t, containsCollapsed(respSection, `ID int64`), "id must be required (no pointer, no omitempty)")
+	assert.True(t, containsCollapsed(respSection, `Label *string`), "label must be optional (pointer)")
+}
+
+func TestGenerate_UseRequiredV2_Off(t *testing.T) {
+	doc := parseSpec(t, requiredV2Spec)
+	pf := oapiparser.ProjectFeatures{
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+		// UseRequiredV2 off — standard OAS required applies.
+	}
+	files := generateFilesWithFeatures(t, doc, pf)
+	got := string(files["model/pet.gen.go"])
+
+	// Request: id excluded (readOnly), name optional (not in standard required), label optional.
+	reqSection := extractStruct(got, "PetRequest")
+	assert.NotContains(t, reqSection, "ID")
+	assert.True(t, containsCollapsed(reqSection, `Name *string`), "name must be optional (not in required)")
+	assert.True(t, containsCollapsed(reqSection, `Label *string`))
+
+	// Response: name excluded (writeOnly), id required (in standard required), label optional.
+	respSection := extractStruct(got, "PetResponse")
+	assert.NotContains(t, respSection, "Name")
+	assert.True(t, containsCollapsed(respSection, `ID int64`), "id must be required (in standard required)")
+	assert.True(t, containsCollapsed(respSection, `Label *string`))
+}
+
+func TestGenerate_UseRequiredV2_Mono(t *testing.T) {
+	// Без split, UseRequiredV2=true. Поле в обоих x-* списках → required.
+	// Поле только в одном → optional.
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      x-request-required: [id, name]
+      x-response-required: [id]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+`)
+	pf := oapiparser.ProjectFeatures{
+		UseRequiredV2: oapiparser.ProjectFeature{Value: true},
+	}
+	files := generateFilesWithFeatures(t, doc, pf)
+	got := string(files["model/pet.gen.go"])
+
+	// id in both x-* lists → required (no pointer, no omitempty).
+	assert.True(t, containsCollapsed(got, `ID int`), "id (in both lists) must be required")
+	// name only in x-request-required → optional (pointer).
+	assert.True(t, containsCollapsed(got, `Name *string`), "name (only in request list) must be optional")
+}
+
+// TestGenerate_UseRequiredV2_Compiles — end-to-end проверка, что
+// сгенерированный код с v2 + split компилируется Go-компилятором.
+// Доказывает, что required/optional логика корректна типами
+// (pointer vs value поля).
+func TestGenerate_UseRequiredV2_Compiles(t *testing.T) {
+	if testing.Short() {
+		t.Skip("compile test skipped in short mode")
+	}
+
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go binary not in PATH, skipping compile test")
+	}
+
+	doc := parseSpec(t, requiredV2Spec)
+	pf := oapiparser.ProjectFeatures{
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+		UseRequiredV2:        oapiparser.ProjectFeature{Value: true},
+	}
+	files := generateFilesWithFeatures(t, doc, pf)
+
+	dir := t.TempDir()
+	modelDir := filepath.Join(dir, "model")
+	require.NoError(t, os.MkdirAll(modelDir, 0o755))
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module compiletest\n\ngo 1.26\n"), 0o644))
+
+	for name, content := range files {
+		if !strings.HasPrefix(name, "model/") {
+			continue
+		}
+
+		require.NoError(t, os.WriteFile(filepath.Join(modelDir, filepath.Base(name)), content, 0o644))
+	}
+
+	cmd := exec.Command("go", "build", "./model")
+	cmd.Dir = dir
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generated model package did not compile: %v\n--- output ---\n%s", err, out)
+	}
+}
+
 // TestGenerate_SetDefaults_Compiles является end-to-end проверкой того, что
 // сгенерированный SetDefaults-код компилируется Go-компилятором (типы), а не
 // только проходит go/parser (синтаксис). Покрывает регрессии B1 (int/string

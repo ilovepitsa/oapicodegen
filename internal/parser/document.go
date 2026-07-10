@@ -90,6 +90,12 @@ type Property struct {
 	Name     string
 	Schema   *Schema
 	Required bool
+	// RequestRequired true, если имя поля есть в x-request-required
+	// списке родительской схемы. Используется при USE_REQUIRED_V2.
+	RequestRequired bool
+	// ResponseRequired true, если имя поля есть в x-response-required
+	// списке родительской схемы. Используется при USE_REQUIRED_V2.
+	ResponseRequired bool
 }
 
 // Schema — минимальное представление JSON Schema / OpenAPI Schema.
@@ -118,6 +124,12 @@ type Schema struct {
 	// AdditionalPropertiesFalse true, если в spec указано
 	// additionalProperties: false — закрытая структура без доп. полей.
 	AdditionalPropertiesFalse bool
+	// RequestRequired — имена свойств из x-request-required расширения:
+	// поля, которые required в Request-модели при USE_REQUIRED_V2.
+	RequestRequired []string
+	// ResponseRequired — имена свойств из x-response-required расширения:
+	// поля, которые required в Response-модели при USE_REQUIRED_V2.
+	ResponseRequired []string
 }
 
 // Parse парсит OpenAPI 3.x документ из байтов.

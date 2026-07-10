@@ -146,24 +146,57 @@ func (g *Generator) renderField(w *codegen.BufferWriter, p *parser.Property, m *
 
 	fieldName := goName(p.Name)
 	fieldType := m.goType(p.Schema)
+	required := g.requiredForMode(p, m.mode)
 
-	if fieldIsOptional(p, fieldType) {
+	if fieldIsOptional(required, fieldType) {
 		fieldType = "*" + fieldType
 	}
 
 	omitEmpty := ""
-	if !p.Required {
+	if !required {
 		omitEmpty = ",omitempty"
 	}
 
 	w.Print(fieldName, " ", fieldType, " `json:\"", p.Name, omitEmpty, "\" yaml:\"", p.Name, omitEmpty, "\"`\n") //nolint:lll // struct tag line
 }
 
+// requiredForMode возвращает, является ли поле required в текущем режиме
+// генерации. Логика зависит от флага USE_REQUIRED_V2:
+//
+// Если флаг выключен — возвращается стандартный OAS required (p.Required).
+//
+// Если флаг включён:
+//   - modeRequest → p.RequestRequired (из x-request-required);
+//   - modeResponse → p.ResponseRequired (из x-response-required);
+//   - моно-режим (mode=="") → если поле есть хотя бы в одном x-* списке,
+//     required = p.RequestRequired && p.ResponseRequired (required только
+//     если в обоих списках); иначе fallback на p.Required.
+func (g *Generator) requiredForMode(p *parser.Property, mode string) bool {
+	if !g.features.UseRequiredV2.Value {
+		return p.Required
+	}
+
+	switch mode {
+	case modeRequest:
+		return p.RequestRequired
+	case modeResponse:
+		return p.ResponseRequired
+	default:
+		// Моно-режим при v2 on: если поле есть в x-* списках, required
+		// только если в обоих; иначе fallback на OAS required.
+		if p.RequestRequired || p.ResponseRequired {
+			return p.RequestRequired && p.ResponseRequired
+		}
+
+		return p.Required
+	}
+}
+
 // fieldIsOptional сообщает, нужно ли оборачивать поле в pointer.
 // Поле optional, если оно не required и его Go-тип уже не nilable
 // (не slice/map/any и не pointer).
-func fieldIsOptional(p *parser.Property, fieldType string) bool {
-	return !p.Required && !strings.HasPrefix(fieldType, "*") && !isInherentlyNilable(fieldType)
+func fieldIsOptional(required bool, fieldType string) bool {
+	return !required && !strings.HasPrefix(fieldType, "*") && !isInherentlyNilable(fieldType)
 }
 
 func (g *Generator) renderEnum(w *codegen.BufferWriter, sh *parser.Schema, name string) {

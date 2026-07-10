@@ -1,11 +1,18 @@
 package parser
 
 import (
+	"slices"
 	"strings"
 
 	highbase "github.com/pb33f/libopenapi/datamodel/high/base"
 	"github.com/pb33f/libopenapi/orderedmap"
 	"gopkg.in/yaml.v3"
+)
+
+// Имена x-* расширений, читаемых парсером.
+const (
+	extRequestRequired  = "x-request-required"
+	extResponseRequired = "x-response-required"
 )
 
 // schemaFromProxy конвертирует *highbase.SchemaProxy в наш *Schema.
@@ -72,12 +79,17 @@ func fillSchema(s *Schema, sh *highbase.Schema) {
 		s.AdditionalPropertiesFalse = true
 	}
 
+	s.RequestRequired = readRequiredExtension(sh.Extensions, extRequestRequired)
+	s.ResponseRequired = readRequiredExtension(sh.Extensions, extResponseRequired)
+
 	if sh.Properties != nil {
 		for pair := sh.Properties.First(); pair != nil; pair = pair.Next() {
 			s.Properties = append(s.Properties, &Property{
-				Name:     pair.Key(),
-				Schema:   schemaFromProxy(pair.Value()),
-				Required: containsString(s.Required, pair.Key()),
+				Name:             pair.Key(),
+				Schema:           schemaFromProxy(pair.Value()),
+				Required:         containsString(s.Required, pair.Key()),
+				RequestRequired:  containsString(s.RequestRequired, pair.Key()),
+				ResponseRequired: containsString(s.ResponseRequired, pair.Key()),
 			})
 		}
 	}
@@ -141,11 +153,33 @@ func decodeNode(n *yaml.Node) any {
 }
 
 func containsString(slice []string, v string) bool {
-	for _, s := range slice {
-		if s == v {
-			return true
-		}
+	return slices.Contains(slice, v)
+}
+
+// readRequiredExtension читает list-of-strings расширение (x-request-required,
+// x-response-required) из high Schema.Extensions. Возвращает nil, если
+// расширение отсутствует или его значение не sequence-узел.
+func readRequiredExtension(
+	extensions *orderedmap.Map[string, *yaml.Node],
+	key string,
+) []string {
+	if extensions == nil {
+		return nil
 	}
 
-	return false
+	node := extensions.GetOrZero(key)
+	if node == nil {
+		return nil
+	}
+
+	if node.Kind != yaml.SequenceNode {
+		return nil
+	}
+
+	var out []string
+	if err := node.Decode(&out); err != nil {
+		return nil
+	}
+
+	return out
 }

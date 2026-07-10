@@ -296,10 +296,17 @@
 - Зависимости: T24c
 - Ветка: `feat/genflag-split`
 
-#### T24g — `USE_REQUIRED_V2` flag — PENDING
-- Флаг заведён в `ProjectFeatures` и резолвится лоадером, но **генераторной поддержки нет**:
-  парсер пока не читает `x-request-required`/`x-response-required`, генератор не использует `UseRequiredV2`.
-- Поддержка `x-request-required` / `x-response-required` list-атрибутов — будущая работа.
+#### T24g — `USE_REQUIRED_V2` flag — DONE
+- Парсер читает `x-request-required` / `x-response-required` расширения (list of strings на уровне schema object) через `readRequiredExtension`.
+- `Schema.RequestRequired`/`ResponseRequired` ([]string) + `Property.RequestRequired`/`ResponseRequired` (bool) поля.
+- `Generator.requiredForMode(p, mode)`:
+  - v2 off → `p.Required` (стандартный OAS)
+  - v2 on + modeRequest → `p.RequestRequired`
+  - v2 on + modeResponse → `p.ResponseRequired`
+  - v2 on + моно (mode=="") → если поле в любом x-* списке → `p.RequestRequired && p.ResponseRequired`, иначе fallback на `p.Required`
+- `fieldIsOptional` сигнатура изменена на `(required bool, fieldType string)` — принимает уже вычисленный required.
+- Зависимость `dependsOn: GOLANG_SPLIT_REQUEST_RESPONSE: true` — валидируется лоадером.
+- Тесты: 3 parser + 4 generator (включая end-to-end compile-тест `TestGenerate_UseRequiredV2_Compiles`).
 - Зависимости: T24c, T24f
 - Ветка: `feat/genflag-required-v2`
 

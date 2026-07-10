@@ -76,7 +76,7 @@ func (g *Generator) renderSetDefaultForField(
 	fieldName := goName(p.Name)
 	goType := m.goType(p.Schema)
 
-	optional := fieldIsOptional(p, goType)
+	optional := fieldIsOptional(g.requiredForMode(p, m.mode), goType)
 	if optional {
 		goType = "*" + goType
 	}
@@ -134,7 +134,7 @@ func (g *Generator) renderNestedSetDefaultsCall(
 	fieldName := goName(p.Name)
 	fieldType := m.goType(p.Schema)
 
-	optional := fieldIsOptional(p, fieldType)
+	optional := fieldIsOptional(g.requiredForMode(p, m.mode), fieldType)
 	if optional {
 		w.Print("\tif m.", fieldName, " != nil {\n")
 		w.Print("\t\tm.", fieldName, ".SetDefaults()\n")
