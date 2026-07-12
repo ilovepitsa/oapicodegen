@@ -96,6 +96,10 @@ type Property struct {
 	// ResponseRequired true, если имя поля есть в x-response-required
 	// списке родительской схемы. Используется при USE_REQUIRED_V2.
 	ResponseRequired bool
+	// Optional true, если имя поля есть в x-optional списке родительской
+	// схемы. Используется при GOLANG_USE_OPTIONAL для генерации
+	// optional.Optional[T] вместо *T.
+	Optional bool
 }
 
 // Schema — минимальное представление JSON Schema / OpenAPI Schema.
@@ -130,6 +134,10 @@ type Schema struct {
 	// ResponseRequired — имена свойств из x-response-required расширения:
 	// поля, которые required в Response-модели при USE_REQUIRED_V2.
 	ResponseRequired []string
+	// Optional — имена свойств из x-optional расширения: поля, для которых
+	// генератор при GOLANG_USE_OPTIONAL использует optional.Optional[T]
+	// вместо *T (трёхсостояние: absent / null / value).
+	Optional []string
 }
 
 // Parse парсит OpenAPI 3.x документ из байтов.

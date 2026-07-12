@@ -94,6 +94,60 @@ components:
 	assert.Nil(t, pet.RequestRequired, "non-sequence extension must be ignored")
 }
 
+// TestParse_OptionalExtension проверяет, что парсер читает x-optional
+// из spec и заполняет Schema.Optional и Property.Optional.
+func TestParse_OptionalExtension(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [id]
+      x-optional: [name, label]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        label: {type: string}
+`)
+
+	pet := findSchema(t, doc, "Pet")
+	assert.Equal(t, []string{"name", "label"}, pet.Optional)
+
+	idProp := findProperty(t, pet, "id")
+	assert.False(t, idProp.Optional, "id must NOT be Optional")
+
+	nameProp := findProperty(t, pet, "name")
+	assert.True(t, nameProp.Optional, "name must be Optional")
+
+	labelProp := findProperty(t, pet, "label")
+	assert.True(t, labelProp.Optional, "label must be Optional")
+}
+
+// TestParse_OptionalExtension_Absent проверяет, что без x-optional
+// Schema.Optional и Property.Optional остаются nil/false.
+func TestParse_OptionalExtension_Absent(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: integer}
+`)
+
+	pet := findSchema(t, doc, "Pet")
+	assert.Nil(t, pet.Optional)
+
+	idProp := findProperty(t, pet, "id")
+	assert.False(t, idProp.Optional)
+}
+
 func parseSpec(t *testing.T, spec string) *Document {
 	t.Helper()
 	doc, err := Parse([]byte(spec))

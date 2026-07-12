@@ -1,5 +1,9 @@
 package parser
 
+import (
+	"nschugorev/oapigenerator/internal/genflags"
+)
+
 // Имена generation flags, поддерживаемых генератором. Совпадают с ключами
 // в generation_flags.yaml (поле name каждой записи).
 const (
@@ -21,40 +25,18 @@ const (
 	// FlagUseUTCForDateTime — когда on, поля time.Time сериализуются
 	// и десериализуются в UTC (принудительный .UTC() в marshal/unmarshal).
 	FlagUseUTCForDateTime = "USE_UTC_FOR_DATE_TIME"
+
+	// FlagUseOptional — когда on, поля, помеченные x-optional, генерируются
+	// как optional.Optional[T] вместо *T (трёхсостояние: absent / null / value).
+	// Используется для PATCH/update-семантики, где нужно отличать "поле не
+	// задано" от "поле явно null".
+	FlagUseOptional = "GOLANG_USE_OPTIONAL"
 )
 
-// supportedFlags — список всех поддерживаемых флагов в стабильном порядке.
-// Порядок важен для детерминированной валидации в Load.
-//
-//nolint:gochecknoglobals // stable ordered list for deterministic validation
-var supportedFlags = []string{
-	FlagServerNoAutoDefaults,
-	FlagSplitRequestResponse,
-	FlagUseRequiredV2,
-	FlagUseUTCForDateTime,
-}
-
-// GenerationFlagConfig — одна запись из глобального generation_flags.yaml.
-// Описывает правила работы флага: включён ли, какие default/target значения,
-// какие платформы затрагивает, от каких флагов зависит.
-// YAML-ключи camelCase — формат extern-конфига, менять нельзя.
-type GenerationFlagConfig struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	// Enabled — разрешён ли override в per-project конфиге.
-	// Disabled-флаги принимают только defaultValue.
-	Enabled bool `yaml:"enabled"`
-	// DependsOn — флаг→ожидаемое значение. Override этого флага в не-default
-	// значении требует, чтобы все зависимости были выставлены проектом.
-	DependsOn map[string]bool `yaml:"dependsOn"` //nolint:tagliatelle // external camelCase key
-	// TargetValue — значение, к которому проекты должны мигрировать.
-	TargetValue bool `yaml:"targetValue"` //nolint:tagliatelle // external camelCase key
-	//nolint:tagliatelle // external camelCase key
-	// DefaultValue — значение по умолчанию для проектов без override.
-	DefaultValue bool `yaml:"defaultValue"`
-	// Affects — платформы, на которые влияет флаг. Должен содержать "golang".
-	Affects []string `yaml:"affects"`
-}
+// GenerationFlagConfig — alias для genflags.FlagConfig, YAML-совместимая запись
+// из глобального generation_flags.yaml. Alias сохраняет обратную совместимость
+// с существующим кодом парсера, делегируя валидацию в genflags.Registry.
+type GenerationFlagConfig = genflags.FlagConfig
 
 // ProjectFeature — финальное значение флага для конкретного проекта.
 type ProjectFeature struct {
@@ -62,10 +44,25 @@ type ProjectFeature struct {
 }
 
 // ProjectFeatures — резолюнутый набор флагов для проекта. Каждое поле
-// соответствует одному флагу из supportedFlags.
+// соответствует одному зарегистрированному флагу.
 type ProjectFeatures struct {
 	ServerNoAutoDefaults ProjectFeature
 	SplitRequestResponse ProjectFeature
 	UseRequiredV2        ProjectFeature
 	UseUTCForDateTime    ProjectFeature
+	UseOptional          ProjectFeature
+}
+
+// newDefaultRegistry создаёт Registry со всеми поддерживаемыми флагами.
+// Регистрация выполняется в детерминированном порядке, что гарантирует
+// стабильную итерацию в ValidateConfig и Resolve.
+func newDefaultRegistry() *genflags.Registry {
+	r := genflags.NewRegistry()
+	r.Register(genflags.BoolFlag{FlagName: FlagServerNoAutoDefaults})
+	r.Register(genflags.BoolFlag{FlagName: FlagSplitRequestResponse})
+	r.Register(genflags.BoolFlag{FlagName: FlagUseRequiredV2})
+	r.Register(genflags.BoolFlag{FlagName: FlagUseUTCForDateTime})
+	r.Register(genflags.BoolFlag{FlagName: FlagUseOptional})
+
+	return r
 }

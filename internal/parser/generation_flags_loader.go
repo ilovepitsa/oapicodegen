@@ -4,10 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"slices"
+	realfs "nschugorev/oapigenerator/internal/fs"
+	"nschugorev/oapigenerator/internal/genflags"
 
 	"gopkg.in/yaml.v3"
-	realfs "nschugorev/oapigenerator/internal/fs"
 )
 
 // GenerationFlagsLoader грузит глобальный конфиг флагов и per-project override,
@@ -15,18 +15,23 @@ import (
 //
 // Двухфазный:
 //  1. Load(source) — парсит глобальный generation_flags.yaml, валидирует наличие
-//     всех поддерживаемых флагов и корректность их конфигов.
+//     всех поддерживаемых флагов и корректность их конфигов через genflags.Registry.
 //  2. GetProjectFeatures(projectPath) — парсит override проекта (map flag→bool),
-//     резолвит каждый флаг против глобального конфига.
+//     резолвит каждый флаг через registry.
 type GenerationFlagsLoader struct {
-	fsys realfs.ReadOnlyFS
+	fsys     realfs.ReadOnlyFS
+	registry *genflags.Registry
 
 	gfConfigs map[string]GenerationFlagConfig
 }
 
-// NewGenerationFlagsLoader создаёт loader поверх readonly FS.
+// NewGenerationFlagsLoader создаёт loader поверх readonly FS с стандартным
+// набором зарегистрированных флагов.
 func NewGenerationFlagsLoader(fsys realfs.ReadOnlyFS) *GenerationFlagsLoader {
-	return &GenerationFlagsLoader{fsys: fsys}
+	return &GenerationFlagsLoader{
+		fsys:     fsys,
+		registry: newDefaultRegistry(),
+	}
 }
 
 // Load парсит глобальный generation_flags.yaml и валидирует конфиги.
@@ -47,8 +52,13 @@ func (l *GenerationFlagsLoader) Load(source string) error {
 		l.gfConfigs[f.Name] = f
 	}
 
-	for _, name := range supportedFlags {
-		if err := l.validateConfig(name); err != nil {
+	for _, name := range l.registry.Names() {
+		cfg, ok := l.gfConfigs[name]
+		if !ok {
+			return fmt.Errorf("validate flag %q: generation flag not found in config", name)
+		}
+
+		if err := l.registry.ValidateConfig(name, cfg); err != nil {
 			return fmt.Errorf("validate flag %q: %w", name, err)
 		}
 	}
@@ -75,12 +85,13 @@ func (l *GenerationFlagsLoader) GetProjectFeatures(projectPath string) (ProjectF
 		FlagSplitRequestResponse: func(f ProjectFeature) { features.SplitRequestResponse = f },
 		FlagUseRequiredV2:        func(f ProjectFeature) { features.UseRequiredV2 = f },
 		FlagUseUTCForDateTime:    func(f ProjectFeature) { features.UseUTCForDateTime = f },
+		FlagUseOptional:          func(f ProjectFeature) { features.UseOptional = f },
 	}
 
-	for _, name := range supportedFlags {
+	for _, name := range l.registry.Names() {
 		feature, err := l.resolveFlag(projectFlags, name)
 		if err != nil {
-			return ProjectFeatures{}, fmt.Errorf("resolve flag %q: %w", name, err)
+			return ProjectFeatures{}, err
 		}
 
 		setters[name](feature)
@@ -89,73 +100,23 @@ func (l *GenerationFlagsLoader) GetProjectFeatures(projectPath string) (ProjectF
 	return features, nil
 }
 
-func (l *GenerationFlagsLoader) validateConfig(name string) error {
-	config, ok := l.gfConfigs[name]
-	if !ok {
-		return errors.New("generation flag not found in config")
-	}
-
-	if !slices.Contains(config.Affects, "golang") {
-		return errors.New("'golang' is not found in the affects list")
-	}
-
-	if config.DefaultValue == config.TargetValue && len(config.DependsOn) != 0 {
-		return errors.New("flag with same default and target values must not contain dependsOn")
-	}
-
-	return nil
-}
-
 func (l *GenerationFlagsLoader) resolveFlag(
 	projectFlags map[string]bool,
 	name string,
 ) (ProjectFeature, error) {
-	config := l.gfConfigs[name]
+	cfg := l.gfConfigs[name]
 
-	override, hasOverride := projectFlags[name]
-	if !hasOverride {
-		return ProjectFeature{Value: config.DefaultValue}, nil
+	var override any
+	if v, has := projectFlags[name]; has {
+		override = v
 	}
 
-	value, err := validateOverride(config, override, projectFlags)
+	value, err := l.registry.Resolve(name, override, projectFlags, cfg)
 	if err != nil {
-		return ProjectFeature{}, err
+		return ProjectFeature{}, fmt.Errorf("resolve flag %q: %w", name, err)
 	}
 
 	return ProjectFeature{Value: value}, nil
-}
-
-func validateOverride(
-	config GenerationFlagConfig,
-	value bool,
-	projectFlags map[string]bool,
-) (bool, error) {
-	if !config.Enabled {
-		if value != config.DefaultValue {
-			return false, errors.New("flag is disabled, only default value is allowed")
-		}
-
-		return value, nil
-	}
-
-	if value == config.DefaultValue {
-		return value, nil
-	}
-
-	for depName, depExpected := range config.DependsOn {
-		depActual, ok := projectFlags[depName]
-		if !ok {
-			return false, fmt.Errorf("dependency %q is required but not found", depName)
-		}
-
-		if depActual != depExpected {
-			return false, fmt.Errorf(
-				"dependency %q: expected %v, got %v", depName, depExpected, depActual,
-			)
-		}
-	}
-
-	return value, nil
 }
 
 func (l *GenerationFlagsLoader) loadProjectFlags(path string) (map[string]bool, error) {

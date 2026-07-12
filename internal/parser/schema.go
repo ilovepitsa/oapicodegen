@@ -13,6 +13,7 @@ import (
 const (
 	extRequestRequired  = "x-request-required"
 	extResponseRequired = "x-response-required"
+	extOptional         = "x-optional"
 )
 
 // schemaFromProxy конвертирует *highbase.SchemaProxy в наш *Schema.
@@ -81,6 +82,7 @@ func fillSchema(s *Schema, sh *highbase.Schema) {
 
 	s.RequestRequired = readRequiredExtension(sh.Extensions, extRequestRequired)
 	s.ResponseRequired = readRequiredExtension(sh.Extensions, extResponseRequired)
+	s.Optional = readRequiredExtension(sh.Extensions, extOptional)
 
 	if sh.Properties != nil {
 		for pair := sh.Properties.First(); pair != nil; pair = pair.Next() {
@@ -90,6 +92,7 @@ func fillSchema(s *Schema, sh *highbase.Schema) {
 				Required:         containsString(s.Required, pair.Key()),
 				RequestRequired:  containsString(s.RequestRequired, pair.Key()),
 				ResponseRequired: containsString(s.ResponseRequired, pair.Key()),
+				Optional:         containsString(s.Optional, pair.Key()),
 			})
 		}
 	}

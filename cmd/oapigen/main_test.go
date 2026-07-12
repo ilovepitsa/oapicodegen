@@ -127,6 +127,12 @@ const validGlobalFlagsConfig = `- name: GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAU
   defaultValue: false
   targetValue: false
   affects: [golang]
+
+- name: GOLANG_USE_OPTIONAL
+  enabled: true
+  defaultValue: false
+  targetValue: true
+  affects: [golang]
 `
 
 func TestRun_GenerationFlagsConfig_LoadsDefaults(t *testing.T) {

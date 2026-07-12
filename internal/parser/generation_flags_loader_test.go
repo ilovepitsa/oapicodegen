@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// validGlobalConfig — эталонный глобальный конфиг со всеми 4 флагами.
+// validGlobalConfig — эталонный глобальный конфиг со всеми 5 флагами.
 // Используется в большинстве тестов как базовая фикстура.
 const validGlobalConfig = `- name: GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS
   description: "Don't auto-fill defaults in server request binding"
@@ -39,6 +39,13 @@ const validGlobalConfig = `- name: GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS
   defaultValue: false
   targetValue: false
   affects: [golang]
+
+- name: GOLANG_USE_OPTIONAL
+  description: "Use optional.Optional[T] for x-optional fields"
+  enabled: true
+  defaultValue: false
+  targetValue: true
+  affects: [golang]
 `
 
 func newTestFS(files map[string]string) fstest.MapFS {
@@ -56,11 +63,12 @@ func TestGenerationFlagsLoader_Load_Success(t *testing.T) {
 	loader := NewGenerationFlagsLoader(fsys)
 	require.NoError(t, loader.Load("generation_flags.yaml"))
 
-	assert.Len(t, loader.gfConfigs, 4)
+	assert.Len(t, loader.gfConfigs, 5)
 	assert.Contains(t, loader.gfConfigs, FlagServerNoAutoDefaults)
 	assert.Contains(t, loader.gfConfigs, FlagSplitRequestResponse)
 	assert.Contains(t, loader.gfConfigs, FlagUseRequiredV2)
 	assert.Contains(t, loader.gfConfigs, FlagUseUTCForDateTime)
+	assert.Contains(t, loader.gfConfigs, FlagUseOptional)
 }
 
 func TestGenerationFlagsLoader_Load_MissingFlag(t *testing.T) {
@@ -103,6 +111,12 @@ func TestGenerationFlagsLoader_Load_MissingGolangInAffects(t *testing.T) {
   defaultValue: false
   targetValue: false
   affects: [golang]
+
+- name: GOLANG_USE_OPTIONAL
+  enabled: true
+  defaultValue: false
+  targetValue: true
+  affects: [golang]
 `
 	fsys := newTestFS(map[string]string{"generation_flags.yaml": config})
 
@@ -139,6 +153,12 @@ func TestGenerationFlagsLoader_Load_DefaultEqualsTargetWithDependsOn(t *testing.
   defaultValue: false
   targetValue: false
   affects: [golang]
+
+- name: GOLANG_USE_OPTIONAL
+  enabled: true
+  defaultValue: false
+  targetValue: true
+  affects: [golang]
 `
 	fsys := newTestFS(map[string]string{"generation_flags.yaml": config})
 
@@ -164,6 +184,7 @@ func TestGenerationFlagsLoader_GetProjectFeatures_NoOverride(t *testing.T) {
 	assert.False(t, features.SplitRequestResponse.Value)
 	assert.False(t, features.UseRequiredV2.Value)
 	assert.False(t, features.UseUTCForDateTime.Value)
+	assert.False(t, features.UseOptional.Value)
 }
 
 func TestGenerationFlagsLoader_GetProjectFeatures_WithOverride(t *testing.T) {
@@ -172,6 +193,7 @@ func TestGenerationFlagsLoader_GetProjectFeatures_WithOverride(t *testing.T) {
 		"project_flags.yaml": `GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS: true
 GOLANG_SPLIT_REQUEST_RESPONSE: true
 USE_REQUIRED_V2: true
+GOLANG_USE_OPTIONAL: true
 `,
 	})
 
@@ -184,6 +206,7 @@ USE_REQUIRED_V2: true
 	assert.True(t, features.ServerNoAutoDefaults.Value)
 	assert.True(t, features.SplitRequestResponse.Value)
 	assert.True(t, features.UseRequiredV2.Value)
+	assert.True(t, features.UseOptional.Value)
 	// USE_UTC_FOR_DATE_TIME не в override → default false
 	assert.False(t, features.UseUTCForDateTime.Value)
 }

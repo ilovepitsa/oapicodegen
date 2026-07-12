@@ -326,19 +326,83 @@
 - Зависимости: нет
 - Ветка: `feat/gen-defaults`
 
-#### T25b — Update-схемы: `Update<Name>` struct для PATCH
-- Все поля `*T` (pointer), без defaults, без validation
-- `update_schema.go` + `update_get_name.go` + `update_set_name.go` + `update_model_getter.go` + `test_update_json_methods.go` (~1370 строк)
-- Getter-методы `Get<Field>() (*T, bool)`
-- Зависимости: нет
-- Ветка: `feat/gen-update-schemas`
+#### T25b — Update-схемы: `Update<Name>` struct для PATCH — разбит на T25b.1–T25b.4
 
-#### T25c — URLForm: `MarshalURLForm`/`UnmarshalURLForm`
-- Для schema в `application/x-www-form-urlencoded` request body
-- `url_form_methods.go` (~476 строк)
-- Требует parser-поддержки form-urlencoded content-type
+Общая спецификация: `type Update<Name> struct { Field *T ... }` — все поля `*T` (pointer, даже required), без defaults, без validation, JSON-тег `omitempty` для всех. Генерируется только для схем, участвующих в PATCH/PUT request body.
+
+##### T25b.1 — Parser: `IsUsedInUpdate` flag + trigger
+- Добавить `IsUsedInUpdate bool` на `Schema` и `Property` в `internal/parser/document.go`.
+- Marker-проход (аналог `update_marker.go` в mwsapi): обойти body всех operations, пометить schema `IsUsedInUpdate=true` если operation — PUT или PATCH (эвристика, т.к. `x-*` расширений пока нет).
+- Поля помечать поштучно: readOnly пропускаются, immutable пропускаются (кроме `name`).
+- Тесты: parser-тест с PUT-операцией → schema помечена.
 - Зависимости: нет
-- Ветка: `feat/gen-urlform`
+- Ветка: `feat/gen-update-marker`
+
+##### T25b.2 — `renderUpdateStruct` + typeMapper mode
+- Новый файл `internal/generator/update_schema.go`: `renderUpdateStruct(w, sh, m, name)` рендерит `type Update<Name> struct { ... }`.
+- Все поля принудительно `*T` (даже required, даже примитивы). Без defaults, без validation.
+- JSON-теги: `json:"<name>,omitempty" yaml:"<name>,omitempty"`.
+- Переиспользовать `renderField`-паттерн, но с принудительным pointer.
+- Решение: `*T` (по спеке T25b), НЕ `Optional[T]` (как в mwsapi) — проще, без зависимости от common-пакета.
+- `computeUpdatable` (аналог `computeSplittable`) — precompute-набор схем с `IsUsedInUpdate=true`.
+- Тесты: генерация `Update<Name>` для object-схемы, проверка что все поля `*T`.
+- Зависимости: T25b.1
+- Ветка: `feat/gen-update-struct`
+
+##### T25b.3 — Getter-методы `Get<Field>() (*T, bool)`
+- Новый файл `internal/generator/update_getters.go`: для каждого поля рендерит:
+  ```go
+  func (m *Update<Name>) Get<Field>() (*T, bool) {
+      if m.Field != nil {
+          return m.Field, true
+      }
+      return nil, false
+  }
+  ```
+- Простой проход по properties.
+- Тесты: проверка что getter-методы генерируются для всех полей.
+- Зависимости: T25b.2
+- Ветка: `feat/gen-update-getters`
+
+##### T25b.4 — Интеграция в writeSchemaFiles + тесты + golden
+- В `generator.go:writeSchemaFiles` добавить условный вызов `g.updateSchemaFile(sh)` если `sh.IsUsedInUpdate`.
+- Compile-тест `TestGenerate_UpdateSchemas_Compiles` — `go build` на сгенерированном коде.
+- Golden-тест: добавить testdata с PUT-операцией, update-schema в golden.
+- Опционально: `AsUpdateModel()` метод на исходной модели (мост Create↔Update) — если понадобится, отдельная подзадача T25b.5.
+- Зависимости: T25b.2, T25b.3
+- Ветка: `feat/gen-update-integration`
+
+#### T25c — URLForm: `MarshalURLForm`/`UnmarshalURLForm` — разбит на T25c.1–T25c.3
+
+Общая спецификация: для schema в `application/x-www-form-urlencoded` request body генерируются методы `MarshalURLForm() (url.Values, error)` и `UnmarshalURLForm(form url.Values) error`. Поддержка только примитивных полей (string/integer/number/boolean). Arrays/maps/$ref → `return error` в сгенерированном коде.
+
+##### T25c.1 — `MarshalURLForm` для object-схем
+- Новый файл `internal/generator/url_form_methods.go`: `renderMarshalURLForm(w, sh, m, name)`.
+- `func (m <Name>) MarshalURLForm() (url.Values, error)` — создаёт `url.Values`, для каждого поля: `if m.Field != nil { values.Set("<name>", <converter>(m.Field)) }`.
+- Converter: string → direct, integer/number → `fmt.Sprint`, bool → `strconv.FormatBool`, time → `.Format(...)` (с UTC если флаг on).
+- Триггер: схема referenced из `RequestBody.Content["application/x-www-form-urlencoded"]` любой операции.
+- `schemeHasURLFormat(sh, doc)` helper — аналог mwsapi.
+- Edge cases: arrays/maps/refs → `return nil, fmt.Errorf("not supported")` в сгенерированном коде.
+- Тесты: генерация MarshalURLForm для object с string/int/bool полями.
+- Зависимости: нет
+- Ветка: `feat/gen-urlform-marshal`
+
+##### T25c.2 — `UnmarshalURLForm` + string-decoder
+- Тот же файл: `renderUnmarshalURLForm(w, sh, m, name)`.
+- `func (m *<Name>) UnmarshalURLForm(form url.Values) error` — для каждого поля: `if form.Has("<name>") { tmp := <decoder>(form.Get("<name>")); m.Field = &tmp }` (optional) или `m.Field = <decoded>` (required).
+- Decoder: string → direct, integer → `strconv.Atoi`, bool → `strconv.ParseBool`, etc. С error propagation.
+- Тесты: генерация UnmarshalURLForm, проверка decoder-выражений.
+- Зависимости: T25c.1
+- Ветка: `feat/gen-urlform-unmarshal`
+
+##### T25c.3 — Интеграция + httpclient/server wire-up + тесты
+- В `writeSchemaFiles` вызвать `urlFormMethodsFile(sh)` если `schemeHasURLFormat(sh, doc)`.
+- В `impl_client.go`: если body content-type `application/x-www-form-urlencoded`, рендерить `url.Values`-encode + `Content-Type: application/x-www-form-urlencoded` вместо `json.Marshal`.
+- В `impl_server.go`: если body content-type form-urlencoded, декодировать через `UnmarshalURLForm` вместо `json.Unmarshal`.
+- Compile-тест `TestGenerate_URLForm_Compiles`.
+- Golden-тест: testdata с form-encoded операцией.
+- Зависимости: T25c.1, T25c.2
+- Ветка: `feat/gen-urlform-integration`
 
 ### Typyped response headers (вне исходной нумерации) — DONE
 - `internal/generator/response_headers.go` — генерация `<Name><Code>PayloadWithHeaders` struct
