@@ -29,4 +29,9 @@ const (
 
 	modeRequest  = "Request"
 	modeResponse = "Response"
+
+	// optionalPkg — import-path runtime-пакета optional.Optional[T],
+	// который сгенерированный код использует для x-optional полей при
+	// включённом GOLANG_USE_OPTIONAL.
+	optionalPkg = "nschugorev/oapigenerator/pkg/optional"
 )

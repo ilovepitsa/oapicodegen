@@ -148,6 +148,13 @@ func (g *Generator) renderField(w *codegen.BufferWriter, p *parser.Property, m *
 	fieldType := m.goType(p.Schema)
 	required := g.requiredForMode(p, m.mode)
 
+	if g.features.UseOptional.Value && p.Optional {
+		m.addImport(optionalPkg, "optional")
+		w.Print(fieldName, " optional.Optional[", fieldType, "] `json:\"", p.Name, "\" yaml:\"", p.Name, "\"`\n") //nolint:lll // struct tag line
+
+		return
+	}
+
 	if fieldIsOptional(required, fieldType) {
 		fieldType = "*" + fieldType
 	}

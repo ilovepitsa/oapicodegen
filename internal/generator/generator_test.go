@@ -240,6 +240,90 @@ components:
 	assert.Contains(t, utc, ".UTC()")
 }
 
+func TestGenerate_OptionalFields_FlagOn(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [id]
+      x-optional: [name, tag, retries]
+      properties:
+        id: {type: integer, format: int64}
+        name: {type: string}
+        tag: {type: string}
+        retries: {type: integer, format: int32}
+`)
+	pf := oapiparser.ProjectFeatures{UseOptional: oapiparser.ProjectFeature{Value: true}}
+	files := generateFilesWithFeatures(t, doc, pf)
+
+	got := string(files["model/pet.gen.go"])
+	assert.True(t, containsCollapsed(got, "Name optional.Optional[string]"))
+	assert.True(t, containsCollapsed(got, "Tag optional.Optional[string]"))
+	assert.True(t, containsCollapsed(got, "Retries optional.Optional[int32]"))
+	// required поле не оборачивается в Optional.
+	assert.True(t, containsCollapsed(got, "ID int64"))
+	// import optional-пакета добавлен.
+	assert.Contains(t, got, `optional "nschugorev/oapigenerator/pkg/optional"`)
+	// x-optional поля без omitempty (struct value — omitempty no-op).
+	assert.True(t, containsCollapsed(got, `json:"name"`))
+	assert.True(t, containsCollapsed(got, `json:"tag"`))
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet.gen.go", files["model/pet.gen.go"], parser.AllErrors)
+	require.NoError(t, err, "generated file should parse as valid Go")
+}
+
+func TestGenerate_OptionalFields_FlagOff_NoOptionalType(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [id]
+      x-optional: [name]
+      properties:
+        id: {type: integer, format: int64}
+        name: {type: string}
+`)
+	// Флаг выключен — x-optional игнорируется, поле рендерится как *T.
+	files := generateFiles(t, doc)
+	got := string(files["model/pet.gen.go"])
+
+	assert.NotContains(t, got, "optional.Optional")
+	assert.NotContains(t, got, "nschugorev/oapigenerator/pkg/optional")
+	assert.True(t, containsCollapsed(got, "Name *string"))
+}
+
+func TestGenerate_OptionalFields_NoXOptional_NoEffect(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [id]
+      properties:
+        id: {type: integer, format: int64}
+        name: {type: string}
+`)
+	pf := oapiparser.ProjectFeatures{UseOptional: oapiparser.ProjectFeature{Value: true}}
+	files := generateFilesWithFeatures(t, doc, pf)
+	got := string(files["model/pet.gen.go"])
+
+	// Флаг включён, но x-optional нет — обычная *T-семантика.
+	assert.NotContains(t, got, "optional.Optional")
+	assert.True(t, containsCollapsed(got, "Name *string"))
+}
+
 func TestGenerate_DateTime_UTCTimeFlagOff_NoUTCTimeFile(t *testing.T) {
 	doc := parseSpec(t, `
 openapi: 3.0.3
