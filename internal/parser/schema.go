@@ -80,19 +80,18 @@ func fillSchema(s *Schema, sh *highbase.Schema) {
 		s.AdditionalPropertiesFalse = true
 	}
 
-	s.RequestRequired = readRequiredExtension(sh.Extensions, extRequestRequired)
-	s.ResponseRequired = readRequiredExtension(sh.Extensions, extResponseRequired)
-	s.Optional = readRequiredExtension(sh.Extensions, extOptional)
-
 	if sh.Properties != nil {
 		for pair := sh.Properties.First(); pair != nil; pair = pair.Next() {
+			propProxy := pair.Value()
+			propHigh := schemaProxyHigh(propProxy)
+
 			s.Properties = append(s.Properties, &Property{
 				Name:             pair.Key(),
-				Schema:           schemaFromProxy(pair.Value()),
+				Schema:           schemaFromProxy(propProxy),
 				Required:         containsString(s.Required, pair.Key()),
-				RequestRequired:  containsString(s.RequestRequired, pair.Key()),
-				ResponseRequired: containsString(s.ResponseRequired, pair.Key()),
-				Optional:         containsString(s.Optional, pair.Key()),
+				RequestRequired:  readBoolExtension(propHigh, extRequestRequired),
+				ResponseRequired: readBoolExtension(propHigh, extResponseRequired),
+				Optional:         readBoolExtension(propHigh, extOptional),
 			})
 		}
 	}
@@ -159,30 +158,35 @@ func containsString(slice []string, v string) bool {
 	return slices.Contains(slice, v)
 }
 
-// readRequiredExtension читает list-of-strings расширение (x-request-required,
-// x-response-required) из high Schema.Extensions. Возвращает nil, если
-// расширение отсутствует или его значение не sequence-узел.
-func readRequiredExtension(
-	extensions *orderedmap.Map[string, *yaml.Node],
-	key string,
-) []string {
-	if extensions == nil {
+// schemaProxyHigh возвращает *highbase.Schema из proxy. Для $ref-proxy
+// возвращается разрешённая целевая схема; если proxy nil или не разрешается —
+// nil. Используется для чтения per-property x-* расширений.
+func schemaProxyHigh(proxy *highbase.SchemaProxy) *highbase.Schema {
+	if proxy == nil {
 		return nil
 	}
 
-	node := extensions.GetOrZero(key)
-	if node == nil {
-		return nil
+	return proxy.Schema()
+}
+
+// readBoolExtension читает scalar-bool расширение (x-optional,
+// x-request-required, x-response-required) из Extensions high-схемы
+// свойства. Возвращает false, если расширение отсутствует или его значение
+// не bool.
+func readBoolExtension(sh *highbase.Schema, key string) bool {
+	if sh == nil || sh.Extensions == nil {
+		return false
 	}
 
-	if node.Kind != yaml.SequenceNode {
-		return nil
+	node := sh.Extensions.GetOrZero(key)
+	if node == nil || node.Kind != yaml.ScalarNode {
+		return false
 	}
 
-	var out []string
-	if err := node.Decode(&out); err != nil {
-		return nil
+	var b bool
+	if err := node.Decode(&b); err != nil {
+		return false
 	}
 
-	return out
+	return b
 }

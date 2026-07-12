@@ -16,6 +16,7 @@ import (
 	"nschugorev/oapigenerator/internal/generator"
 	"nschugorev/oapigenerator/internal/parser"
 	"os"
+	"path/filepath"
 )
 
 func Main() int {
@@ -87,12 +88,9 @@ func run(args []string, stderr *os.File) error {
 
 	sugar := logger.Sugar()
 
-	data, err := os.ReadFile(input)
-	if err != nil {
-		return fmt.Errorf("read spec %q: %w", input, err)
-	}
-
-	doc, err := parser.Parse(data)
+	// ParseFile (а не os.ReadFile + Parse) прокидывает os.DirFS в libopenpi,
+	// чтобы резолвить cross-file $ref из каталога спеки.
+	doc, err := parser.ParseFile(os.DirFS(filepath.Dir(input)), filepath.Base(input))
 	if err != nil {
 		return fmt.Errorf("parse spec %q: %w", input, err)
 	}

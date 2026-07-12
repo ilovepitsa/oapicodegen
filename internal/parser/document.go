@@ -90,14 +90,14 @@ type Property struct {
 	Name     string
 	Schema   *Schema
 	Required bool
-	// RequestRequired true, если имя поля есть в x-request-required
-	// списке родительской схемы. Используется при USE_REQUIRED_V2.
+	// RequestRequired true, если у property в spec стоит
+	// x-request-required: true. Используется при USE_REQUIRED_V2.
 	RequestRequired bool
-	// ResponseRequired true, если имя поля есть в x-response-required
-	// списке родительской схемы. Используется при USE_REQUIRED_V2.
+	// ResponseRequired true, если у property в spec стоит
+	// x-response-required: true. Используется при USE_REQUIRED_V2.
 	ResponseRequired bool
-	// Optional true, если имя поля есть в x-optional списке родительской
-	// схемы. Используется при GOLANG_USE_OPTIONAL для генерации
+	// Optional true, если у property в spec стоит x-optional: true.
+	// Используется при GOLANG_USE_OPTIONAL для генерации
 	// optional.Optional[T] вместо *T.
 	Optional bool
 }
@@ -128,21 +128,11 @@ type Schema struct {
 	// AdditionalPropertiesFalse true, если в spec указано
 	// additionalProperties: false — закрытая структура без доп. полей.
 	AdditionalPropertiesFalse bool
-	// RequestRequired — имена свойств из x-request-required расширения:
-	// поля, которые required в Request-модели при USE_REQUIRED_V2.
-	RequestRequired []string
-	// ResponseRequired — имена свойств из x-response-required расширения:
-	// поля, которые required в Response-модели при USE_REQUIRED_V2.
-	ResponseRequired []string
-	// Optional — имена свойств из x-optional расширения: поля, для которых
-	// генератор при GOLANG_USE_OPTIONAL использует optional.Optional[T]
-	// вместо *T (трёхсостояние: absent / null / value).
-	Optional []string
 }
 
 // Parse парсит OpenAPI 3.x документ из байтов.
 func Parse(data []byte) (*Document, error) {
-	return parseBytes(data, "")
+	return parseBytes(data, "", nil)
 }
 
 // ParseFile парсит OpenAPI 3.x файл из fsys. path — относительный путь.
@@ -152,5 +142,5 @@ func ParseFile(fsys fs.FS, path string) (*Document, error) {
 		return nil, fmt.Errorf("read spec %q: %w", path, err)
 	}
 
-	return parseBytes(data, path)
+	return parseBytes(data, path, fsys)
 }

@@ -250,12 +250,11 @@ components:
     Pet:
       type: object
       required: [id]
-      x-optional: [name, tag, retries]
       properties:
         id: {type: integer, format: int64}
-        name: {type: string}
-        tag: {type: string}
-        retries: {type: integer, format: int32}
+        name: {type: string, x-optional: true}
+        tag: {type: string, x-optional: true}
+        retries: {type: integer, format: int32, x-optional: true}
 `)
 	pf := oapiparser.ProjectFeatures{UseOptional: oapiparser.ProjectFeature{Value: true}}
 	files := generateFilesWithFeatures(t, doc, pf)
@@ -287,10 +286,9 @@ components:
     Pet:
       type: object
       required: [id]
-      x-optional: [name]
       properties:
         id: {type: integer, format: int64}
-        name: {type: string}
+        name: {type: string, x-optional: true}
 `)
 	// Флаг выключен — x-optional игнорируется, поле рендерится как *T.
 	files := generateFiles(t, doc)
@@ -1232,7 +1230,7 @@ func TestSchemaTreeHasDefaults_CyclicRefTerminates(t *testing.T) {
 }
 
 // requiredV2Spec — общий spec для тестов USE_REQUIRED_V2:
-// required: [id], x-request-required: [id, name], x-response-required: [id].
+// required: [id]; id и name помечены x-request-required, id — x-response-required.
 // id readOnly, name writeOnly, label regular.
 const requiredV2Spec = `
 openapi: 3.0.3
@@ -1243,11 +1241,9 @@ components:
     Pet:
       type: object
       required: [id]
-      x-request-required: [id, name]
-      x-response-required: [id]
       properties:
-        id: {type: integer, format: int64, readOnly: true}
-        name: {type: string, writeOnly: true}
+        id: {type: integer, format: int64, readOnly: true, x-request-required: true, x-response-required: true}
+        name: {type: string, writeOnly: true, x-request-required: true}
         label: {type: string}
 `
 
@@ -1296,8 +1292,8 @@ func TestGenerate_UseRequiredV2_Off(t *testing.T) {
 }
 
 func TestGenerate_UseRequiredV2_Mono(t *testing.T) {
-	// Без split, UseRequiredV2=true. Поле в обоих x-* списках → required.
-	// Поле только в одном → optional.
+	// Без split, UseRequiredV2=true. Поле с обоими x-* маркерами → required.
+	// Поле только с одним → optional.
 	doc := parseSpec(t, `
 openapi: 3.0.3
 info: {title: t, version: '1'}
@@ -1306,11 +1302,9 @@ components:
   schemas:
     Pet:
       type: object
-      x-request-required: [id, name]
-      x-response-required: [id]
       properties:
-        id: {type: integer}
-        name: {type: string}
+        id: {type: integer, x-request-required: true, x-response-required: true}
+        name: {type: string, x-request-required: true}
 `)
 	pf := oapiparser.ProjectFeatures{
 		UseRequiredV2: oapiparser.ProjectFeature{Value: true},
@@ -1318,10 +1312,10 @@ components:
 	files := generateFilesWithFeatures(t, doc, pf)
 	got := string(files["model/pet.gen.go"])
 
-	// id in both x-* lists → required (no pointer, no omitempty).
-	assert.True(t, containsCollapsed(got, `ID int`), "id (in both lists) must be required")
-	// name only in x-request-required → optional (pointer).
-	assert.True(t, containsCollapsed(got, `Name *string`), "name (only in request list) must be optional")
+	// id с обоими x-* маркерами → required (no pointer, no omitempty).
+	assert.True(t, containsCollapsed(got, `ID int`), "id (both markers) must be required")
+	// name только с x-request-required → optional (pointer).
+	assert.True(t, containsCollapsed(got, `Name *string`), "name (only request marker) must be optional")
 }
 
 // TestGenerate_UseRequiredV2_Compiles — end-to-end проверка, что

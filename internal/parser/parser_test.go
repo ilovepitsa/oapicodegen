@@ -194,6 +194,52 @@ func TestParseFile_FromMapFS(t *testing.T) {
 	assert.Equal(t, "Petstore", doc.Info.Title)
 }
 
+// TestParseFile_CrossFileRef проверяет, что ParseFile резолвит cross-file
+// $ref через переданный fs.FS. spec.yaml ссылается на pet.yaml#/Pet;
+// LocalFS от MapFS должен использоваться rolodex'ом libopenpi.
+func TestParseFile_CrossFileRef(t *testing.T) {
+	spec := `openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    PetList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: {$ref: 'pet.yaml#/components/schemas/Pet'}
+`
+	petYaml := `openapi: 3.0.3
+info: {title: pets, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [id]
+      properties:
+        id: {type: integer, format: int64}
+        name: {type: string}
+`
+
+	fsys := fstest.MapFS{
+		"spec.yaml": &fstest.MapFile{Data: []byte(spec)},
+		"pet.yaml":  &fstest.MapFile{Data: []byte(petYaml)},
+	}
+	doc, err := ParseFile(fsys, "spec.yaml")
+	require.NoError(t, err)
+
+	petList := findSchema(t, doc, "PetList")
+	require.NotNil(t, petList)
+	require.NotEmpty(t, petList.Properties)
+	itemsProp := findProperty(t, petList, "items")
+	require.NotNil(t, itemsProp.Schema)
+	require.NotNil(t, itemsProp.Schema.Items, "array items schema must be resolved")
+	assert.Equal(t, "Pet", itemsProp.Schema.Items.Name, "cross-file $ref must resolve to Pet schema")
+	assert.NotEmpty(t, itemsProp.Schema.Items.Properties, "Pet properties must be resolved from pet.yaml")
+}
+
 func TestParse_InvalidYAML_ReturnsError(t *testing.T) {
 	_, err := Parse([]byte("openapi: 3.0.3\n  bad: indent: here\n"))
 	require.Error(t, err)

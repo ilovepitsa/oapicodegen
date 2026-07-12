@@ -3,22 +3,40 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"path"
 
 	"github.com/pb33f/libopenapi"
 	"github.com/pb33f/libopenapi/datamodel"
 	highv3 "github.com/pb33f/libopenapi/datamodel/high/v3"
+	"github.com/pb33f/libopenapi/index"
 )
 
 // parseBytes парсит OpenAPI 3.x документ из байтов. location — путь для
-// разрешения относительных $ref (пустая строка = без BasePath).
-func parseBytes(data []byte, location string) (*Document, error) {
+// разрешения относительных $ref (пустая строка = без BasePath). fsys —
+// filesystem для резолвинга cross-file $ref (nil = OS filesystem по умолчанию).
+//
+// fsys оборачивается в *index.LocalFS libopenpi, потому что rolodex требует
+// реализации RolodexFS (plain fs.FS отвергается с "is not a RolodexFS").
+func parseBytes(data []byte, location string, fsys fs.FS) (*Document, error) {
 	cfg := &datamodel.DocumentConfiguration{
 		AllowFileReferences:     true,
 		ExtractRefsSequentially: true,
 	}
 	if location != "" {
 		cfg.BasePath = path.Dir(location)
+	}
+
+	if fsys != nil {
+		localFS, err := index.NewLocalFSWithConfig(&index.LocalFSConfig{
+			BaseDirectory: cfg.BasePath,
+			DirFS:         fsys,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("parser: wrap local fs: %w", err)
+		}
+
+		cfg.LocalFS = localFS
 	}
 
 	doc, err := libopenapi.NewDocumentWithConfiguration(data, cfg)

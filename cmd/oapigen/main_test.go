@@ -28,6 +28,30 @@ func TestRun_GeneratesFiles(t *testing.T) {
 	assert.NotEmpty(t, files, "expected generated files")
 }
 
+// TestRun_CrossFileRef проверяет, что CLI резолвит cross-file $ref через
+// каталог спеки: spec.yaml ссылается на pet.yaml#/components/schemas/Pet.
+func TestRun_CrossFileRef(t *testing.T) {
+	tmp := t.TempDir()
+	spec := filepath.Join(tmp, "spec.yaml")
+	require.NoError(t, os.WriteFile(spec, []byte(crossFileSpec), 0o644))
+
+	petYaml := filepath.Join(tmp, "pet.yaml")
+	require.NoError(t, os.WriteFile(petYaml, []byte(petSpec), 0o644))
+
+	output := filepath.Join(tmp, "gen")
+	stderr := os.NewFile(0, "/dev/null")
+	err := run([]string{
+		"-input", spec,
+		"-output", output,
+		"-import-prefix", "github.com/foo/bar/gen",
+	}, stderr)
+	require.NoError(t, err)
+
+	files, err := filepath.Glob(filepath.Join(output, "*", "*.gen.go"))
+	require.NoError(t, err)
+	assert.NotEmpty(t, files, "expected generated files despite cross-file $ref")
+}
+
 func TestRun_DryRunNoFiles(t *testing.T) {
 	tmp := t.TempDir()
 	spec := filepath.Join(tmp, "spec.yaml")
@@ -100,6 +124,32 @@ components:
   schemas:
     Pet: {type: object, properties: {name: {type: string}}}
     Pets: {type: array, items: {$ref: '#/components/schemas/Pet'}}
+`
+
+const crossFileSpec = `openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    PetList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: {$ref: 'pet.yaml#/components/schemas/Pet'}
+`
+
+const petSpec = `openapi: 3.0.3
+info: {title: pets, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [id]
+      properties:
+        id: {type: integer, format: int64}
+        name: {type: string}
 `
 
 const validGlobalFlagsConfig = `- name: GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS
