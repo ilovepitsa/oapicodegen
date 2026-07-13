@@ -2,7 +2,19 @@
 
 package model
 
+import (
+	"fmt"
+	validator "nschugorev/oapigenerator/pkg/validator"
+)
+
 type CreatedEvent struct {
 	Type   string `json:"type" yaml:"type"`
 	ItemID string `json:"itemId" yaml:"itemId"`
+}
+
+func (x CreatedEvent) ValidateOwn(reg *validator.Registry) error {
+	if len(x.ItemID) < 1 {
+		return fmt.Errorf("field ItemID: must be >= 1")
+	}
+	return nil
 }

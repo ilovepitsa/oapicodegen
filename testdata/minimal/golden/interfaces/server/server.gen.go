@@ -11,5 +11,6 @@ type Server interface {
 	ListItems(ctx context.Context, req *client.ListItemsRequest) (*client.ListItemsResponse, error)
 	CreateItem(ctx context.Context, req *client.CreateItemRequest) (*client.CreateItemResponse, error)
 	GetItem(ctx context.Context, req *client.GetItemRequest) (*client.GetItemResponse, error)
+	UpdateItem(ctx context.Context, req *client.UpdateItemRequest) (*client.UpdateItemResponse, error)
 	DeleteItem(ctx context.Context, req *client.DeleteItemRequest) (*client.DeleteItemResponse, error)
 }

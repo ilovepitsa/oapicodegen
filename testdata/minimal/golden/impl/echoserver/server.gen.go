@@ -42,6 +42,7 @@ func (s *ServerHTTP) Register(e *echo.Echo) {
 	e.GET("/items", s.listItems)
 	e.POST("/items", s.createItem)
 	e.GET("/items/:id", s.getItem)
+	e.PUT("/items/:id", s.updateItem)
 	e.DELETE("/items/:id", s.deleteItem)
 }
 
@@ -98,6 +99,27 @@ func (s *ServerHTTP) getItem(c echo.Context) error {
 	}
 	if resp.Response404 {
 		return c.NoContent(404)
+	}
+	return c.NoContent(resp.Code)
+}
+
+func (s *ServerHTTP) updateItem(c echo.Context) error {
+	req := &apiclient.UpdateItemRequest{}
+	if err := bindBody(c, &req.Body); err != nil {
+		return err
+	}
+	if err := c.Bind(req); err != nil {
+		return err
+	}
+	resp, err := s.impl.UpdateItem(c.Request().Context(), req)
+	if err != nil {
+		return err
+	}
+	if resp.Response200 != nil {
+		return c.JSON(200, resp.Response200)
+	}
+	if resp.Response400 {
+		return c.NoContent(400)
 	}
 	return c.NoContent(resp.Code)
 }

@@ -42,6 +42,20 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/Item'}
         '404': {description: not found}
+    put:
+      operationId: updateItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ItemCreate'}
+      responses:
+        '200':
+          description: updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Item'}
+        '400': {description: bad request}
     delete:
       operationId: deleteItem
       parameters:
@@ -53,19 +67,33 @@ components:
     Item:
       type: object
       required: [id, name, kind]
+      x-validations: ["app.ItemConsistency"]
       properties:
-        id: {type: string}
-        name: {type: string}
+        id:
+          type: string
+          x-validations: ["Size >=1"]
+        name:
+          type: string
+          x-validations: ["Size >=1"]
         kind: {$ref: '#/components/schemas/Kind'}
-        tag: {type: string, nullable: true}
+        tag:
+          type: string
+          nullable: true
+          x-validations: ["Size <=50"]
         metadata: {type: object, additionalProperties: {type: string}}
     ItemCreate:
       type: object
       required: [name, kind]
+      x-validations: ["app.ItemCreateConsistency"]
       properties:
-        name: {type: string}
+        name:
+          type: string
+          x-validations: ["Size >=1", "app.NonEmptyName"]
         kind: {$ref: '#/components/schemas/Kind'}
-        tag: {type: string, nullable: true}
+        tag:
+          type: string
+          nullable: true
+          x-validations: ["Size <=50", "Immutable"]
     Items:
       type: array
       items: {$ref: '#/components/schemas/Item'}
@@ -81,10 +109,14 @@ components:
       required: [type, itemId]
       properties:
         type: {type: string, enum: [created]}
-        itemId: {type: string}
+        itemId:
+          type: string
+          x-validations: ["Size >=1"]
     DeletedEvent:
       type: object
       required: [type, itemId]
       properties:
         type: {type: string, enum: [deleted]}
-        itemId: {type: string}
+        itemId:
+          type: string
+          x-validations: ["Size >=1"]

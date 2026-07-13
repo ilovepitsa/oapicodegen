@@ -11,6 +11,7 @@ type Client interface {
 	ListItems(ctx context.Context, req *ListItemsRequest) (*ListItemsResponse, error)
 	CreateItem(ctx context.Context, req *CreateItemRequest) (*CreateItemResponse, error)
 	GetItem(ctx context.Context, req *GetItemRequest) (*GetItemResponse, error)
+	UpdateItem(ctx context.Context, req *UpdateItemRequest) (*UpdateItemResponse, error)
 	DeleteItem(ctx context.Context, req *DeleteItemRequest) (*DeleteItemResponse, error)
 }
 
@@ -43,6 +44,16 @@ type GetItemResponse struct {
 	Code        int
 	Response200 *model.Item
 	Response404 bool
+}
+
+type UpdateItemRequest struct {
+	Body model.ItemCreate `json:"-"`
+}
+
+type UpdateItemResponse struct {
+	Code        int
+	Response200 *model.Item
+	Response400 bool
 }
 
 type DeleteItemRequest struct {

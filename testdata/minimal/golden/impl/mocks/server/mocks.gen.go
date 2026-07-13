@@ -70,6 +70,19 @@ func (mr *MockServerMockRecorder) GetItem(arg0, arg1 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetItem", reflect.TypeOf((*MockServer)(nil).GetItem), arg0, arg1)
 }
 
+func (m *MockServer) UpdateItem(arg0 context.Context, arg1 *apiclient.UpdateItemRequest) (*apiclient.UpdateItemResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateItem", arg0, arg1)
+	ret0, _ := ret[0].(*apiclient.UpdateItemResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (mr *MockServerMockRecorder) UpdateItem(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateItem", reflect.TypeOf((*MockServer)(nil).UpdateItem), arg0, arg1)
+}
+
 func (m *MockServer) DeleteItem(arg0 context.Context, arg1 *apiclient.DeleteItemRequest) (*apiclient.DeleteItemResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteItem", arg0, arg1)

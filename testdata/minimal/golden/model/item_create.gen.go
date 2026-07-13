@@ -2,8 +2,87 @@
 
 package model
 
+import (
+	"fmt"
+	optional "nschugorev/oapigenerator/pkg/optional"
+	validator "nschugorev/oapigenerator/pkg/validator"
+)
+
 type ItemCreate struct {
 	Name string  `json:"name" yaml:"name"`
 	Kind Kind    `json:"kind" yaml:"kind"`
 	Tag  *string `json:"tag,omitempty" yaml:"tag,omitempty"`
+}
+
+func (x ItemCreate) ValidateOwn(reg *validator.Registry) error {
+	if len(x.Name) < 1 {
+		return fmt.Errorf("field Name: must be >= 1")
+	}
+	v, ok := reg.Get("app.NonEmptyName")
+	if !ok {
+		return fmt.Errorf("validator %q not registered", "app.NonEmptyName")
+	}
+	if err := v.Validate(x.Name); err != nil {
+		return fmt.Errorf("field Name: %w", err)
+	}
+	if x.Tag != nil && len(*x.Tag) > 50 {
+		return fmt.Errorf("field Tag: must be <= 50")
+	}
+	v, ok := reg.Get("app.ItemCreateConsistency")
+	if !ok {
+		return fmt.Errorf("validator %q not registered", "app.ItemCreateConsistency")
+	}
+	if err := v.Validate(x); err != nil {
+		return err
+	}
+	return nil
+}
+
+type UpdateItemCreate struct {
+	Name optional.Optional[string] `json:"name" yaml:"name"`
+	Kind optional.Optional[Kind]   `json:"kind" yaml:"kind"`
+}
+
+// GetName возвращает значение поля Name и флаг presence.
+// Семантика: (nil, false) — поле не задано; (nil, true) — задано как null;
+// (&value, true) — задано значением.
+func (u *UpdateItemCreate) GetName() (*string, bool) {
+	if !u.Name.IsSet() {
+		return nil, false
+	}
+	if u.Name.IsNil() {
+		return nil, true
+	}
+	v := u.Name.Value()
+	return &v, true
+}
+
+// GetKind возвращает значение поля Kind и флаг presence.
+// Семантика: (nil, false) — поле не задано; (nil, true) — задано как null;
+// (&value, true) — задано значением.
+func (u *UpdateItemCreate) GetKind() (*Kind, bool) {
+	if !u.Kind.IsSet() {
+		return nil, false
+	}
+	if u.Kind.IsNil() {
+		return nil, true
+	}
+	v := u.Kind.Value()
+	return &v, true
+}
+
+func (x UpdateItemCreate) ValidateOwn(reg *validator.Registry) error {
+	if x.Name.IsSet() && !x.Name.IsNil() && len(x.Name.Value()) < 1 {
+		return fmt.Errorf("field Name: must be >= 1")
+	}
+	if x.Name.IsSet() && !x.Name.IsNil() {
+		v, ok := reg.Get("app.NonEmptyName")
+		if !ok {
+			return fmt.Errorf("validator %q not registered", "app.NonEmptyName")
+		}
+		if err := v.Validate(x.Name.Value()); err != nil {
+			return fmt.Errorf("field Name: %w", err)
+		}
+	}
+	return nil
 }

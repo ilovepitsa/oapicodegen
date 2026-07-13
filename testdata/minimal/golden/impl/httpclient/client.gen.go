@@ -130,6 +130,40 @@ func (c *Client) GetItem(ctx context.Context, req *apiclient.GetItemRequest) (*a
 	return result, nil
 }
 
+func (c *Client) UpdateItem(ctx context.Context, req *apiclient.UpdateItemRequest) (*apiclient.UpdateItemResponse, error) {
+	path := "/items/{id}"
+	u := *c.http.ServerURL()
+	u.Path = strings.TrimSuffix(u.Path, "/") + path
+	body, err := json.Marshal(req.Body)
+	if err != nil {
+		return nil, fmt.Errorf("encode body: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "PUT", u.String(), bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(ctx, httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	result := &apiclient.UpdateItemResponse{Code: resp.StatusCode}
+	switch resp.StatusCode {
+	case 200:
+		var v model.Item
+		if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+			return nil, fmt.Errorf("decode 200: %w", err)
+		}
+		result.Response200 = &v
+	case 400:
+		result.Response400 = true
+	default:
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+	return result, nil
+}
+
 func (c *Client) DeleteItem(ctx context.Context, req *apiclient.DeleteItemRequest) (*apiclient.DeleteItemResponse, error) {
 	path := "/items/{id}"
 	path = strings.Replace(path, "{id}", url.PathEscape(fmt.Sprint(req.ID)), 1)

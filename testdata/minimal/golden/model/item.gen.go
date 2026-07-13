@@ -2,10 +2,35 @@
 
 package model
 
+import (
+	"fmt"
+	validator "nschugorev/oapigenerator/pkg/validator"
+)
+
 type Item struct {
 	ID       string            `json:"id" yaml:"id"`
 	Name     string            `json:"name" yaml:"name"`
 	Kind     Kind              `json:"kind" yaml:"kind"`
 	Tag      *string           `json:"tag,omitempty" yaml:"tag,omitempty"`
 	Metadata map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+}
+
+func (x Item) ValidateOwn(reg *validator.Registry) error {
+	if len(x.ID) < 1 {
+		return fmt.Errorf("field ID: must be >= 1")
+	}
+	if len(x.Name) < 1 {
+		return fmt.Errorf("field Name: must be >= 1")
+	}
+	if x.Tag != nil && len(*x.Tag) > 50 {
+		return fmt.Errorf("field Tag: must be <= 50")
+	}
+	v, ok := reg.Get("app.ItemConsistency")
+	if !ok {
+		return fmt.Errorf("validator %q not registered", "app.ItemConsistency")
+	}
+	if err := v.Validate(x); err != nil {
+		return err
+	}
+	return nil
 }

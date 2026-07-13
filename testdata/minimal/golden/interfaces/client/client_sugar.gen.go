@@ -49,6 +49,17 @@ func (x *ClientSugared) GetItem(ctx context.Context, req *GetItemRequest) (*mode
 	return nil, fmt.Errorf("unexpected status: %d", resp.Code)
 }
 
+func (x *ClientSugared) UpdateItem(ctx context.Context, req *UpdateItemRequest) (*model.Item, error) {
+	resp, err := x.impl.UpdateItem(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Response200 != nil {
+		return resp.Response200, nil
+	}
+	return nil, fmt.Errorf("unexpected status: %d", resp.Code)
+}
+
 func (x *ClientSugared) DeleteItem(ctx context.Context, req *DeleteItemRequest) error {
 	resp, err := x.impl.DeleteItem(ctx, req)
 	if err != nil {
