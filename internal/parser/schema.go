@@ -14,6 +14,15 @@ const (
 	extRequestRequired  = "x-request-required"
 	extResponseRequired = "x-response-required"
 	extOptional         = "x-optional"
+	extValidations      = "x-validations"
+
+	// extValidationImmutable — значение в списке x-validations, помечающее
+	// property как Immutable. Используется update-marker'ом.
+	extValidationImmutable = "Immutable"
+
+	// nameFieldName — имя поля, которое update-marker сохраняет даже если
+	// оно Immutable (на верхнем уровне объекта).
+	nameFieldName = "name"
 )
 
 // schemaFromProxy конвертирует *highbase.SchemaProxy в наш *Schema.
@@ -92,6 +101,7 @@ func fillSchema(s *Schema, sh *highbase.Schema) {
 				RequestRequired:  readBoolExtension(propHigh, extRequestRequired),
 				ResponseRequired: readBoolExtension(propHigh, extResponseRequired),
 				Optional:         readBoolExtension(propHigh, extOptional),
+				Immutable:        hasXValidation(propHigh, extValidationImmutable),
 			})
 		}
 	}
@@ -189,4 +199,25 @@ func readBoolExtension(sh *highbase.Schema, key string) bool {
 	}
 
 	return b
+}
+
+// hasXValidation проверяет, входит ли marker в список x-validations свойства.
+// x-validations — sequence-узел из scalar-строк; пример: [Immutable, Required].
+// Возвращает false, если расширение отсутствует или не sequence.
+func hasXValidation(sh *highbase.Schema, marker string) bool {
+	if sh == nil || sh.Extensions == nil {
+		return false
+	}
+
+	node := sh.Extensions.GetOrZero(extValidations)
+	if node == nil || node.Kind != yaml.SequenceNode {
+		return false
+	}
+
+	var rules []string
+	if err := node.Decode(&rules); err != nil {
+		return false
+	}
+
+	return slices.Contains(rules, marker)
 }

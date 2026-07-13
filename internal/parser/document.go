@@ -100,6 +100,13 @@ type Property struct {
 	// Используется при GOLANG_USE_OPTIONAL для генерации
 	// optional.Optional[T] вместо *T.
 	Optional bool
+	// Immutable true, если у property в spec стоит
+	// x-validations: [Immutable]. Используется update-marker'ом: такие
+	// поля не помечаются IsUsedInUpdate (кроме поля с именем "name").
+	Immutable bool
+	// IsUsedInUpdate true, если свойство участвует в PATCH/PUT-запросе.
+	// Ставится update-marker'ом (см. update_marker.go).
+	IsUsedInUpdate bool
 }
 
 // Schema — минимальное представление JSON Schema / OpenAPI Schema.
@@ -128,6 +135,9 @@ type Schema struct {
 	// AdditionalPropertiesFalse true, если в spec указано
 	// additionalProperties: false — закрытая структура без доп. полей.
 	AdditionalPropertiesFalse bool
+	// IsUsedInUpdate true, если схема участвует в PATCH/PUT request body
+	// какой-то операции. Ставится update-marker'ом (см. update_marker.go).
+	IsUsedInUpdate bool
 }
 
 // Parse парсит OpenAPI 3.x документ из байтов.

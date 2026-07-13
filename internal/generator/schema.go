@@ -13,6 +13,10 @@ func (g *Generator) schemaFile(sh *parser.Schema) codegen.File {
 	m := g.newTypeMapper("model")
 	body := g.renderSchema(sh, m)
 
+	if sh.IsUsedInUpdate {
+		body = append(body, g.renderUpdateStruct(sh, m, goName(sh.Name))...)
+	}
+
 	return g.factory.Create(&gogen.File{
 		Package: "model",
 		Imports: m.imports,
@@ -102,6 +106,68 @@ func (g *Generator) renderFilteredStruct(
 	}
 }
 
+// renderUpdateStruct рендерит Update<Name> — вариант схемы для PUT/PATCH
+// request body. Содержит только свойства с IsUsedInUpdate=true (фильтр
+// update-marker'а). Каждое поле оборачивается в optional.Optional[T] —
+// это даёт PATCH-семантику: отличаем "поле не задано" от "поле = null" от
+// "поле = значение".
+//
+// mode typeMapper'а выставляется в Request при включённом split, чтобы
+// $ref на splittable-схемы разрешались в <Name>Request (update-тело —
+// это request-контекст). Без split mode="" — refs разрешаются в базовое
+// имя.
+//
+// v1-ограничение: marker не помечает nested $ref / array items, поэтому
+// Update-суффикс к ссылкам не применяется — refs указывают на исходные
+// схемы (или их Request-вариант при split).
+func (g *Generator) renderUpdateStruct(sh *parser.Schema, m *typeMapper, name string) []byte {
+	w := codegen.NewBufferWriter()
+
+	if sh.Description != "" {
+		writeDocComment(w, "Update"+name+" — PATCH/PUT variant of "+name+".")
+	}
+
+	if g.features.SplitRequestResponse.Value {
+		m.mode = modeRequest
+	} else {
+		m.mode = ""
+	}
+
+	w.Print("type Update", name, " struct {\n")
+
+	for _, p := range sh.Properties {
+		if !p.IsUsedInUpdate {
+			continue
+		}
+
+		g.renderUpdateField(w, p, m)
+	}
+
+	w.Print("}\n\n")
+
+	return w.Content()
+}
+
+// renderUpdateField рендерит поле Update<Name>-структуры. Все поля
+// оборачиваются в optional.Optional[T] безусловно — независимо от флага
+// GOLANG_USE_OPTIONAL и метки p.Optional. Теги json/yaml без omitempty:
+// presence определяется самой обёрткой Optional.
+func (g *Generator) renderUpdateField(w *codegen.BufferWriter, p *parser.Property, m *typeMapper) { //nolint:lll // struct tag line
+	if p.Schema != nil && p.Schema.Description != "" {
+		writeDocComment(w, p.Schema.Description)
+	}
+
+	if p.Schema != nil && p.Schema.Deprecated {
+		w.Print("// Deprecated: schema marks this field as deprecated\n")
+	}
+
+	fieldName := goName(p.Name)
+	fieldType := m.goType(p.Schema)
+
+	m.addImport(optionalPkg, "optional")
+	w.Print(fieldName, " optional.Optional[", fieldType, "] `json:\"", p.Name, "\" yaml:\"", p.Name, "\"`\n") //nolint:lll // struct tag line
+}
+
 // filteredSchemaHasDefaults сообщает, есть ли default хотя бы у одного
 // property, проходящего фильтр keep, или у вложенной object-схемы через
 // $ref. Используется для решения, генерировать ли SetDefaults для
@@ -135,7 +201,7 @@ func (g *Generator) renderStruct(w *codegen.BufferWriter, sh *parser.Schema, m *
 	}
 }
 
-func (g *Generator) renderField(w *codegen.BufferWriter, p *parser.Property, m *typeMapper) {
+func (g *Generator) renderField(w *codegen.BufferWriter, p *parser.Property, m *typeMapper) { //nolint:lll // function signature
 	if p.Schema != nil && p.Schema.Description != "" {
 		writeDocComment(w, p.Schema.Description)
 	}

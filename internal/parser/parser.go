@@ -76,5 +76,7 @@ func convertDocument(m *highv3.Document) *Document {
 
 	extractPaths(out, m.Paths)
 
+	markUpdateSchemas(out)
+
 	return out
 }

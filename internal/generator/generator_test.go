@@ -2011,3 +2011,283 @@ func mustReadFile(t *testing.T, p string) []byte {
 
 	return data
 }
+
+// TestGenerate_UpdateStruct проверяет, что для схемы, использованной в
+// PUT/PATCH request body, генерируется Update<Name> с полями, помеченными
+// IsUsedInUpdate. ReadOnly и Immutable (кроме name) пропускаются.
+// Каждое поле обёрнуто в optional.Optional[T], теги без omitempty.
+func TestGenerate_UpdateStruct(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets/{id}:
+    put:
+      operationId: updatePet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '200': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: integer, format: int64, readOnly: true}
+        name: {type: string}
+        tag: {type: string, x-validations: [Immutable]}
+        label: {type: string}
+`)
+	files := generateFiles(t, doc)
+
+	got := string(files["model/pet.gen.go"])
+
+	// UpdatePet существует.
+	assert.True(t, containsCollapsed(got, "type UpdatePet struct {"))
+
+	// Поля: name и label (IsUsedInUpdate=true).
+	assert.True(t, containsCollapsed(got, "Name optional.Optional[string] `json:\"name\" yaml:\"name\"`"))
+	assert.True(t, containsCollapsed(got, "Label optional.Optional[string] `json:\"label\" yaml:\"label\"`"))
+
+	// ReadOnly id и Immutable tag не входят в UpdatePet.
+	// Проверяем, что UpdatePet-блок не содержит Id/Tag. Извлечём блок.
+	updateBlock := extractStructBlock(t, got, "UpdatePet")
+	assert.NotContains(t, updateBlock, "Id")
+	assert.NotContains(t, updateBlock, "Tag")
+
+	// import optional-пакета добавлен.
+	assert.Contains(t, got, `optional "nschugorev/oapigenerator/pkg/optional"`)
+
+	// Сгенерированный файл валиден как Go.
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet.gen.go", files["model/pet.gen.go"], parser.AllErrors)
+	require.NoError(t, err, "pet.gen.go should parse as valid Go")
+}
+
+// TestGenerate_UpdateStruct_PATCH проверяет, что PATCH тоже триггерит
+// генерацию Update<Name>.
+func TestGenerate_UpdateStruct_PATCH(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets/{id}:
+    patch:
+      operationId: patchPet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '200': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	files := generateFiles(t, doc)
+
+	got := string(files["model/pet.gen.go"])
+	assert.True(t, containsCollapsed(got, "type UpdatePet struct {"))
+	assert.True(t, containsCollapsed(got, "Name optional.Optional[string]"))
+}
+
+// TestGenerate_UpdateStruct_NotMarked проверяет, что схема, не
+// используемая в PUT/PATCH, не получает Update-вариант.
+func TestGenerate_UpdateStruct_NotMarked(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '200': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	files := generateFiles(t, doc)
+
+	got := string(files["model/pet.gen.go"])
+	assert.NotContains(t, got, "UpdatePet")
+}
+
+// TestGenerate_UpdateStruct_ImmutableNameKept проверяет, что поле с
+// именем "name" входит в Update<Name>, даже если оно Immutable.
+func TestGenerate_UpdateStruct_ImmutableNameKept(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets/{id}:
+    put:
+      operationId: updatePet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '200': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string, x-validations: [Immutable]}
+`)
+	files := generateFiles(t, doc)
+
+	got := string(files["model/pet.gen.go"])
+	assert.True(t, containsCollapsed(got, "Name optional.Optional[string]"))
+}
+
+// TestGenerate_UpdateStruct_NoOptionalFlag проверяет, что поля Update<Name>
+// оборачиваются в optional.Optional[T] даже при выключенном флаге
+// GOLANG_USE_OPTIONAL — update-режим требует Optional безусловно.
+func TestGenerate_UpdateStruct_NoOptionalFlag(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets/{id}:
+    put:
+      operationId: updatePet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '200': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	// Флаги не заданы — UseOptional по умолчанию false.
+	files := generateFiles(t, doc)
+
+	got := string(files["model/pet.gen.go"])
+	assert.True(t, containsCollapsed(got, "Name optional.Optional[string]"))
+	assert.Contains(t, got, `optional "nschugorev/oapigenerator/pkg/optional"`)
+}
+
+// TestGenerate_UpdateStruct_RefToOtherSchema проверяет, что $ref на
+// другую схему в update-поле разрешается базовым именем (без Update
+// суффикса — marker v1 не помечает nested).
+func TestGenerate_UpdateStruct_RefToOtherSchema(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets/{id}:
+    put:
+      operationId: updatePet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '200': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+        owner: {$ref: '#/components/schemas/Owner'}
+    Owner:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	files := generateFiles(t, doc)
+
+	got := string(files["model/pet.gen.go"])
+	// $ref на Owner разрешается базовым именем (не UpdateOwner).
+	assert.True(t, containsCollapsed(got, "Owner optional.Optional[Owner]"))
+}
+
+// TestGenerate_UpdateStruct_SplitMode проверяет, что при включённом
+// GOLANG_SPLIT_REQUEST_RESPONSE $ref из Update<Name> на splittable-схему
+// разрешается в <Name>Request.
+func TestGenerate_UpdateStruct_SplitMode(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets/{id}:
+    put:
+      operationId: updatePet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '200': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+        tag: {$ref: '#/components/schemas/Tag'}
+    Tag:
+      type: object
+      properties:
+        color: {type: string}
+`)
+	pf := oapiparser.ProjectFeatures{SplitRequestResponse: oapiparser.ProjectFeature{Value: true}}
+	files := generateFilesWithFeatures(t, doc, pf)
+
+	got := string(files["model/pet.gen.go"])
+	// $ref на Tag (splittable) в update-контексте → TagRequest.
+	assert.True(t, containsCollapsed(got, "Tag optional.Optional[TagRequest]"))
+}
+
+// extractStructBlock возвращает содержимое структуры с заданным именем
+// (между "type <name> struct {" и следующей "}" на отдельной строке).
+func extractStructBlock(t *testing.T, src, structName string) string {
+	t.Helper()
+
+	startMarker := "type " + structName + " struct {"
+	startIdx := strings.Index(src, startMarker)
+	require.GreaterOrEqualf(t, startIdx, 0, "struct %s not found in source", structName)
+
+	bodyStart := startIdx + len(startMarker)
+	depth := 1
+	i := bodyStart
+
+	for i < len(src) && depth > 0 {
+		switch src[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+		}
+		i++
+	}
+
+	return src[startIdx:i]
+}
