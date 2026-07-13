@@ -117,6 +117,9 @@ func (g *Generator) renderFilteredStruct(
 // это request-контекст). Без split mode="" — refs разрешаются в базовое
 // имя.
 //
+// Тип поля берётся через m.baseType (а не m.goType) — nullable-указатель
+// не добавляется, потому что Optional уже различает null через IsNil.
+//
 // v1-ограничение: marker не помечает nested $ref / array items, поэтому
 // Update-суффикс к ссылкам не применяется — refs указывают на исходные
 // схемы (или их Request-вариант при split).
@@ -145,6 +148,8 @@ func (g *Generator) renderUpdateStruct(sh *parser.Schema, m *typeMapper, name st
 
 	w.Print("}\n\n")
 
+	g.renderUpdateGetters(w, sh, m, name)
+
 	return w.Content()
 }
 
@@ -162,10 +167,47 @@ func (g *Generator) renderUpdateField(w *codegen.BufferWriter, p *parser.Propert
 	}
 
 	fieldName := goName(p.Name)
-	fieldType := m.goType(p.Schema)
+	fieldType := m.baseType(p.Schema)
 
 	m.addImport(optionalPkg, "optional")
 	w.Print(fieldName, " optional.Optional[", fieldType, "] `json:\"", p.Name, "\" yaml:\"", p.Name, "\"`\n") //nolint:lll // struct tag line
+}
+
+// renderUpdateGetters рендерит Get<Field>() (*T, bool) методы для каждого
+// поля Update<Name>. Семантика:
+//   - !IsSet() → (nil, false) — поле не в запросе, не меняем.
+//   - IsSet() && IsNil() → (nil, true) — пользователь прислал null, чистим.
+//   - IsSet() && !IsNil() → (&value, true) — новое значение.
+//
+// T берётся из baseType (без nullable-указателя) — поле уже Optional[T].
+func (g *Generator) renderUpdateGetters(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) { //nolint:lll // function signature
+	for _, p := range sh.Properties {
+		if !p.IsUsedInUpdate {
+			continue
+		}
+
+		g.renderUpdateGetter(w, p, m, name)
+	}
+}
+
+func (g *Generator) renderUpdateGetter(w *codegen.BufferWriter, p *parser.Property, m *typeMapper, name string) { //nolint:lll // function signature
+	fieldName := goName(p.Name)
+	fieldType := m.baseType(p.Schema)
+	getterName := "Get" + fieldName
+
+	w.Print("// ", getterName, " возвращает значение поля ", fieldName, " и флаг presence.\n")
+	w.Print("// Семантика: (nil, false) — поле не задано; (nil, true) — задано как null;\n")
+	w.Print("// (&value, true) — задано значением.\n")
+	w.Print("func (u *Update", name, ") ", getterName, "() (*", fieldType, ", bool) {\n")
+	w.Print("\tif !u.", fieldName, ".IsSet() {\n")
+	w.Print("\t\treturn nil, false\n")
+	w.Print("\t}\n")
+	w.Print("\tif u.", fieldName, ".IsNil() {\n")
+	w.Print("\t\treturn nil, true\n")
+	w.Print("\t}\n")
+	w.Print("\tv := u.", fieldName, ".Value()\n")
+	w.Print("\treturn &v, true\n")
+	w.Print("}\n\n")
 }
 
 // filteredSchemaHasDefaults сообщает, есть ли default хотя бы у одного

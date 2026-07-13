@@ -2266,6 +2266,128 @@ components:
 	assert.True(t, containsCollapsed(got, "Tag optional.Optional[TagRequest]"))
 }
 
+// TestGenerate_UpdateStruct_Getters проверяет, что для каждого поля
+// Update<Name> генерируется Get<Field>() (*T, bool) с правильной
+// сигнатурой и телом (три ветки: not-set / set-to-nil / set-to-value).
+func TestGenerate_UpdateStruct_Getters(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets/{id}:
+    put:
+      operationId: updatePet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '200': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+        age: {type: integer, format: int32}
+        tag: {$ref: '#/components/schemas/Tag'}
+    Tag:
+      type: object
+      properties:
+        color: {type: string}
+`)
+	files := generateFiles(t, doc)
+
+	got := string(files["model/pet.gen.go"])
+
+	// Сигнатуры геттеров для каждого поля.
+	assert.True(t, containsCollapsed(got, "func (u *UpdatePet) GetName() (*string, bool)"))
+	assert.True(t, containsCollapsed(got, "func (u *UpdatePet) GetAge() (*int32, bool)"))
+	assert.True(t, containsCollapsed(got, "func (u *UpdatePet) GetTag() (*Tag, bool)"))
+
+	// Три ветки тела: not-set → (nil, false); set-to-nil → (nil, true); value → (&v, true).
+	assert.True(t, containsCollapsed(got, "if !u.Name.IsSet() {"))
+	assert.True(t, containsCollapsed(got, "return nil, false"))
+	assert.True(t, containsCollapsed(got, "if u.Name.IsNil() {"))
+	assert.True(t, containsCollapsed(got, "return nil, true"))
+	assert.True(t, containsCollapsed(got, "v := u.Name.Value()"))
+	assert.True(t, containsCollapsed(got, "return &v, true"))
+
+	// Валидный Go.
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet.gen.go", files["model/pet.gen.go"], parser.AllErrors)
+	require.NoError(t, err, "pet.gen.go should parse as valid Go")
+}
+
+// TestGenerate_UpdateStruct_Getters_NullableField проверяет, что
+// nullable-поле в Update использует baseType (без дополнительного *),
+// потому что Optional уже различает null через IsNil.
+func TestGenerate_UpdateStruct_Getters_NullableField(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets/{id}:
+    put:
+      operationId: updatePet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '200': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string, nullable: true}
+`)
+	files := generateFiles(t, doc)
+
+	got := string(files["model/pet.gen.go"])
+
+	// Поле — Optional[string], а не Optional[*string].
+	assert.True(t, containsCollapsed(got, "Name optional.Optional[string]"))
+	// Геттер возвращает *string, а не **string.
+	assert.True(t, containsCollapsed(got, "func (u *UpdatePet) GetName() (*string, bool)"))
+}
+
+// TestGenerate_UpdateStruct_Getters_SliceField проверяет геттер для
+// slice-поля: Optional[[]string] → (*[]string, bool).
+func TestGenerate_UpdateStruct_Getters_SliceField(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets/{id}:
+    put:
+      operationId: updatePet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '200': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        tags:
+          type: array
+          items: {type: string}
+`)
+	files := generateFiles(t, doc)
+
+	got := string(files["model/pet.gen.go"])
+	assert.True(t, containsCollapsed(got, "Tags optional.Optional[[]string]"))
+	assert.True(t, containsCollapsed(got, "func (u *UpdatePet) GetTags() (*[]string, bool)"))
+}
+
 // extractStructBlock возвращает содержимое структуры с заданным именем
 // (между "type <name> struct {" и следующей "}" на отдельной строке).
 func extractStructBlock(t *testing.T, src, structName string) string {

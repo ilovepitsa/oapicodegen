@@ -50,6 +50,14 @@ func (o Optional[T]) IsSet() bool {
 	return o.set
 }
 
+// IsNil возвращает true, если значение было явно задано как null (SetToNil
+// или JSON null при UnmarshalJSON). Для не-set состояния возвращает false.
+// Используется update-getter'ами (Get<Field>) чтобы отличать "поле
+// прислали null" от "поле не прислали".
+func (o Optional[T]) IsNil() bool {
+	return o.set && o.isNil
+}
+
 // Value возвращает хранимое значение. Если Optional не set или SetToNil,
 // возвращает zero T.
 func (o Optional[T]) Value() T {

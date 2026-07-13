@@ -426,3 +426,61 @@ func TestOptional_InStruct(t *testing.T) {
 		assert.Equal(t, 5, u.Age.Value())
 	})
 }
+
+func TestOptional_IsNil(t *testing.T) {
+	t.Parallel()
+
+	t.Run("zero not set", func(t *testing.T) {
+		t.Parallel()
+		var o Optional[string]
+		assert.False(t, o.IsNil())
+	})
+
+	t.Run("New value", func(t *testing.T) {
+		t.Parallel()
+		o := New("x")
+		assert.False(t, o.IsNil())
+	})
+
+	t.Run("SetTo value", func(t *testing.T) {
+		t.Parallel()
+		var o Optional[int]
+		o.SetTo(7)
+		assert.False(t, o.IsNil())
+	})
+
+	t.Run("SetToNil", func(t *testing.T) {
+		t.Parallel()
+		var o Optional[int]
+		o.SetToNil()
+		assert.True(t, o.IsSet())
+		assert.True(t, o.IsNil())
+	})
+
+	t.Run("Unset after SetToNil", func(t *testing.T) {
+		t.Parallel()
+		var o Optional[int]
+		o.SetToNil()
+		o.Unset()
+		assert.False(t, o.IsSet())
+		assert.False(t, o.IsNil())
+	})
+
+	t.Run("JSON null → IsNil true", func(t *testing.T) {
+		t.Parallel()
+		var o Optional[string]
+		err := json.Unmarshal([]byte("null"), &o)
+		require.NoError(t, err)
+		assert.True(t, o.IsSet())
+		assert.True(t, o.IsNil())
+	})
+
+	t.Run("JSON value → IsNil false", func(t *testing.T) {
+		t.Parallel()
+		var o Optional[string]
+		err := json.Unmarshal([]byte(`"hi"`), &o)
+		require.NoError(t, err)
+		assert.True(t, o.IsSet())
+		assert.False(t, o.IsNil())
+	})
+}
