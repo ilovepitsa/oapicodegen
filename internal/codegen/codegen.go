@@ -2,7 +2,6 @@
 // File, FileWriter (запись в FS), Writer (код-райтер с Print/WriteString/
 // NewLine), BufferWriter (Writer + File), WithPath (префиксация путей),
 // NoopFileWriter (dry-run).
-// Замена git.mws-team.ru/mws/devp/platform-go/pkg/codegen (без gogen — он в T7).
 package codegen
 
 import (

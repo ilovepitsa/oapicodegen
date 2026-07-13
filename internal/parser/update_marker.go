@@ -16,7 +16,7 @@ import "net/http"
 // Ограничение v1: маркируется только top-level request-body схема и её прямые
 // свойства. Рекурсия в nested $ref / array items / allOf отсутствует —
 // добавим, когда T25b.2 потребует сгенерированные Update-модели для вложенных
-// схем. keepName-for-array-items (как в mwsapi) — тоже отложено.
+// схем. keepName-for-array-items — тоже отложено.
 func markUpdateSchemas(doc *Document) {
 	for _, op := range doc.Operations {
 		if op.Method != http.MethodPut && op.Method != http.MethodPatch {

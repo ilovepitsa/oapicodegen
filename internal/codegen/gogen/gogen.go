@@ -1,6 +1,5 @@
 // Package gogen — рендер структурного описания Go-файла (gogen.File) в
-// gofmt-совместимый исходник (codegen.File). Замена
-// git.mws-team.ru/mws/devp/platform-go/pkg/codegen/gogen.
+// gofmt-совместимый исходник (codegen.File).
 //
 // В первой итерации поддерживается минимальное управление импортами: список
 // Import без группировки std/external/local. Категоризация и дедупликация

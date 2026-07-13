@@ -1,6 +1,6 @@
 // Package httpclient — базовый HTTP-клиент с interceptor-цепочкой.
-// Замена platform-go/pkg/client: Intercept/Invoker/APIResp не нужны —
-// интерсепторы работают на уровне *http.Request → *http.Response.
+// Intercept/Invoker/APIResp не нужны — интерсепторы работают на уровне
+// *http.Request → *http.Response.
 package httpclient
 
 import (

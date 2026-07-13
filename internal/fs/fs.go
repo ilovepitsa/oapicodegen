@@ -1,5 +1,5 @@
 // Package fs — обёртка над os-файловай системой с опцией sandbox-базового
-// каталога (WithBaseDir). Замена git.mws-team.ru/mws/devp/platform-go/pkg/fs.
+// каталога (WithBaseDir).
 //
 // В первой итерации поддерживается только RealFS (op на реальной FS). In-memory
 // MapFS будет добавлен, когда задача (например, e2e-тесты T24) его реально
@@ -34,7 +34,7 @@ type ReadOnlyFS interface {
 }
 
 // ReadFile читает содержимое файла name из fsys. Удобная top-level функция
-// поверх fs.ReadFile, повторяет сигнатуру platform-go/pkg/fs.ReadFile.
+// поверх fs.ReadFile.
 func ReadFile(fsys ReadOnlyFS, name string) ([]byte, error) {
 	return fs.ReadFile(fsys, name) //nolint:wrapcheck // thin delegator
 }

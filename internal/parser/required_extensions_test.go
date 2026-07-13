@@ -157,6 +157,56 @@ components:
 	assert.False(t, idProp.Optional, "explicit x-optional: false must yield Optional=false")
 }
 
+// TestParse_SensitiveExtension проверяет, что парсер читает x-sensitive: true
+// из per-property расширений и заполняет Property.Sensitive.
+func TestParse_SensitiveExtension(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [id]
+      properties:
+        id: {type: integer}
+        plaintext: {type: string, format: binary, x-sensitive: true}
+        secret: {type: string, x-sensitive: true}
+`)
+
+	pet := findSchema(t, doc, "Pet")
+
+	idProp := findProperty(t, pet, "id")
+	assert.False(t, idProp.Sensitive, "id must NOT be Sensitive")
+
+	plaintextProp := findProperty(t, pet, "plaintext")
+	assert.True(t, plaintextProp.Sensitive, "plaintext must be Sensitive")
+
+	secretProp := findProperty(t, pet, "secret")
+	assert.True(t, secretProp.Sensitive, "secret must be Sensitive")
+}
+
+// TestParse_SensitiveExtension_Absent проверяет, что без x-sensitive
+// Property.Sensitive остаётся false.
+func TestParse_SensitiveExtension_Absent(t *testing.T) {
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: integer}
+`)
+
+	pet := findSchema(t, doc, "Pet")
+	idProp := findProperty(t, pet, "id")
+	assert.False(t, idProp.Sensitive)
+}
+
 func parseSpec(t *testing.T, spec string) *Document {
 	t.Helper()
 	doc, err := Parse([]byte(spec))

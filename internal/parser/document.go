@@ -2,9 +2,6 @@
 // используемый генератором. Поддерживаются только стандартные концепции:
 // schemas (oneOf/anyOf/allOf/$ref/required/enum/format/default/nullable/
 // deprecated), paths, operations, parameters, request bodies, responses.
-//
-// MWS-специфика (x-* расширения, audit-data, split Request/Response,
-// update-схемы, common-схемы) намеренно отсутствует — бэклог.
 package parser
 
 import (
@@ -100,6 +97,10 @@ type Property struct {
 	// Используется при GOLANG_USE_OPTIONAL для генерации
 	// optional.Optional[T] вместо *T.
 	Optional bool
+	// Sensitive true, если у property в spec стоит x-sensitive: true.
+	// Используется audit-data генератором: поле маскируется в audit-версии
+	// через sensitive.Sensitive[T].
+	Sensitive bool
 	// Immutable true, если у property в spec стоит
 	// x-validations: [Immutable]. Используется update-marker'ом: такие
 	// поля не помечаются IsUsedInUpdate (кроме поля с именем "name").

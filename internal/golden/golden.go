@@ -1,6 +1,5 @@
 // Package golden — golden-тесты: сравнение сгенерированного вывода с
-// эталонными файлами в testdata/. Замена
-// git.mws-team.ru/mws/devp/platform-go/pkg/golden.
+// эталонными файлами в testdata/.
 //
 // Конвейер:
 //

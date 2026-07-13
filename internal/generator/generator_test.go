@@ -3503,3 +3503,727 @@ components:
 	assert.NotContains(t, src, "application/x-www-form-urlencoded")
 	assert.NotContains(t, src, "UnmarshalURLForm")
 }
+
+// --- T26.1 converter tests ---
+
+func generateConverterFile(t *testing.T, doc *oapiparser.Document, schemaName string) []byte {
+	t.Helper()
+
+	g := &Generator{
+		doc:     doc,
+		factory: gogen.NewFileFactory("oapigen"),
+	}
+
+	for _, sh := range doc.Schemas {
+		if sh.Name == schemaName {
+			return g.converterMethodsFile(sh).Content()
+		}
+	}
+
+	t.Fatalf("schema %s not found", schemaName)
+
+	return nil
+}
+
+func TestConverter_RequestToResponse_SharedFields(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, format: int64, readOnly: true}
+        name: {type: string}
+        secret: {type: string, writeOnly: true}
+        tag: {type: string}
+`)
+	got := string(generateConverterFile(t, doc, "Pet"))
+
+	// Function signature.
+	assert.Contains(t, got, "func PetRequestToResponse(req PetRequest) PetResponse {")
+	assert.Contains(t, got, "var resp PetResponse")
+
+	// Shared fields (name, tag) copied.
+	assert.Contains(t, got, "resp.Name = req.Name")
+	assert.Contains(t, got, "resp.Tag = req.Tag")
+
+	// readOnly (id) and writeOnly (secret) NOT copied.
+	assert.NotContains(t, got, "resp.ID = req.ID")
+	assert.NotContains(t, got, "resp.Secret = req.Secret")
+
+	assert.Contains(t, got, "return resp")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet_converters.gen.go", []byte(got), parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestConverter_NoSharedFields_NotGenerated(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        secret: {type: string, writeOnly: true}
+`)
+	assert.False(t, schemaHasSharedFields(findSchemaByName(t, doc, "Pet")))
+}
+
+func TestConverter_HasSharedFields(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+`)
+	assert.True(t, schemaHasSharedFields(findSchemaByName(t, doc, "Pet")))
+}
+
+func TestConverter_AllFieldsShared(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name, tag]
+      properties:
+        name: {type: string}
+        tag: {type: string}
+`)
+	got := string(generateConverterFile(t, doc, "Pet"))
+
+	assert.Contains(t, got, "resp.Name = req.Name")
+	assert.Contains(t, got, "resp.Tag = req.Tag")
+	assert.NotContains(t, got, "resp.ID")
+}
+
+func TestConverter_PointerFieldCopied(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        tag: {type: string, nullable: true}
+`)
+	got := string(generateConverterFile(t, doc, "Pet"))
+
+	// Nullable (pointer) field copied directly — shallow pointer copy.
+	assert.Contains(t, got, "resp.Tag = req.Tag")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet_converters.gen.go", []byte(got), parser.AllErrors)
+	require.NoError(t, err)
+}
+
+// --- T26.2 integration tests ---
+
+func TestGenerate_Converters_GeneratedWithSplit(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, format: int64, readOnly: true}
+        name: {type: string}
+        secret: {type: string, writeOnly: true}
+`)
+	pf := oapiparser.ProjectFeatures{
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+	}
+	files := generateFilesWithFeatures(t, doc, pf)
+
+	got, ok := files["model/pet_converters.gen.go"]
+	require.True(t, ok, "pet_converters.gen.go should be generated with split on")
+
+	src := string(got)
+	assert.Contains(t, src, "func PetRequestToResponse(req PetRequest) PetResponse {")
+	assert.Contains(t, src, "resp.Name = req.Name")
+	assert.NotContains(t, src, "resp.ID")
+	assert.NotContains(t, src, "resp.Secret")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet_converters.gen.go", got, parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestGenerate_Converters_NotGeneratedWithoutSplit(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        name: {type: string}
+`)
+	files := generateFiles(t, doc)
+
+	_, ok := files["model/pet_converters.gen.go"]
+	assert.False(t, ok, "pet_converters.gen.go should not be generated without split")
+}
+
+func TestGenerate_Converters_NotGeneratedWhenNoSharedFields(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id: {type: integer, readOnly: true}
+        secret: {type: string, writeOnly: true}
+`)
+	pf := oapiparser.ProjectFeatures{
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+	}
+	files := generateFilesWithFeatures(t, doc, pf)
+
+	_, ok := files["model/pet_converters.gen.go"]
+	assert.False(t, ok, "converters should not be generated when there are no shared fields")
+}
+
+func TestGenerate_Converters_Compiles(t *testing.T) {
+	if testing.Short() {
+		t.Skip("compile test skipped in short mode")
+	}
+
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go binary not in PATH, skipping compile test")
+	}
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, format: int64, readOnly: true}
+        name: {type: string}
+        tag: {type: string, nullable: true}
+        secret: {type: string, writeOnly: true}
+`)
+	pf := oapiparser.ProjectFeatures{
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+	}
+	files := generateFilesWithFeatures(t, doc, pf)
+
+	dir := t.TempDir()
+	modelDir := filepath.Join(dir, "model")
+	require.NoError(t, os.MkdirAll(modelDir, 0o755))
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module compiletest\n\ngo 1.26\n"), 0o644))
+
+	for name, content := range files {
+		if !strings.HasPrefix(name, "model/") {
+			continue
+		}
+
+		require.NoError(t, os.WriteFile(filepath.Join(modelDir, filepath.Base(name)), content, 0o644))
+	}
+
+	cmd := exec.Command("go", "build", "./model")
+	cmd.Dir = dir
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generated model package did not compile: %v\n--- output ---\n%s", err, out)
+	}
+}
+
+// --- T27.3 model-layer audit-data tests ---
+
+func generatePetAuditModelFile(t *testing.T, doc *oapiparser.Document) []byte {
+	t.Helper()
+
+	g := &Generator{
+		doc:     doc,
+		factory: gogen.NewFileFactory("oapigen"),
+	}
+
+	for _, sh := range doc.Schemas {
+		if sh.Name == "Pet" {
+			return g.auditModelFile(sh).Content()
+		}
+	}
+
+	t.Fatal("schema Pet not found")
+
+	return nil
+}
+
+func TestAuditModel_StructAndMethod(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        age: {type: integer, format: int64}
+`)
+	got := string(generatePetAuditModelFile(t, doc))
+
+	assert.Contains(t, got, "type PetAuditData struct {")
+	assert.Contains(t, got, "func (m Pet) GetAuditData() any {")
+	assert.Contains(t, got, "var am PetAuditData")
+	assert.Contains(t, got, "return am")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet_audit_data.gen.go", []byte(got), parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestAuditModel_SensitiveFieldMasked(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name, secret]
+      properties:
+        name: {type: string}
+        secret: {type: string, x-sensitive: true}
+`)
+	got := string(generatePetAuditModelFile(t, doc))
+
+	// Sensitive field gets sensitive.Sensitive[T] type.
+	assert.Regexp(t, `Secret\s+sensitive\.Sensitive\[string\]`, got)
+	// Non-sensitive field keeps original type.
+	assert.Regexp(t, `Name\s+string`, got)
+
+	// Method: non-sensitive copied directly.
+	assert.Contains(t, got, "am.Name = m.Name")
+	// Sensitive wrapped in sensitive.New.
+	assert.Contains(t, got, "am.Secret = sensitive.New(m.Secret)")
+}
+
+func TestAuditModel_SensitivePointerField(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        secret: {type: string, nullable: true, x-sensitive: true}
+`)
+	got := string(generatePetAuditModelFile(t, doc))
+
+	// Sensitive pointer field → *sensitive.Sensitive[string].
+	assert.Regexp(t, `Secret\s+\*sensitive\.Sensitive\[string\]`, got)
+
+	// Method: nil-guard + dereference + sensitive.New.
+	assert.Contains(t, got, "if m.Secret != nil {")
+	assert.Contains(t, got, "v := sensitive.New(*m.Secret)")
+	assert.Contains(t, got, "am.Secret = &v")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet_audit_data.gen.go", []byte(got), parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestAuditModel_NonSensitivePointerField(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        tag: {type: string, nullable: true}
+`)
+	got := string(generatePetAuditModelFile(t, doc))
+
+	// Non-sensitive nullable field → *string, copied directly.
+	assert.Regexp(t, `Tag\s+\*string`, got)
+	assert.Contains(t, got, "am.Tag = m.Tag")
+}
+
+func TestSchemaReferencedByOperation_RequestBody(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+    Other:
+      type: object
+      properties:
+        id: {type: integer}
+`)
+	pet := findSchemaByName(t, doc, "Pet")
+	other := findSchemaByName(t, doc, "Other")
+
+	assert.True(t, schemaReferencedByOperation(pet, doc), "Pet is referenced by request body")
+	assert.False(t, schemaReferencedByOperation(other, doc), "Other is not referenced")
+}
+
+func TestSchemaReferencedByOperation_Response(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pet'}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	pet := findSchemaByName(t, doc, "Pet")
+	assert.True(t, schemaReferencedByOperation(pet, doc), "Pet is referenced by response")
+}
+
+func TestSchemaReferencedByOperation_NotReferenced(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	pet := findSchemaByName(t, doc, "Pet")
+	assert.False(t, schemaReferencedByOperation(pet, doc), "Pet is not referenced by any operation")
+}
+
+// --- T27.4 server-layer audit-data tests ---
+
+func generateAuditClientFile(t *testing.T, doc *oapiparser.Document) []byte {
+	t.Helper()
+
+	g := &Generator{
+		doc:        doc,
+		factory:    gogen.NewFileFactory("oapigen"),
+		modulePath: testModulePath,
+	}
+
+	return g.auditClientFile().Content()
+}
+
+func TestAuditServer_RequestWithPathParamAndBody(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets/{petId}:
+    post:
+      operationId: updatePet
+      parameters:
+        - {name: petId, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '200': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	got := string(generateAuditClientFile(t, doc))
+
+	assert.Contains(t, got, "type UpdatePetRequestAuditData struct {")
+	assert.Regexp(t, `PetID\s+string`, got)
+	assert.Regexp(t, `Body\s+any`, got)
+	assert.Contains(t, got, "func (req *UpdatePetRequest) GetAuditData() any {")
+	assert.Contains(t, got, "PetID: req.PetID,")
+	// Required body → no nil-check.
+	assert.Contains(t, got, "am.Body = req.Body.GetAuditData()")
+	assert.NotContains(t, got, "if req.Body != nil")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "audit.gen.go", []byte(got), parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestAuditServer_RequestWithOptionalBody_NilCheck(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: created}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	got := string(generateAuditClientFile(t, doc))
+
+	assert.Contains(t, got, "if req.Body != nil {")
+	assert.Contains(t, got, "am.Body = req.Body.GetAuditData()")
+}
+
+func TestAuditServer_RequestWithQueryParamOnly(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      parameters:
+        - {name: limit, in: query, schema: {type: integer}}
+      responses:
+        '200': {description: ok}
+components:
+  schemas: {}
+`)
+	got := string(generateAuditClientFile(t, doc))
+
+	assert.Contains(t, got, "type ListPetsRequestAuditData struct {")
+	assert.Contains(t, got, "Limit int")
+	assert.NotContains(t, got, "Body any")
+}
+
+func TestAuditServer_RequestSkipped_NoParamsNoBody(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /health:
+    get:
+      operationId: health
+      responses:
+        '200': {description: ok}
+components:
+  schemas: {}
+`)
+	got := string(generateAuditClientFile(t, doc))
+
+	assert.NotContains(t, got, "HealthRequestAuditData")
+}
+
+func TestAuditServer_ResponseWithSchema(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets/{petId}:
+    get:
+      operationId: getPet
+      parameters:
+        - {name: petId, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pet'}
+        '404': {description: not found}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	got := string(generateAuditClientFile(t, doc))
+
+	assert.Contains(t, got, "type GetPetResponse200AuditData struct {")
+	assert.Contains(t, got, "Payload any")
+	assert.Contains(t, got, "func (resp *GetPetResponse) Response200AuditData() GetPetResponse200AuditData {")
+	assert.Contains(t, got, "if resp.Response200 != nil {")
+	assert.Contains(t, got, "am.Payload = resp.Response200.GetAuditData()")
+	// 404 has no schema → no audit struct.
+	assert.NotContains(t, got, "GetPetResponse404AuditData")
+}
+
+func TestAuditServer_ResponseWithHeaders(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      parameters:
+        - {name: limit, in: query, schema: {type: integer}}
+      responses:
+        '200':
+          description: ok
+          headers:
+            X-Total:
+              schema: {type: integer}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pet'}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	got := string(generateAuditClientFile(t, doc))
+
+	// Headers case → access via .Payload.
+	assert.Contains(t, got, "if resp.Response200.Payload != nil {")
+	assert.Contains(t, got, "am.Payload = resp.Response200.Payload.GetAuditData()")
+}
+
+func TestAuditServer_ResponseDefaultSkipped(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      parameters:
+        - {name: limit, in: query, schema: {type: integer}}
+      responses:
+        default:
+          description: err
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        msg: {type: string}
+`)
+	got := string(generateAuditClientFile(t, doc))
+
+	// default response → no audit struct.
+	assert.NotContains(t, got, "ResponseDefaultAuditData")
+}

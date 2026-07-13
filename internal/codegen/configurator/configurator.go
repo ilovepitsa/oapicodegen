@@ -1,5 +1,5 @@
 // Package configurator строит codegen.FileWriter из CLI-флагов и runtime
-// output-пути. Замена git.mws-team.ru/mws/devp/platform-go/pkg/codegen/configurator.
+// output-пути.
 //
 // Конвейер: NewFileWriterConfiguratorFromFlags(flagSet) → Create(output) →
 // fileWriter, который использует internal/fs.RealFS с WithBaseDir(output) и

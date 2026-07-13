@@ -72,9 +72,9 @@ per-project override, резолвит `ProjectFeatures` для генерато
 ### `internal/cmdtreegenerator` (T21) → глубокий бэклог
 
 Генерация дерева команд CLI по пути `paths`. В первой итерации **не
-реализуется**: оригинал в mwsapi завязан на `x-cli` расширения, CRUD-эвристики
-и multi-service parser, которых у нас нет. Пересмотреть при появлении
-реального требования к auto-generated CLI.
+реализуется**: требует `x-cli` расширения, CRUD-эвристики и multi-service
+parser, которых у нас нет. Пересмотреть при появлении реального требования
+к auto-generated CLI.
 
 ### `internal/opensourceyaml` (T22) → глубокий бэклог
 
@@ -90,22 +90,21 @@ per-project override, резолвит `ProjectFeatures` для генерато
 При заданном `-generation-flags-config-path` грузит флаги и прокидывает их в
 `Generate()` через `generator.WithProjectFeatures`.
 
-## Замены `platform-go`
+## Вспомогательные пакеты
 
-Все утилиты и инфраструктурные пакеты, которые в оригинальном `mws/api`
-тянулись из `git.mws-team.ru/mws/devp/platform-go`, здесь реализованы
-собственными силами в `internal/`:
+Все утилиты и инфраструктурные пакеты реализованы собственными силами
+в `internal/` и `pkg/`:
 
-| `platform-go/pkg/*` | Замена | Задача |
+| Пакет | Замена | Задача |
 |---|---|---|
-| `ptr` | `internal/ptr` | T3 |
-| `must` | `internal/must` | T4 |
-| `fs` | `internal/fs` | T5 |
-| `codegen` | `internal/codegen` | T6 |
-| `codegen/gogen` | `internal/codegen/gogen` | T7 |
-| `codegen/configurator` | `internal/codegen/configurator` | T8 |
-| `cli/logging` | `internal/cli/logging` | T9 |
-| `golden` | `internal/golden` | T10 |
+| `internal/ptr` | ptr utilities | T3 |
+| `internal/must` | must-хелперы | T4 |
+| `internal/fs` | FS-обёртка | T5 |
+| `internal/codegen` | абстракции вывода | T6 |
+| `internal/codegen/gogen` | Go-рендер | T7 |
+| `internal/codegen/configurator` | CLI → FileWriter | T8 |
+| `internal/cli/logging` | zap из CLI-флагов | T9 |
+| `internal/golden` | golden-тесты | T10 |
 
 Пакеты `exec`, `http/*`, `cmdtool`, `rootcmd`, `app`, `zapctx`, `zaputil`,
 `env`, `os`, `consterr`, `cmdtest`, `ztest`, `encryption`, `vault`,
@@ -197,7 +196,7 @@ func (m ListPetsResponse200PayloadWithHeaders) Headers() map[string]string {
    не читает файлы, `codegen` не знает про OpenAPI.
 2. **Стандартный OpenAPI сначала.** Любое `x-*` расширение — отдельная задача
    во второй итерации.
-3. **Собственные замены вместо `platform-go`.** Внешние зависимости минимальны:
-   `libopenapi`, `zap`, стандартная библиотека Go.
+3. **Минимум внешних зависимостей.** Внешние зависимости минимальны:
+   `libopenpi`, `zap`, стандартная библиотека Go.
 4. **Ветвление по задачам.** Одна задача → одна ветка `feat/...` → merge в
    `main` (см. `TASKS.md`).

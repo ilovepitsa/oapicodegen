@@ -2,7 +2,7 @@
 // только стандартный OpenAPI 3.x (без x-* расширений, audit-data, split
 // Request/Response, update-схем, URL-form-encoding — всё это в бэклоге).
 //
-// Layout (multi-package, как в mwsapi):
+// Layout (multi-package):
 //
 //	<modulePath>/model/              — schemas + JSON-методы
 //	<modulePath>/interfaces/client/  — Client interface + Request/Response + sugar
@@ -116,7 +116,31 @@ func (g *Generator) writeSchemaFiles(fw codegen.FileWriter, sh *parser.Schema) e
 		}
 	}
 
+	if g.shouldGenerateConverters(sh) {
+		cf := g.converterMethodsFile(sh)
+		cname := "model/" + fileName(sh.Name) + "_converters.gen.go"
+
+		if err := fw.WriteFile(cname, cf); err != nil {
+			return fmt.Errorf("write %s: %w", cname, err)
+		}
+	}
+
 	return nil
+}
+
+// shouldGenerateConverters сообщает, нужно ли генерировать <Name>_converters.gen.go
+// для схемы. True только при включённом split-режиме для splittable-схемы с
+// хотя бы одним shared-полем (не readOnly && не writeOnly).
+func (g *Generator) shouldGenerateConverters(sh *parser.Schema) bool {
+	if !g.features.SplitRequestResponse.Value {
+		return false
+	}
+
+	if !g.splittable[sh.Name] {
+		return false
+	}
+
+	return schemaHasSharedFields(sh)
 }
 
 // writeUTCTimeFile пишет model/utc_time.gen.go, если включён флаг

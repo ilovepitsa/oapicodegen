@@ -15,6 +15,7 @@ const (
 	extResponseRequired = "x-response-required"
 	extOptional         = "x-optional"
 	extValidations      = "x-validations"
+	extSensitive        = "x-sensitive"
 
 	// extValidationImmutable — значение в списке x-validations, помечающее
 	// property как Immutable. Используется update-marker'ом.
@@ -103,6 +104,7 @@ func fillSchema(s *Schema, sh *highbase.Schema) {
 				RequestRequired:  readBoolExtension(propHigh, extRequestRequired),
 				ResponseRequired: readBoolExtension(propHigh, extResponseRequired),
 				Optional:         readBoolExtension(propHigh, extOptional),
+				Sensitive:        readBoolExtension(propHigh, extSensitive),
 				Immutable:        immutable,
 				Validations:      propValidations,
 			})

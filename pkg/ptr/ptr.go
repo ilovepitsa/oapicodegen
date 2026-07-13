@@ -1,6 +1,6 @@
 // Package ptr предоставляет обёртки над указателями: создание указателя из
 // значения (Get), разыменование с zero-фоллбэком (Value), копирование (Clone)
-// и nil-aware сравнение (Equal). Замена git.mws-team.ru/mws/devp/platform-go/pkg/ptr.
+// и nil-aware сравнение (Equal).
 package ptr
 
 // Get возвращает указатель на v. Удобно для создания *T из литералов и

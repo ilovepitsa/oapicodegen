@@ -1,10 +1,9 @@
 # План задач: oapigenerator
 
-Проект: Go-генератор из OpenAPI-спек, аналог `../api/cmd/mwsapigen`, **без Kotlin, без TypeScript, без Terraform-provider, без `mwsp` CLI**. Все замены `platform-go` — собственные библиотеки в `internal/`. Валидатор (TUI) — в бэклоге.
+Проект: Go-генератор из OpenAPI-спек, **без Kotlin, без TypeScript, без Terraform-provider**. Все вспомогательные библиотеки — собственные, в `internal/` и `pkg/`. Валидатор (TUI) — в бэклоге.
 
 - **Go-модуль**: `nschugorev/oapigenerator` (временное имя, потом сменим)
 - **Рабочий процесс**: одна задача → одна ветка `feat/...` → merge в `main`
-- **Референс**: `/Users/n.shchugorev/projects/api/` (исходники `cmd/mwsapigen`, `cmd/validator`, `go/`)
 
 ## Скоуп первой итерации (важно!)
 
@@ -20,28 +19,32 @@
 **Поддерживается через generation flags (включаются в `generation_flags.yaml`):**
 - `GOLANG_SPLIT_REQUEST_RESPONSE` — раздельные `<Name>Request`/`<Name>Response` модели (T24f — DONE)
 - `USE_UTC_FOR_DATE_TIME` — принудительная UTC-сериализация `time.Time` через тип `UTCTime` (T24d — DONE)
-- `GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS` — когда off, server request-decoder вызывает `req.Body.SetDefaults()` (T24e — DONE, требует T25a)
+- `GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS` — когда off, server request-decoder вызывает `req.Body.SetDefaults()` (T24e — DONE, T25a — DONE)
 - `USE_REQUIRED_V2` — флаг заведён в `ProjectFeatures`, генераторной поддержки пока нет (T24g — pending)
 
+**Дополнительно реализовано (без generation flags):**
+- `x-validations` — декларативные правила валидации (`>N`/`Size >=N`/`pkg.Name`/`Immutable`) → `ValidateOwn(reg)` + `ExpectedValidatorNames()` + reflection-walker `pkg/validator.Validate`
+- Update-схемы `Update<Name>` для PUT/PATCH body (T25b — DONE)
+- URL-form encoding `application/x-www-form-urlencoded` (T25c — DONE)
+- `SetDefaults()` для object-схем с default-полями (T25a — DONE)
+- Типизированные response headers (`<Name><Code>PayloadWithHeaders`)
+
 **Не поддерживается (бэклог):**
-- Кастомные расширения `x-*` (`x-request-required`, `x-response-required`, `x-optional-response`, `x-validations`, `x-audit-data`, `x-mws-*` и пр.)
-- Кастомные валидации (x-validations)
-- `audit-data` схемы и связанный код
-- URL-form encoding (`application/x-www-form-urlencoded`)
-- Конвертёры между Request/Response-моделями (требуют split + T25)
-- Update-схемы (`*_update`) — T25b
-- `SetDefaults()` методы — T25a DONE
+- `x-audit-data` + `ServerAuditData` — комплаенс-логирование (audit-схема на каждую операцию)
+- `GenerateConverters` — автоконвертеры `Request→Response` (только при split-mode)
+- `x-request-required`/`x-response-required` — генераторная поддержка `USE_REQUIRED_V2` (T24g)
+- Кастомные `x-*` расширения
 
 Это значит: задачи T13, T14, T16 (audit), T18 (HTTP server для audit) упрощаются или откладываются. См. раздел «Корректировки задач» ниже.
 
 ## Корректировки задач под первую итерацию
 
 - **T13 Schema + JSON-методы** — DONE (без `x-*`-специфики и без `GenerateConverters`)
-- **T14 URLForm, WithDefaults, Update-схемы** → **в бэклог** (требует URL-form encoding и update-схемы); см. T25a–T25c
-- **T15 Client interfaces + sugar** — DONE (без x-validations)
+- **T14 URLForm, WithDefaults, Update-схемы** — DONE (T25a SetDefaults, T25b Update-схемы, T25c URLForm)
+- **T15 Client interfaces + sugar** — DONE (включая x-validations)
 - **T16 Server interfaces + audit** — DONE (без `ServerAuditData`/`audit_data`-схемы — в бэклоге)
-- **T17 HTTP client** — DONE (без URL-form)
-- **T18 HTTP server** — DONE (базовый роутинг, без audit-data; типизированные response headers — DONE)
+- **T17 HTTP client** — DONE (включая URL-form encoding)
+- **T18 HTTP server** — DONE (базовый роутинг, URL-form decoding, типизированные response headers — DONE; без audit-data)
 - **T19 Mocks** — DONE
 - **T20 SDK** — DONE
 - **T21 cmdtreegenerator** → **глубокий бэклог** (не нужен в первой итерации; весь функционал завязан на `x-cli` расширения, CRUD-эвристики и multi-service parser — пересмотреть при появлении реального требования к CLI)
@@ -52,21 +55,19 @@
 - **T25 CI, линтеры** — частично: Makefile-таргеты есть; `.gitlab-ci.yml`/`.golangci.yml` см. репозиторий
 - **Типизированные response headers** (новая задача, вне исходной нумерации) — DONE: `internal/generator/response_headers.go`, `PayloadWithHeaders`-паттерн, типизированные header-поля (string/int/int32/int64/float32/float64/bool), client-decoder с `strconv` + error propagation, server-side `Headers()` метод
 
-## Карта замен `platform-go`
+## Карта вспомогательных пакетов
 
-| Группа | Пакет platform-go | Замена в проекте | Задача |
+| Группа | Пакет | Реализация | Задача |
 |---|---|---|---|
-| Codegen-ядро | `pkg/codegen` | `internal/codegen` | T6 |
-| Codegen Go-рендер | `pkg/codegen/gogen` | `internal/codegen/gogen` | T7 |
-| Codegen-конфигуратор | `pkg/codegen/configurator` | `internal/codegen/configurator` | T8 |
-| FS | `pkg/fs` | `internal/fs` | T5 |
-| CLI-логирование | `pkg/cli/logging` | `internal/cli/logging` | T9 |
-| Утилиты | `pkg/ptr` | `internal/ptr` | T3 |
-| Утилиты | `pkg/must` | `internal/must` | T4 |
-| Тесты | `pkg/golden` | `internal/golden` | T10 |
-| Exec | `pkg/exec` | — (только для validator, бэклог) | — |
-| HTTP-инфра | `pkg/http/*` | — (нужна рантайму сгенерированного кода, не генератору) | — |
-| Прочие | `cmdtool`, `rootcmd`, `app`, `zapctx`, `zaputil`, `env`, `os`, `consterr`, `cmdtest`, `ztest`, `encryption`, `vault`, `configloader`, `cli/browser` | по мере необходимости | — |
+| Codegen-ядро | `codegen` | `internal/codegen` | T6 |
+| Codegen Go-рендер | `codegen/gogen` | `internal/codegen/gogen` | T7 |
+| Codegen-конфигуратор | `codegen/configurator` | `internal/codegen/configurator` | T8 |
+| FS | `fs` | `internal/fs` | T5 |
+| CLI-логирование | `cli/logging` | `internal/cli/logging` | T9 |
+| Утилиты | `ptr` | `internal/ptr` | T3 |
+| Утилиты | `must` | `internal/must` | T4 |
+| Тесты | `golden` | `internal/golden` | T10 |
+| HTTP-клиент | `httpclient` | `pkg/httpclient` | — |
 
 ## Этап 0 — скелет
 
@@ -83,60 +84,52 @@
 - Ветка: `feat/docs`
 - Зависимости: T1
 
-## Этап 1 — внутренние замены platform-go
+## Этап 1 — вспомогательные пакеты
 
 ### T3 — `internal/ptr`
 - API: `Ptr[T](v) *T`, `From[T](*T) T` с zero-value fallback, `Or`, `Equal`, и т.д.
-- Замена: `git.mws-team.ru/mws/devp/platform-go/pkg/ptr`
 - Тесты + бенч
 - Ветка: `feat/internal-ptr`
 - Зависимости: T1
 
 ### T4 — `internal/must`
 - API: `Must(err)`, `MustGet[T](v T, err error) T`, `MustNoError(err)` и пр.
-- Замена: `platform-go/pkg/must`
 - Тесты
 - Ветка: `feat/internal-must`
 - Зависимости: T1
 
 ### T5 — `internal/fs`
 - API: `RealFS`, `NewRecommendedReal(opts...)`, `WithBaseDir`, интерфейс FS (read/write, MkdirAll, Stat)
-- Замена: `platform-go/pkg/fs`
 - Тесты на `testing/fstest`
 - Ветка: `feat/internal-fs`
 - Зависимости: T1
 
 ### T6 — `internal/codegen` — ядро
 - API: `File`, `FileWriter` (`WriteFile(name, File) error`, `Close() error`), `BufferWriter`, `WithPath(fw, ...)`, `noopFileWriter`, `NewBufferWriter`
-- Замена: `platform-go/pkg/codegen` (без gogen)
 - Тесты
 - Ветка: `feat/internal-codegen-core`
 - Зависимости: T1
 
 ### T7 — `internal/codegen/gogen` — FileFactory и рендер Go-файлов
 - API: `FileFactory`, `NewFileFactory(toolName)`, `Create(File) *bytes.Buffer` / `io.Reader`, gofmt-рендер
-- Замена: `platform-go/pkg/codegen/gogen`
 - Тесты на рендер
 - Ветка: `feat/internal-codegen-gogen`
 - Зависимости: T6
 
 ### T8 — `internal/codegen/configurator` — FileWriter из флагов
 - API: `NewFileWriterConfiguratorFromFlags(*flag.FlagSet)`, `Create(log, output) FileWriter`
-- Замена: `platform-go/pkg/codegen/configurator`
 - Тесты
 - Ветка: `feat/internal-codegen-configurator`
 - Зависимости: T5, T6
 
 ### T9 — `internal/cli/logging` — zap-логирование из флагов
 - API: `NewLoggerConfiguratorFromFlags(*flag.FlagSet)`, `Create() *zap.Logger`
-- Замена: `platform-go/pkg/cli/logging`
 - Тесты
 - Ветка: `feat/internal-cli-logging`
 - Зависимости: T1
 
 ### T10 — `internal/golden` — golden-тесты
 - API: `Equals(t, got, want string)`, `Update(path, content)`, флаг `-update`
-- Замена: `platform-go/pkg/golden`
 - Тесты
 - Ветка: `feat/internal-golden`
 - Зависимости: T1
@@ -157,8 +150,6 @@
 - См. T24a для деталей
 
 ## Этап 3 — генераторы
-
-> Все генераторы портируются из `cmd/mwsapigen/internal/generator` без kotlin/terraform-специфики.
 
 ### T13 — generator: Schema + JSON-методы (стандартный OpenAPI) — DONE
 - `NewSchema` (object/array/primitive/oneOf/anyOf/allOf/$ref), `NewJSONMethods`, `NewSchemaOneOfResource`, `NewSchemaOneOfResourceJSON`
@@ -204,14 +195,14 @@
 - Зависимости: T15
 
 ### T21 — cmdtreegenerator — дерево команд CLI → ГЛУБОКИЙ БЭКЛОГ
-- ~~Порт `cmd/mwsapigen/internal/cmdtreegenerator`~~
+- ~~Порт генератора дерева команд CLI~~
 - Причина: оригинал (4841 строка) завязан на `x-cli` расширения, CRUD-эвристики, multi-service parser (`parser.Project`/`Service`/`Method`), кастомный CLI-фреймворк `cli.Command[T]` с profile config — ничего из этого у нас нет и не планируется в первой итерации.
 - Пересмотреть при появлении реального требования к auto-generated CLI.
 - Ветка: ~~`feat/cmdtree`~~ (не создаётся)
 - ~~Зависимости: T11, T13~~
 
 ### T22 — opensourceyaml — публичный OpenAPI-spec → ГЛУБОКИЙ БЭКЛОГ
-- ~~Порт `cmd/mwsapigen/internal/opensourceyaml`~~
+- ~~Порт генератора публичного OpenAPI-spec~~
 - Причина: публикацией публичного OpenAPI-spec управляет внешняя инфраструктура (repo/release pipeline), а не генератор. В первой итерации не нужно.
 - Пересмотреть при появлении требования «генератор должен вырезать `x-*` из internal-spec и публиковать public-spec».
 - Ветка: ~~`feat/opensource-yaml`~~ (не создаётся)
@@ -310,11 +301,11 @@
 - Зависимости: T24c, T24f
 - Ветка: `feat/genflag-required-v2`
 
-### T25: URLForm, WithDefaults, Update-схемы — разбит на T25a–T25c
+### T25: URLForm, WithDefaults, Update-схемы — DONE (T25a–T25c)
 
 #### T25a — WithDefaults: `SetDefaults()` методы — DONE
 - Генерация `func (m *<Name>) SetDefaults()` для schema-struct'ов — заполняет поля из `default` из spec.
-- Прямой codegen (НЕ visitor pattern из mwsapi) — ~210 строк в `internal/generator/set_defaults.go`.
+- Прямой codegen (НЕ visitor pattern) — ~210 строк в `internal/generator/set_defaults.go`.
 - Покрытые типы: string, integer (int/int32/int64), number (float32/float64), boolean, enum (константное имя).
 - Optional pointer-поля: `if m.Field == nil { v := <literal>; m.Field = &v }`.
 - Required value-поля: `if m.Field == <zero> { m.Field = <literal> }`.
@@ -326,13 +317,13 @@
 - Зависимости: нет
 - Ветка: `feat/gen-defaults`
 
-#### T25b — Update-схемы: `Update<Name>` struct для PATCH — разбит на T25b.1–T25b.4
+#### T25b — Update-схемы: `Update<Name>` struct для PATCH — DONE (разбит на T25b.1–T25b.4)
 
 Общая спецификация: `type Update<Name> struct { Field *T ... }` — все поля `*T` (pointer, даже required), без defaults, без validation, JSON-тег `omitempty` для всех. Генерируется только для схем, участвующих в PATCH/PUT request body.
 
 ##### T25b.1 — Parser: `IsUsedInUpdate` flag + trigger
 - Добавить `IsUsedInUpdate bool` на `Schema` и `Property` в `internal/parser/document.go`.
-- Marker-проход (аналог `update_marker.go` в mwsapi): обойти body всех operations, пометить schema `IsUsedInUpdate=true` если operation — PUT или PATCH (эвристика, т.к. `x-*` расширений пока нет).
+- Marker-проход (аналог `update_marker.go`): обойти body всех operations, пометить schema `IsUsedInUpdate=true` если operation — PUT или PATCH (эвристика, т.к. `x-*` расширений пока нет).
 - Поля помечать поштучно: readOnly пропускаются, immutable пропускаются (кроме `name`).
 - Тесты: parser-тест с PUT-операцией → schema помечена.
 - Зависимости: нет
@@ -343,7 +334,7 @@
 - Все поля принудительно `*T` (даже required, даже примитивы). Без defaults, без validation.
 - JSON-теги: `json:"<name>,omitempty" yaml:"<name>,omitempty"`.
 - Переиспользовать `renderField`-паттерн, но с принудительным pointer.
-- Решение: `*T` (по спеке T25b), НЕ `Optional[T]` (как в mwsapi) — проще, без зависимости от common-пакета.
+- Решение: `*T` (по спеке T25b), НЕ `Optional[T]` — проще, без зависимости от common-пакета.
 - `computeUpdatable` (аналог `computeSplittable`) — precompute-набор схем с `IsUsedInUpdate=true`.
 - Тесты: генерация `Update<Name>` для object-схемы, проверка что все поля `*T`.
 - Зависимости: T25b.1
@@ -372,7 +363,7 @@
 - Зависимости: T25b.2, T25b.3
 - Ветка: `feat/gen-update-integration`
 
-#### T25c — URLForm: `MarshalURLForm`/`UnmarshalURLForm` — разбит на T25c.1–T25c.3
+#### T25c — URLForm: `MarshalURLForm`/`UnmarshalURLForm` — DONE (разбит на T25c.1–T25c.3)
 
 Общая спецификация: для schema в `application/x-www-form-urlencoded` request body генерируются методы `MarshalURLForm() (url.Values, error)` и `UnmarshalURLForm(form url.Values) error`. Поддержка только примитивных полей (string/integer/number/boolean). Arrays/maps/$ref → `return error` в сгенерированном коде.
 
@@ -381,7 +372,7 @@
 - `func (m <Name>) MarshalURLForm() (url.Values, error)` — создаёт `url.Values`, для каждого поля: `if m.Field != nil { values.Set("<name>", <converter>(m.Field)) }`.
 - Converter: string → direct, integer/number → `fmt.Sprint`, bool → `strconv.FormatBool`, time → `.Format(...)` (с UTC если флаг on).
 - Триггер: схема referenced из `RequestBody.Content["application/x-www-form-urlencoded"]` любой операции.
-- `schemeHasURLFormat(sh, doc)` helper — аналог mwsapi.
+- `schemeHasURLFormat(sh, doc)` helper.
 - Edge cases: arrays/maps/refs → `return nil, fmt.Errorf("not supported")` в сгенерированном коде.
 - Тесты: генерация MarshalURLForm для object с string/int/bool полями.
 - Зависимости: нет
@@ -416,16 +407,15 @@
 - Ветка: см. git log
 
 ### Глубокий бэклог (без детализации)
-- `ServerAuditData` + `x-audit-data` + audit-data схемы
-- `GenerateConverters` (split Request/Response моделей — пересекается с T24f)
-- `x-validations`
-- Кастомные `x-mws-*` расширения и фильтрация в opensourceyaml
+- `ServerAuditData` + `x-audit-data` + audit-data схемы — комплаенс-логирование: для каждой операции описывается audit-схема (что логировать при вызове — кто, что, с какими параметрами, результат), серверный интерфейс получает методы `ServerAuditData`. Не часть стандартного OpenAPI.
+- `GenerateConverters` — автоконвертеры `func <Name>RequestToResponse(req) (resp, error)` между split-моделями; имеет смысл только при включённом `GOLANG_SPLIT_REQUEST_RESPONSE`.
+- `USE_REQUIRED_V2` (T24g) — генераторная поддержка `x-request-required`/`x-response-required` расширений.
+- Кастомные `x-*` расширения и фильтрация в opensourceyaml.
 
-**Отдельные компоненты:**
-- Validator TUI (`cmd/validator`, `bubbletea`)
-- Terraform-provider (`terraform-provider-mwsp`)
-- `mwsp` CLI
-- TypeScript-генератор (`mws-typescript-api-generator`)
+**Отдельные компоненты (не относятся к Go-генератору):**
+- Validator TUI (`cmd/validator`, `bubbletea`) — terminal-инструмент для работы со списками замечаний валидации (код-ревью/линтинг/security-сканы): загрузка, фильтр по пути, привязка Jira-тикета, перемещение в исключения, сохранение.
+- Terraform-provider
+- TypeScript-генератор
 - `graphgen` (`cmd/tools/graphgen`)
 
 ## Правила работы
@@ -435,4 +425,4 @@
 3. До merge: сборка `go build ./...`, тесты `go test ./...`, линтер.
 4. Одна задача — один PR/MR (пользователь делает merge сам).
 5. Коммиты в произвольной форме, но осмысленные.
-6. Если задача вскрыла новый пакет `platform-go` — добавить替换у в `internal/` отдельной под-задачей.
+6. Если задача вскрыла новый вспомогательный пакет — добавить реализацию в `internal/` отдельной под-задачей.

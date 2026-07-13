@@ -1,5 +1,4 @@
-// Package logging — zap-логер, конфигурируемый из CLI-флагов. Замена
-// git.mws-team.ru/mws/devp/platform-go/pkg/cli/logging.
+// Package logging — zap-логер, конфигурируемый из CLI-флагов.
 //
 // Конвейер: NewLoggerConfiguratorFromFlags(flagSet) → Create() → *zap.Logger.
 // Caller обычно зовёт .Sugar() для SugaredLogger (Fatal/Fatalf/With/Warn/Panic).
