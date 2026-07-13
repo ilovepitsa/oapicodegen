@@ -125,6 +125,15 @@ func (g *Generator) writeSchemaFiles(fw codegen.FileWriter, sh *parser.Schema) e
 		}
 	}
 
+	if schemaReferencedByOperation(sh, g.doc) {
+		af := g.auditModelFile(sh)
+		aname := "model/" + fileName(sh.Name) + "_audit_data.gen.go"
+
+		if err := fw.WriteFile(aname, af); err != nil {
+			return fmt.Errorf("write %s: %w", aname, err)
+		}
+	}
+
 	return nil
 }
 
@@ -224,6 +233,7 @@ func (g *Generator) writeOperationFiles(fw codegen.FileWriter) error {
 	}{
 		{"interfaces/client/client.gen.go", g.clientFile},
 		{"interfaces/client/client_sugar.gen.go", g.clientSugarFile},
+		{"interfaces/client/audit.gen.go", g.auditClientFile},
 		{"interfaces/server/server.gen.go", g.serverFile},
 		{"impl/httpclient/client.gen.go", g.implClientFile},
 		{"impl/echoserver/server.gen.go", g.implServerFile},

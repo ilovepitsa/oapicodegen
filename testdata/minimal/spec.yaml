@@ -80,6 +80,9 @@ components:
           type: string
           nullable: true
           x-validations: ["Size <=50"]
+        secret:
+          type: string
+          x-sensitive: true
         metadata: {type: object, additionalProperties: {type: string}}
     ItemCreate:
       type: object
@@ -94,6 +97,9 @@ components:
           type: string
           nullable: true
           x-validations: ["Size <=50", "Immutable"]
+        secret:
+          type: string
+          x-sensitive: true
     Items:
       type: array
       items: {$ref: '#/components/schemas/Item'}

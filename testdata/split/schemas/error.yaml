@@ -1,0 +1,12 @@
+# Error schema.
+# Referenced from openapi.yaml and paths/pets.yaml via $ref.
+
+Error:
+  type: object
+  required: [code, message]
+  properties:
+    code:
+      type: integer
+      format: int32
+    message:
+      type: string

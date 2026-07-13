@@ -1,0 +1,21 @@
+openapi: 3.0.3
+info:
+  title: split-example
+  version: '1.0.0'
+  description: |
+    Example of a split OpenAPI 3.x spec: main entry references path and
+    schema files via relative $ref. The generator (cmd/oapigen) resolves
+    cross-file refs through os.DirFS passed to parser.ParseFile.
+paths:
+  /pets:
+    $ref: 'paths/pets.yaml#/PetsPath'
+  /pets/{petId}:
+    $ref: 'paths/pets.yaml#/PetByIdPath'
+components:
+  schemas:
+    Pet:
+      $ref: 'schemas/pet.yaml#/Pet'
+    NewPet:
+      $ref: 'schemas/pet.yaml#/NewPet'
+    Error:
+      $ref: 'schemas/error.yaml#/Error'

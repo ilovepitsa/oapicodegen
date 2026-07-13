@@ -12,6 +12,7 @@ type Item struct {
 	Name     string            `json:"name" yaml:"name"`
 	Kind     Kind              `json:"kind" yaml:"kind"`
 	Tag      *string           `json:"tag,omitempty" yaml:"tag,omitempty"`
+	Secret   *string           `json:"secret,omitempty" yaml:"secret,omitempty"`
 	Metadata map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 }
 

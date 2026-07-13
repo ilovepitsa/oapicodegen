@@ -9,9 +9,10 @@ import (
 )
 
 type ItemCreate struct {
-	Name string  `json:"name" yaml:"name"`
-	Kind Kind    `json:"kind" yaml:"kind"`
-	Tag  *string `json:"tag,omitempty" yaml:"tag,omitempty"`
+	Name   string  `json:"name" yaml:"name"`
+	Kind   Kind    `json:"kind" yaml:"kind"`
+	Tag    *string `json:"tag,omitempty" yaml:"tag,omitempty"`
+	Secret *string `json:"secret,omitempty" yaml:"secret,omitempty"`
 }
 
 func (x ItemCreate) ValidateOwn(reg *validator.Registry) error {
@@ -39,8 +40,9 @@ func (x ItemCreate) ValidateOwn(reg *validator.Registry) error {
 }
 
 type UpdateItemCreate struct {
-	Name optional.Optional[string] `json:"name" yaml:"name"`
-	Kind optional.Optional[Kind]   `json:"kind" yaml:"kind"`
+	Name   optional.Optional[string] `json:"name" yaml:"name"`
+	Kind   optional.Optional[Kind]   `json:"kind" yaml:"kind"`
+	Secret optional.Optional[string] `json:"secret" yaml:"secret"`
 }
 
 // GetName возвращает значение поля Name и флаг presence.
@@ -68,6 +70,20 @@ func (u *UpdateItemCreate) GetKind() (*Kind, bool) {
 		return nil, true
 	}
 	v := u.Kind.Value()
+	return &v, true
+}
+
+// GetSecret возвращает значение поля Secret и флаг presence.
+// Семантика: (nil, false) — поле не задано; (nil, true) — задано как null;
+// (&value, true) — задано значением.
+func (u *UpdateItemCreate) GetSecret() (*string, bool) {
+	if !u.Secret.IsSet() {
+		return nil, false
+	}
+	if u.Secret.IsNil() {
+		return nil, true
+	}
+	v := u.Secret.Value()
 	return &v, true
 }
 

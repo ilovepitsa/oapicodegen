@@ -4,6 +4,7 @@ import (
 	"nschugorev/oapigenerator/internal/codegen"
 	"nschugorev/oapigenerator/internal/codegen/gogen"
 	"nschugorev/oapigenerator/internal/parser"
+	"strings"
 )
 
 // auditClientFile генерирует interfaces/client/audit.gen.go с audit-версиями
@@ -91,6 +92,8 @@ func (g *Generator) renderRequestAuditStruct(
 
 // renderAuditParamField рендерит поле path/query-параметра в audit-структуре.
 // Тип совпадает с полем в <Op>Request — копирование через присваивание.
+// Pointer-логика повторяет renderParamField из client.go: path-параметры
+// всегда required (без pointer), optional query-параметры — *T.
 func (g *Generator) renderAuditParamField(
 	w *codegen.BufferWriter,
 	p *parser.Parameter,
@@ -98,6 +101,12 @@ func (g *Generator) renderAuditParamField(
 ) {
 	fieldName := goName(p.Name)
 	fieldType := m.goType(p.Schema)
+
+	required := p.Required || p.In == oapiParamPath
+	if !required && !strings.HasPrefix(fieldType, "*") && !isInherentlyNilable(fieldType) {
+		fieldType = "*" + fieldType
+	}
+
 	w.Print("\t", fieldName, " ", fieldType, "\n")
 }
 
@@ -169,6 +178,12 @@ func (g *Generator) renderOpResponseAudit(
 
 		schema := responseSchema(r)
 		if schema == nil {
+			continue
+		}
+
+		// Only $ref schemas have GetAuditData() from T27.3. Inline schemas
+		// (arrays, primitives, anonymous objects) don't get audit methods.
+		if schema.Ref == "" {
 			continue
 		}
 

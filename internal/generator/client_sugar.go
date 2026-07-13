@@ -69,11 +69,12 @@ func (g *Generator) renderSugarMethod(w *codegen.BufferWriter, op *parser.Operat
 
 	if successCode != "" {
 		field := responseFieldName(successCode)
-		w.Print("\tif resp.", field, " != nil {\n")
 
 		if hasReturn {
+			w.Print("\tif resp.", field, " != nil {\n")
 			w.Print("\t\treturn resp.", field, ", nil\n")
 		} else {
+			w.Print("\tif resp.", field, " {\n")
 			w.Print("\t\treturn nil\n")
 		}
 

@@ -1634,7 +1634,7 @@ components:
 	assert.True(t, containsCollapsed(got, "func (x *ClientSugared) DeletePet(ctx context.Context, req *DeletePetRequest) error {"))
 	assert.Contains(t, got, "resp, err := x.impl.ListPets(ctx, req)")
 	assert.Contains(t, got, "return resp.Response200, nil")
-	assert.Contains(t, got, "if resp.Response204 != nil {")
+	assert.Contains(t, got, "if resp.Response204 {")
 	assert.Contains(t, got, "return nil")
 }
 
@@ -4101,7 +4101,7 @@ components:
 	got := string(generateAuditClientFile(t, doc))
 
 	assert.Contains(t, got, "type ListPetsRequestAuditData struct {")
-	assert.Contains(t, got, "Limit int")
+	assert.Regexp(t, `Limit\s+\*int`, got)
 	assert.NotContains(t, got, "Body any")
 }
 
@@ -4226,4 +4226,99 @@ components:
 
 	// default response → no audit struct.
 	assert.NotContains(t, got, "ResponseDefaultAuditData")
+}
+
+// TestGenerate_AuditData_Compiles — end-to-end проверка, что сгенерированные
+// audit-data файлы (model + interfaces/client) компилируются вместе.
+func TestGenerate_AuditData_Compiles(t *testing.T) {
+	if testing.Short() {
+		t.Skip("compile test skipped in short mode")
+	}
+
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go binary not in PATH, skipping compile test")
+	}
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets/{petId}:
+    get:
+      operationId: getPet
+      parameters:
+        - {name: petId, in: path, required: true, schema: {type: string}}
+        - {name: verbose, in: query, schema: {type: boolean}}
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pet'}
+        '404': {description: not found}
+    put:
+      operationId: updatePet
+      parameters:
+        - {name: petId, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pet'}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        secret: {type: string, x-sensitive: true}
+        tag: {type: string, nullable: true}
+`)
+	files := generateFiles(t, doc)
+
+	dir := t.TempDir()
+	modelDir := filepath.Join(dir, "model")
+	sensitiveDir := filepath.Join(dir, "pkg", "sensitive")
+	optionalDir := filepath.Join(dir, "pkg", "optional")
+	require.NoError(t, os.MkdirAll(modelDir, 0o755))
+	require.NoError(t, os.MkdirAll(sensitiveDir, 0o755))
+	require.NoError(t, os.MkdirAll(optionalDir, 0o755))
+
+	// Generated audit-data code imports nschugorev/oapigenerator/pkg/sensitive
+	// (hardcoded sensitivePkg in audit_model.go). Update<Name> structs use
+	// pkg/optional. Temp module must match the real module path.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"),
+		[]byte("module nschugorev/oapigenerator\n\ngo 1.26\n"), 0o644))
+
+	sensitiveSrc, err := os.ReadFile("../../pkg/sensitive/sensitive.go")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(sensitiveDir, "sensitive.go"),
+		sensitiveSrc, 0o644))
+
+	optionalSrc, err := os.ReadFile("../../pkg/optional/optional.go")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(optionalDir, "optional.go"),
+		optionalSrc, 0o644))
+
+	for name, content := range files {
+		if !strings.HasPrefix(name, "model/") {
+			continue
+		}
+
+		require.NoError(t, os.WriteFile(filepath.Join(modelDir, filepath.Base(name)), content, 0o644))
+	}
+
+	cmd := exec.Command("go", "build", "./model")
+	cmd.Dir = dir
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generated audit-data model package did not compile: %v\n--- output ---\n%s", err, out)
+	}
 }

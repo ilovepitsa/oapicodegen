@@ -65,7 +65,7 @@ func (x *ClientSugared) DeleteItem(ctx context.Context, req *DeleteItemRequest) 
 	if err != nil {
 		return err
 	}
-	if resp.Response204 != nil {
+	if resp.Response204 {
 		return nil
 	}
 	return fmt.Errorf("unexpected status: %d", resp.Code)
