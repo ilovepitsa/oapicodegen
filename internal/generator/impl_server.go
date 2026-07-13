@@ -20,12 +20,15 @@ func (g *Generator) implServerFile() codegen.File {
 	}
 
 	needBody := false
+	needURLForm := false
 
 	for _, op := range g.doc.Operations {
 		if op.RequestBody != nil {
 			needBody = true
 
-			break
+			if requestBodyIsURLForm(op.RequestBody) {
+				needURLForm = true
+			}
 		}
 	}
 
@@ -36,7 +39,12 @@ func (g *Generator) implServerFile() codegen.File {
 		m.addImport("net/http", "")
 	}
 
-	body := g.renderImplServer(needBody)
+	if needURLForm {
+		m.addImport("net/url", "")
+		m.addImport("strings", "")
+	}
+
+	body := g.renderImplServer(needBody, needURLForm)
 
 	return g.factory.Create(&gogen.File{
 		Package: "server",
@@ -45,7 +53,7 @@ func (g *Generator) implServerFile() codegen.File {
 	})
 }
 
-func (g *Generator) renderImplServer(needBody bool) []byte {
+func (g *Generator) renderImplServer(needBody, needURLForm bool) []byte {
 	w := codegen.NewBufferWriter()
 
 	w.Print("type ServerHTTP struct {\n")
@@ -57,23 +65,7 @@ func (g *Generator) renderImplServer(needBody bool) []byte {
 	w.Print("}\n\n")
 
 	if needBody {
-		w.WriteString("// bindBody читает тело запроса, сбрасывает его для c.Bind() и\n")
-		w.WriteString("// десериализует в dst. c.Bind() повторно читает тело, но поля с\n")
-		w.WriteString("// json:\"-\" игнорируются — поэтому Body декодируется отдельно.\n")
-		w.Print("func bindBody(c echo.Context, dst any) error {\n")
-		w.Print("\tbody, err := io.ReadAll(c.Request().Body)\n")
-		w.Print("\tif err != nil {\n")
-		w.Print("\t\treturn err\n")
-		w.Print("\t}\n")
-		w.Print("\tc.Request().Body = io.NopCloser(bytes.NewReader(body))\n")
-		w.Print("\tif len(body) == 0 {\n")
-		w.Print("\t\treturn nil\n")
-		w.Print("\t}\n")
-		w.Print("\tif err := json.Unmarshal(body, dst); err != nil {\n")
-		w.Print("\t\treturn echo.NewHTTPError(http.StatusBadRequest, err.Error())\n")
-		w.Print("\t}\n")
-		w.Print("\treturn nil\n")
-		w.Print("}\n\n")
+		g.renderBindBody(w, needURLForm)
 	}
 
 	w.Print("func (s *ServerHTTP) Register(e *echo.Echo) {\n")
@@ -92,6 +84,40 @@ func (g *Generator) renderImplServer(needBody bool) []byte {
 	}
 
 	return w.Content()
+}
+
+func (g *Generator) renderBindBody(w *codegen.BufferWriter, needURLForm bool) {
+	w.WriteString("// bindBody читает тело запроса, сбрасывает его для c.Bind() и\n")
+	w.WriteString("// десериализует в dst. c.Bind() повторно читает тело, но поля с\n")
+	w.WriteString("// json:\"-\" игнорируются — поэтому Body декодируется отдельно.\n")
+	w.Print("func bindBody(c echo.Context, dst any) error {\n")
+
+	if needURLForm {
+		w.Print("\tct := c.Request().Header.Get(\"Content-Type\")\n")
+		w.Print("\tif strings.HasPrefix(ct, \"application/x-www-form-urlencoded\") {\n")
+		w.Print("\t\tif err := c.Request().ParseForm(); err != nil {\n")
+		w.Print("\t\t\treturn err\n")
+		w.Print("\t\t}\n")
+		w.Print("\t\tif u, ok := dst.(interface{ UnmarshalURLForm(url.Values) error }); ok {\n")
+		w.Print("\t\t\treturn u.UnmarshalURLForm(c.Request().PostForm)\n")
+		w.Print("\t\t}\n")
+		w.Print("\t\treturn nil\n")
+		w.Print("\t}\n")
+	}
+
+	w.Print("\tbody, err := io.ReadAll(c.Request().Body)\n")
+	w.Print("\tif err != nil {\n")
+	w.Print("\t\treturn err\n")
+	w.Print("\t}\n")
+	w.Print("\tc.Request().Body = io.NopCloser(bytes.NewReader(body))\n")
+	w.Print("\tif len(body) == 0 {\n")
+	w.Print("\t\treturn nil\n")
+	w.Print("\t}\n")
+	w.Print("\tif err := json.Unmarshal(body, dst); err != nil {\n")
+	w.Print("\t\treturn echo.NewHTTPError(http.StatusBadRequest, err.Error())\n")
+	w.Print("\t}\n")
+	w.Print("\treturn nil\n")
+	w.Print("}\n\n")
 }
 
 func (g *Generator) renderImplServerMethod(w *codegen.BufferWriter, op *parser.Operation) {

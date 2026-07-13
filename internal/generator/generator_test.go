@@ -4,6 +4,7 @@ import (
 	"go/parser"
 	"go/token"
 	"nschugorev/oapigenerator/internal/codegen"
+	"nschugorev/oapigenerator/internal/codegen/gogen"
 	"nschugorev/oapigenerator/internal/golden"
 	"os"
 	"os/exec"
@@ -2760,4 +2761,745 @@ components:
 	files := generateFiles(t, doc)
 	_, ok := files["model/expected_validators.gen.go"]
 	assert.False(t, ok, "expected_validators.gen.go should not be generated when only simple rules exist")
+}
+
+// --- URLForm tests (T25c.1) ---
+
+// generatePetURLFormFile рендерит url-form файл для схемы Pet из doc.
+// Использует приватный Generator без Options — только для unit-тестов
+// рендерера (T25c.1, T25c.2). Wire-up через Generate проверяется в T25c.3.
+func generatePetURLFormFile(t *testing.T, doc *oapiparser.Document) []byte {
+	t.Helper()
+
+	g := &Generator{
+		doc:     doc,
+		factory: gogen.NewFileFactory("oapigen"),
+	}
+
+	for _, sh := range doc.Schemas {
+		if sh.Name == "Pet" {
+			return g.urlFormMethodsFile(sh).Content()
+		}
+	}
+
+	t.Fatal("schema Pet not found")
+
+	return nil
+}
+
+func TestSchemeHasURLFormat_RefBody(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+    Other:
+      type: object
+      properties:
+        id: {type: integer}
+`)
+
+	pet := findSchemaByName(t, doc, "Pet")
+	other := findSchemaByName(t, doc, "Other")
+
+	assert.True(t, schemeHasURLFormat(pet, doc), "Pet is referenced from form-urlencoded body")
+	assert.False(t, schemeHasURLFormat(other, doc), "Other is not referenced from any form body")
+}
+
+func TestSchemeHasURLFormat_JSONBody_False(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+`)
+
+	pet := findSchemaByName(t, doc, "Pet")
+	assert.False(t, schemeHasURLFormat(pet, doc), "JSON body should not trigger URL form generation")
+}
+
+func TestMarshalURLForm_PrimitiveFields(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name, age, active, score]
+      properties:
+        name: {type: string}
+        age: {type: integer, format: int64}
+        active: {type: boolean}
+        score: {type: number, format: float}
+`)
+	got := string(generatePetURLFormFile(t, doc))
+
+	assert.Contains(t, got, "func (m Pet) MarshalURLForm() (url.Values, error) {")
+	assert.Contains(t, got, "values := url.Values{}")
+	assert.Contains(t, got, `values.Set("name", m.Name)`)
+	assert.Contains(t, got, `values.Set("age", strconv.FormatInt(int64(m.Age), 10))`)
+	assert.Contains(t, got, `values.Set("active", strconv.FormatBool(m.Active))`)
+	assert.Contains(t, got, `values.Set("score", strconv.FormatFloat(float64(m.Score), 'f', -1, 32))`)
+	assert.Contains(t, got, "return values, nil")
+
+	// Generated file parses as valid Go.
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet_url_form.gen.go", []byte(got), parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestMarshalURLForm_OptionalPointerField(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        tag: {type: string, nullable: true}
+`)
+	got := string(generatePetURLFormFile(t, doc))
+
+	// Required field — direct set.
+	assert.Contains(t, got, `values.Set("name", m.Name)`)
+	// Optional nullable field — guard + dereference.
+	assert.Contains(t, got, "if m.Tag != nil {")
+	assert.Contains(t, got, `values.Set("tag", *m.Tag)`)
+}
+
+func TestMarshalURLForm_DateTimeField(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [createdAt]
+      properties:
+        createdAt: {type: string, format: date-time}
+`)
+	got := string(generatePetURLFormFile(t, doc))
+
+	assert.Contains(t, got, `values.Set("createdAt", m.CreatedAt.Format(time.RFC3339))`)
+}
+
+func TestMarshalURLForm_UnsupportedArray(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name, tags]
+      properties:
+        name: {type: string}
+        tags:
+          type: array
+          items: {type: string}
+`)
+	got := string(generatePetURLFormFile(t, doc))
+
+	// Array field unsupported → immediate error return, no values.Set calls.
+	assert.Contains(t, got, "func (m Pet) MarshalURLForm() (url.Values, error) {")
+	assert.Contains(t, got, `return nil, fmt.Errorf("field Tags: url-form encoding not supported")`)
+	assert.NotContains(t, got, "values.Set")
+
+	// Generated file parses as valid Go.
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet_url_form.gen.go", []byte(got), parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestMarshalURLForm_UnsupportedRef(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name, owner]
+      properties:
+        name: {type: string}
+        owner: {$ref: '#/components/schemas/Owner'}
+    Owner:
+      type: object
+      properties:
+        id: {type: integer}
+`)
+	got := string(generatePetURLFormFile(t, doc))
+
+	// $ref field unsupported → error return.
+	assert.Contains(t, got, `return nil, fmt.Errorf("field Owner: url-form encoding not supported")`)
+}
+
+func TestUnmarshalURLForm_PrimitiveFields(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name, age, active, score]
+      properties:
+        name: {type: string}
+        age: {type: integer, format: int64}
+        active: {type: boolean}
+        score: {type: number, format: float}
+`)
+	got := string(generatePetURLFormFile(t, doc))
+
+	assert.Contains(t, got, "func (m *Pet) UnmarshalURLForm(values url.Values) error {")
+	// Plain string → direct assign.
+	assert.Contains(t, got, `m.Name = values.Get("name")`)
+	// int64 → ParseInt + direct assign (no cast).
+	assert.Contains(t, got, `parsed, err := strconv.ParseInt(values.Get("age"), 10, 64)`)
+	assert.Contains(t, got, `m.Age = parsed`)
+	// bool → ParseBool + direct assign.
+	assert.Contains(t, got, `parsed, err := strconv.ParseBool(values.Get("active"))`)
+	assert.Contains(t, got, `m.Active = parsed`)
+	// float32 → ParseFloat + cast.
+	assert.Contains(t, got, `parsed, err := strconv.ParseFloat(values.Get("score"), 32)`)
+	assert.Contains(t, got, `m.Score = float32(parsed)`)
+	assert.Contains(t, got, "return nil")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet_url_form.gen.go", []byte(got), parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestUnmarshalURLForm_Int32Field(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [age]
+      properties:
+        age: {type: integer, format: int32}
+`)
+	got := string(generatePetURLFormFile(t, doc))
+
+	assert.Contains(t, got, `parsed, err := strconv.ParseInt(values.Get("age"), 10, 32)`)
+	assert.Contains(t, got, `m.Age = int32(parsed)`)
+}
+
+func TestUnmarshalURLForm_OptionalPointerField(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        tag: {type: string, nullable: true}
+        age: {type: integer, format: int64, nullable: true}
+`)
+	got := string(generatePetURLFormFile(t, doc))
+
+	// Required string → direct assign.
+	assert.Contains(t, got, `m.Name = values.Get("name")`)
+	// Nullable string → guard + &v.
+	assert.Contains(t, got, `if v := values.Get("tag"); v != "" {`)
+	assert.Contains(t, got, `m.Tag = &v`)
+	// Nullable int64 → guard + parse + &parsed.
+	assert.Contains(t, got, `if v := values.Get("age"); v != "" {`)
+	assert.Contains(t, got, `parsed, err := strconv.ParseInt(v, 10, 64)`)
+	assert.Contains(t, got, `m.Age = &parsed`)
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet_url_form.gen.go", []byte(got), parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestUnmarshalURLForm_PointerWithCast(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        score: {type: number, format: float, nullable: true}
+`)
+	got := string(generatePetURLFormFile(t, doc))
+
+	// Nullable float32 → guard + parse + converted temp + &converted.
+	assert.Contains(t, got, `if v := values.Get("score"); v != "" {`)
+	assert.Contains(t, got, `parsed, err := strconv.ParseFloat(v, 32)`)
+	assert.Contains(t, got, `converted := float32(parsed)`)
+	assert.Contains(t, got, `m.Score = &converted`)
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet_url_form.gen.go", []byte(got), parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestUnmarshalURLForm_DateTimeField(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [createdAt]
+      properties:
+        createdAt: {type: string, format: date-time}
+`)
+	got := string(generatePetURLFormFile(t, doc))
+
+	assert.Contains(t, got, `parsed, err := time.Parse(time.RFC3339, values.Get("createdAt"))`)
+	assert.Contains(t, got, `m.CreatedAt = parsed`)
+}
+
+func TestUnmarshalURLForm_DateField(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [birthday]
+      properties:
+        birthday: {type: string, format: date}
+`)
+	got := string(generatePetURLFormFile(t, doc))
+
+	assert.Contains(t, got, `parsed, err := time.Parse(time.DateOnly, values.Get("birthday"))`)
+	assert.Contains(t, got, `m.Birthday = parsed`)
+}
+
+func TestUnmarshalURLForm_UnsupportedArray(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name, tags]
+      properties:
+        name: {type: string}
+        tags:
+          type: array
+          items: {type: string}
+`)
+	got := string(generatePetURLFormFile(t, doc))
+
+	assert.Contains(t, got, "func (m *Pet) UnmarshalURLForm(values url.Values) error {")
+	assert.Contains(t, got, `return fmt.Errorf("field Tags: url-form decoding not supported")`)
+	assert.NotContains(t, got, "values.Get")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet_url_form.gen.go", []byte(got), parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func findSchemaByName(t *testing.T, doc *oapiparser.Document, name string) *oapiparser.Schema {
+	t.Helper()
+
+	for _, sh := range doc.Schemas {
+		if sh.Name == name {
+			return sh
+		}
+	}
+
+	t.Fatalf("schema %s not found", name)
+
+	return nil
+}
+
+// --- T25c.3 integration tests ---
+
+func TestGenerate_URLFormFile_Generated(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name, age]
+      properties:
+        name: {type: string}
+        age: {type: integer, format: int64}
+`)
+	files := generateFiles(t, doc)
+
+	got, ok := files["model/pet_url_form.gen.go"]
+	require.True(t, ok, "pet_url_form.gen.go should be generated for URL-form body")
+
+	src := string(got)
+	assert.Contains(t, src, "func (m Pet) MarshalURLForm() (url.Values, error) {")
+	assert.Contains(t, src, "func (m *Pet) UnmarshalURLForm(values url.Values) error {")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet_url_form.gen.go", got, parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestGenerate_URLFormFile_NotGeneratedForJSONBody(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	files := generateFiles(t, doc)
+
+	_, ok := files["model/pet_url_form.gen.go"]
+	assert.False(t, ok, "pet_url_form.gen.go should not be generated for JSON body")
+}
+
+func TestGenerate_URLFormClient_UsesMarshalURLForm(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+`)
+	files := generateFiles(t, doc)
+
+	got, ok := files["impl/httpclient/client.gen.go"]
+	require.True(t, ok, "client.gen.go should be generated")
+
+	src := string(got)
+	assert.Contains(t, src, "values, err := req.Body.MarshalURLForm()")
+	assert.Contains(t, src, "body := []byte(values.Encode())")
+	assert.NotContains(t, src, "json.Marshal(req.Body)")
+	assert.Contains(t, src, `httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")`)
+	assert.NotContains(t, src, `httpReq.Header.Set("Content-Type", "application/json")`)
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "client.gen.go", got, parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestGenerate_URLFormServer_UsesUnmarshalURLForm(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+`)
+	files := generateFiles(t, doc)
+
+	got, ok := files["impl/echoserver/server.gen.go"]
+	require.True(t, ok, "server.gen.go should be generated")
+
+	src := string(got)
+	assert.Contains(t, src, `strings.HasPrefix(ct, "application/x-www-form-urlencoded")`)
+	assert.Contains(t, src, "interface{ UnmarshalURLForm(url.Values) error }")
+	assert.Contains(t, src, "u.UnmarshalURLForm(c.Request().PostForm)")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "server.gen.go", got, parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestGenerate_URLFormServer_NoURLFormBranchWhenOnlyJSON(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '201': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	files := generateFiles(t, doc)
+
+	got, ok := files["impl/echoserver/server.gen.go"]
+	require.True(t, ok, "server.gen.go should be generated")
+
+	src := string(got)
+	assert.NotContains(t, src, "application/x-www-form-urlencoded")
+	assert.NotContains(t, src, "UnmarshalURLForm")
 }

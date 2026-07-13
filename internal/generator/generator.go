@@ -107,6 +107,15 @@ func (g *Generator) writeSchemaFiles(fw codegen.FileWriter, sh *parser.Schema) e
 		}
 	}
 
+	if schemeHasURLFormat(sh, g.doc) {
+		uf := g.urlFormMethodsFile(sh)
+		uname := "model/" + fileName(sh.Name) + "_url_form.gen.go"
+
+		if err := fw.WriteFile(uname, uf); err != nil {
+			return fmt.Errorf("write %s: %w", uname, err)
+		}
+	}
+
 	return nil
 }
 

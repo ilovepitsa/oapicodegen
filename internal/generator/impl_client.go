@@ -55,8 +55,12 @@ func (g *Generator) implClientImports() (bool, bool, bool) {
 
 	for _, op := range g.doc.Operations {
 		if op.RequestBody != nil {
-			needJSON = true
-			needBytes = true
+			if requestBodyIsURLForm(op.RequestBody) {
+				needBytes = true
+			} else {
+				needJSON = true
+				needBytes = true
+			}
 		}
 
 		for _, r := range op.Responses {
@@ -166,10 +170,18 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 
 	hasBody := op.RequestBody != nil
 	if hasBody {
-		w.Print("\tbody, err := json.Marshal(req.Body)\n")
-		w.Print("\tif err != nil {\n")
-		w.Print("\t\treturn nil, fmt.Errorf(\"encode body: %w\", err)\n")
-		w.Print("\t}\n")
+		if requestBodyIsURLForm(op.RequestBody) {
+			w.Print("\tvalues, err := req.Body.MarshalURLForm()\n")
+			w.Print("\tif err != nil {\n")
+			w.Print("\t\treturn nil, fmt.Errorf(\"encode body: %w\", err)\n")
+			w.Print("\t}\n")
+			w.Print("\tbody := []byte(values.Encode())\n")
+		} else {
+			w.Print("\tbody, err := json.Marshal(req.Body)\n")
+			w.Print("\tif err != nil {\n")
+			w.Print("\t\treturn nil, fmt.Errorf(\"encode body: %w\", err)\n")
+			w.Print("\t}\n")
+		}
 	}
 
 	w.Print("\thttpReq, err := http.NewRequestWithContext(ctx, \"", op.Method, "\", u.String(), ")
@@ -201,7 +213,11 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 	}
 
 	if hasBody {
-		w.Print("\thttpReq.Header.Set(\"Content-Type\", \"application/json\")\n")
+		if requestBodyIsURLForm(op.RequestBody) {
+			w.Print("\thttpReq.Header.Set(\"Content-Type\", \"application/x-www-form-urlencoded\")\n")
+		} else {
+			w.Print("\thttpReq.Header.Set(\"Content-Type\", \"application/json\")\n")
+		}
 	}
 
 	w.Print("\tresp, err := c.http.Do(ctx, httpReq)\n")
