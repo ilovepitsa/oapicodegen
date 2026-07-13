@@ -104,6 +104,8 @@ func (g *Generator) renderFilteredStruct(
 	if filteredSchemaHasDefaults(g, sh, keep) {
 		g.renderSetDefaultsMethod(w, sh, m, name, keep)
 	}
+
+	g.renderValidateOwn(w, sh, m, name, false, keep)
 }
 
 // renderUpdateStruct рендерит Update<Name> — вариант схемы для PUT/PATCH
@@ -149,6 +151,10 @@ func (g *Generator) renderUpdateStruct(sh *parser.Schema, m *typeMapper, name st
 	w.Print("}\n\n")
 
 	g.renderUpdateGetters(w, sh, m, name)
+
+	g.renderValidateOwn(w, sh, m, "Update"+name, true, func(p *parser.Property) bool {
+		return p.IsUsedInUpdate
+	})
 
 	return w.Content()
 }
@@ -241,6 +247,8 @@ func (g *Generator) renderStruct(w *codegen.BufferWriter, sh *parser.Schema, m *
 	if filteredSchemaHasDefaults(g, sh, nil) {
 		g.renderSetDefaultsMethod(w, sh, m, name, nil)
 	}
+
+	g.renderValidateOwn(w, sh, m, name, false, nil)
 }
 
 func (g *Generator) renderField(w *codegen.BufferWriter, p *parser.Property, m *typeMapper) { //nolint:lll // function signature

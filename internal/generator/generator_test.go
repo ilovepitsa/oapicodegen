@@ -2413,3 +2413,351 @@ func extractStructBlock(t *testing.T, src, structName string) string {
 
 	return src[startIdx:i]
 }
+
+// --- Validation generation tests (T-val.3) ---
+
+func TestGenerate_ValidateOwn_SimpleRule(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [age]
+      properties:
+        age:
+          type: integer
+          x-validations: [">0"]
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/pet.gen.go"])
+
+	assert.Contains(t, got, "func (x Pet) ValidateOwn(reg *validator.Registry) error {")
+	assert.Contains(t, got, `if x.Age <= 0 {`)
+	assert.Contains(t, got, `return fmt.Errorf("field Age: must be > 0")`)
+	assert.Contains(t, got, `validator "nschugorev/oapigenerator/pkg/validator"`)
+
+	// Generated file parses as valid Go.
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "pet.gen.go", files["model/pet.gen.go"], parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestGenerate_ValidateOwn_SizeRule(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          x-validations: ["Size >=2"]
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/pet.gen.go"])
+
+	// Required field — no pointer wrapping. Size-rules use len() without nil-guard.
+	assert.Contains(t, got, `if len(x.Name) < 2 {`)
+	assert.Contains(t, got, `return fmt.Errorf("field Name: must be >= 2")`)
+}
+
+func TestGenerate_ValidateOwn_SizeRule_PointerField(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name:
+          type: string
+          x-validations: ["Size >=2"]
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/pet.gen.go"])
+
+	// Non-required field → *string. Size rule needs nil-guard + deref.
+	assert.Contains(t, got, `if x.Name != nil && len(*x.Name) < 2 {`)
+}
+
+func TestGenerate_ValidateOwn_PointerFieldNilGuard(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        tag:
+          type: string
+          nullable: true
+          x-validations: [">=1"]
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/pet.gen.go"])
+
+	// Nullable field becomes *string — guard + dereference. Rule ">=1" inverts to "< 1".
+	assert.Contains(t, got, `if x.Tag != nil && *x.Tag < 1 {`)
+}
+
+func TestGenerate_ValidateOwn_NamedValidator_Property(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          x-validations: ["cdn.EmailFormat"]
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/pet.gen.go"])
+
+	// Required field — no pointer wrapping, no nil-guard.
+	assert.Contains(t, got, `v, ok := reg.Get("cdn.EmailFormat")`)
+	assert.Contains(t, got, `return fmt.Errorf("validator %q not registered", "cdn.EmailFormat")`)
+	assert.Contains(t, got, `if err := v.Validate(x.Email); err != nil {`)
+	assert.Contains(t, got, `return fmt.Errorf("field Email: %w", err)`)
+}
+
+func TestGenerate_ValidateOwn_NamedValidator_PointerField(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        email:
+          type: string
+          x-validations: ["cdn.EmailFormat"]
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/pet.gen.go"])
+
+	// Non-required → *string. Guard + deref for validator call.
+	assert.Contains(t, got, `if x.Email != nil {`)
+	assert.Contains(t, got, `if err := v.Validate(*x.Email); err != nil {`)
+}
+
+func TestGenerate_ValidateOwn_NamedValidator_SchemaLevel(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      x-validations: ["cdn.PetConsistency"]
+      properties:
+        name: {type: string}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/pet.gen.go"])
+
+	// Schema-level: validator called on receiver, no field-path wrap.
+	assert.Contains(t, got, `v, ok := reg.Get("cdn.PetConsistency")`)
+	assert.Contains(t, got, `if err := v.Validate(x); err != nil {`)
+	assert.Contains(t, got, "\t\treturn err\n")
+}
+
+func TestGenerate_ValidateOwn_NoRules_NotGenerated(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/pet.gen.go"])
+
+	assert.NotContains(t, got, "ValidateOwn")
+}
+
+func TestGenerate_ValidateOwn_UpdateStruct(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets/{id}:
+    put:
+      operationId: updatePet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '200': {description: ok}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name:
+          type: string
+          x-validations: [">=1"]
+        tag:
+          type: string
+          x-validations: [Immutable]
+`)
+	files := generateFiles(t, doc)
+	got := string(files["model/pet.gen.go"])
+
+	// Update struct gets ValidateOwn with IsSet/IsNil guard + .Value() accessor.
+	// Rule ">=1" inverts to "< 1".
+	assert.Contains(t, got, "func (x UpdatePet) ValidateOwn(reg *validator.Registry) error {")
+	assert.Contains(t, got, `if x.Name.IsSet() && !x.Name.IsNil() && x.Name.Value() < 1 {`)
+
+	// Tag is Immutable non-name — skipped from UpdatePet, so no validation for it.
+	updateBlock := extractStructBlock(t, got, "UpdatePet")
+	assert.NotContains(t, updateBlock, "Tag")
+}
+
+func TestGenerate_ValidateOwn_SplitStruct(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name:
+          type: string
+          x-validations: [">=1"]
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+          x-validations: [">0"]
+`)
+	pf := oapiparser.ProjectFeatures{}
+	pf.SplitRequestResponse.Value = true
+	files := generateFilesWithFeatures(t, doc, pf)
+	got := string(files["model/pet.gen.go"])
+
+	// Request variant: name only (id is readOnly, filtered out). Rule ">=1" → "< 1".
+	// name is non-required → *string, so guard + deref.
+	assert.Contains(t, got, "func (x PetRequest) ValidateOwn(reg *validator.Registry) error {")
+	assert.Contains(t, got, `if x.Name != nil && *x.Name < 1 {`)
+
+	// Response variant: both name and id present. id → ID (initialism).
+	assert.Contains(t, got, "func (x PetResponse) ValidateOwn(reg *validator.Registry) error {")
+	assert.Contains(t, got, `if x.ID != nil && *x.ID <= 0 {`)
+	assert.Contains(t, got, `if x.Name != nil && *x.Name < 1 {`)
+}
+
+func TestGenerate_ExpectedValidatorsFile(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      x-validations: ["cdn.PetConsistency"]
+      properties:
+        email:
+          type: string
+          x-validations: ["cdn.EmailFormat"]
+        name:
+          type: string
+          x-validations: ["cdn.NotEmpty", "cdn.EmailFormat"]
+    Owner:
+      type: object
+      properties:
+        contact:
+          type: string
+          x-validations: ["cdn.EmailFormat"]
+`)
+	files := generateFiles(t, doc)
+	got, ok := files["model/expected_validators.gen.go"]
+	require.True(t, ok, "expected_validators.gen.go should be generated")
+
+	src := string(got)
+	assert.Contains(t, src, "func ExpectedValidatorNames() []string {")
+	assert.Contains(t, src, `"cdn.EmailFormat",`)
+	assert.Contains(t, src, `"cdn.NotEmpty",`)
+	assert.Contains(t, src, `"cdn.PetConsistency",`)
+
+	// Sorted: EmailFormat < NotEmpty < PetConsistency.
+	emailIdx := strings.Index(src, `"cdn.EmailFormat"`)
+	notEmptyIdx := strings.Index(src, `"cdn.NotEmpty"`)
+	consistencyIdx := strings.Index(src, `"cdn.PetConsistency"`)
+	assert.Greater(t, notEmptyIdx, emailIdx, "NotEmpty should come after EmailFormat")
+	assert.Greater(t, consistencyIdx, notEmptyIdx, "PetConsistency should come after NotEmpty")
+
+	fset := token.NewFileSet()
+	_, err := parser.ParseFile(fset, "expected_validators.gen.go", got, parser.AllErrors)
+	require.NoError(t, err)
+}
+
+func TestGenerate_ExpectedValidatorsFile_NotGeneratedWhenNoNamed(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        age:
+          type: integer
+          x-validations: [">0"]
+`)
+	files := generateFiles(t, doc)
+	_, ok := files["model/expected_validators.gen.go"]
+	assert.False(t, ok, "expected_validators.gen.go should not be generated when only simple rules exist")
+}

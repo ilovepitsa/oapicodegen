@@ -77,6 +77,10 @@ func Generate(fw codegen.FileWriter, doc *parser.Document, opts ...Option) error
 		return err
 	}
 
+	if err := g.writeExpectedValidatorsFile(fw); err != nil {
+		return err
+	}
+
 	if len(doc.Operations) > 0 {
 		if err := g.writeOperationFiles(fw); err != nil {
 			return err
