@@ -94,6 +94,8 @@ func fillSchema(s *Schema, sh *highbase.Schema) {
 			propProxy := pair.Value()
 			propHigh := schemaProxyHigh(propProxy)
 
+			immutable, propValidations := parsePropertyValidations(propHigh)
+
 			s.Properties = append(s.Properties, &Property{
 				Name:             pair.Key(),
 				Schema:           schemaFromProxy(propProxy),
@@ -101,7 +103,8 @@ func fillSchema(s *Schema, sh *highbase.Schema) {
 				RequestRequired:  readBoolExtension(propHigh, extRequestRequired),
 				ResponseRequired: readBoolExtension(propHigh, extResponseRequired),
 				Optional:         readBoolExtension(propHigh, extOptional),
-				Immutable:        hasXValidation(propHigh, extValidationImmutable),
+				Immutable:        immutable,
+				Validations:      propValidations,
 			})
 		}
 	}
@@ -109,6 +112,8 @@ func fillSchema(s *Schema, sh *highbase.Schema) {
 	s.AllOf = appendComposites(s.AllOf, sh.AllOf)
 	s.OneOf = appendComposites(s.OneOf, sh.OneOf)
 	s.AnyOf = appendComposites(s.AnyOf, sh.AnyOf)
+
+	s.Validations = parseSchemaValidations(sh)
 }
 
 func appendComposites(dst []*Schema, proxies []*highbase.SchemaProxy) []*Schema {
@@ -199,25 +204,4 @@ func readBoolExtension(sh *highbase.Schema, key string) bool {
 	}
 
 	return b
-}
-
-// hasXValidation проверяет, входит ли marker в список x-validations свойства.
-// x-validations — sequence-узел из scalar-строк; пример: [Immutable, Required].
-// Возвращает false, если расширение отсутствует или не sequence.
-func hasXValidation(sh *highbase.Schema, marker string) bool {
-	if sh == nil || sh.Extensions == nil {
-		return false
-	}
-
-	node := sh.Extensions.GetOrZero(extValidations)
-	if node == nil || node.Kind != yaml.SequenceNode {
-		return false
-	}
-
-	var rules []string
-	if err := node.Decode(&rules); err != nil {
-		return false
-	}
-
-	return slices.Contains(rules, marker)
 }

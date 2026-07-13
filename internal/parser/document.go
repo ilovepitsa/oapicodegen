@@ -107,6 +107,10 @@ type Property struct {
 	// IsUsedInUpdate true, если свойство участвует в PATCH/PUT-запросе.
 	// Ставится update-marker'ом (см. update_marker.go).
 	IsUsedInUpdate bool
+	// Validations — правила валидации из x-validations (кроме Immutable,
+	// который идёт в отдельное поле). Простые правила (">0", "Size <=10")
+	// и именованные валидаторы ("cdn.EmailFormat").
+	Validations []ValidationRule
 }
 
 // Schema — минимальное представление JSON Schema / OpenAPI Schema.
@@ -138,7 +142,59 @@ type Schema struct {
 	// IsUsedInUpdate true, если схема участвует в PATCH/PUT request body
 	// какой-то операции. Ставится update-marker'ом (см. update_marker.go).
 	IsUsedInUpdate bool
+	// Validations — schema-level правила из x-validations. Только named
+	// валидаторы (cross-field). Простые правила на уровне схемы не
+	// поддерживаются — они идут на properties.
+	Validations []ValidationRule
 }
+
+// ValidationRule — абстрактное правило валидации из x-validations.
+// Реализации: SimpleRule (">0", "Size <=10") и NamedRule
+// ("cdn.EmailFormat").
+type ValidationRule interface {
+	isValidationRule()
+}
+
+// Target — что сравнивать в SimpleRule.
+type Target int
+
+const (
+	// TargetValue — сравнение самого значения (для чисел).
+	TargetValue Target = iota
+	// TargetSize — сравнение len() для slice/string/map. "Length" в spec
+	// алиас для Size — нормализуется в TargetSize.
+	TargetSize
+)
+
+// Operator — оператор сравнения в SimpleRule.
+type Operator int
+
+const (
+	OpGT Operator = iota // >
+	OpGE                 // >=
+	OpLT                 // <
+	OpLE                 // <=
+	OpEQ                 // ==
+	OpNE                 // !=
+)
+
+// SimpleRule — простое правило валидации: числовое сравнение или
+// сравнение len(). Генерируется как inline if-проверка.
+type SimpleRule struct {
+	Target Target
+	Op     Operator
+	Value  float64
+}
+
+func (SimpleRule) isValidationRule() {}
+
+// NamedRule — именованный валидатор. Имя вида "pkg.Name" — lookup в
+// validator.Registry при вызове ValidateOwn.
+type NamedRule struct {
+	Name string
+}
+
+func (NamedRule) isValidationRule() {}
 
 // Parse парсит OpenAPI 3.x документ из байтов.
 func Parse(data []byte) (*Document, error) {

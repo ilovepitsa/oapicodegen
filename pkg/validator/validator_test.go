@@ -407,29 +407,9 @@ func TestValidator_Validate_CalledWithFieldValue(t *testing.T) {
 
 	r := New()
 
-	type check struct {
-		Value string
-	}
-
-	// Имитация сгенерированного ValidateOwn, который зовёт reg.Get(name).Validate(value).
-	type validatedStruct struct {
-		Value string
-	}
-
-	called := false
-	r.Register(fakeValidator{
-		name: "test.NonEmpty",
-		err:  nil,
-	})
-
-	// Подменяем Validate-вызов: используем тестовый валидатор с tracked-вызовом.
+	// Используем тестовый валидатор с tracked-вызовом.
 	tracked := &trackingValidator{name: "test.NonEmpty"}
 	r.Register(tracked)
-
-	v := validatedStruct{Value: "hello"}
-	_ = v
-	_ = check{Value: "hello"}
-	_ = called
 
 	// Прямой вызов валидатора через registry.
 	got, ok := r.Get("test.NonEmpty")
