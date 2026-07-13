@@ -24,8 +24,17 @@ cookie-параметры.
 `<Name><Code>PayloadWithHeaders`-обёртка с body и типизированными header-полями
 (string/int/int32/int64/float32/float64/bool).
 
-Кастомные `x-*` валидации, audit-data, URL-form encoding и update-схемы
-остаются в бэклоге — см. `TASKS.md`.
+`x-validations`: декларативные правила валидации (простые `>N`/`Size >=N`/
+именованные `pkg.Name`/маркер `Immutable`) → сгенерированный `ValidateOwn(reg)`
++ `model.ExpectedValidatorNames()` для startup-check'а. Runtime-walker —
+`pkg/validator.Validate`. См. раздел [x-validations](#x-validations) ниже.
+
+Update-схемы (`Update<Name>` для PUT/PATCH request body): все поля
+оборачиваются в `optional.Optional[T]` (трёх-state PATCH-семантика),
+`Immutable`-поля пропускаются (кроме `name`), генерируются getter'ы
+`Get<Field>() (*T, bool)` и `ValidateOwn` на property-level правилах.
+
+audit-data, URL-form encoding остаются в бэклоге — см. `TASKS.md`.
 
 ## Установка
 
@@ -95,6 +104,133 @@ GOLANG_SPLIT_REQUEST_RESPONSE: true
 USE_UTC_FOR_DATE_TIME: true
 ```
 
+## x-validations
+
+`x-validations` — расширение OpenAPI-схемы для декларативного описания
+валидационных правил. Генератор переводит их в метод `ValidateOwn(reg)` на
+каждой структуре с правилами; runtime-валидация выполняет
+`pkg/validator.Validate` — reflection-walker, обходит struct-дерево и
+вызывает `ValidateOwn` на каждой структуре, реализующей `Validatable`.
+
+### Синтаксис правил
+
+`x-validations` — список строк. Каждая строка — либо простое правило,
+либо ссылка на именованный валидатор, либо маркер `Immutable`.
+
+```yaml
+properties:
+  age:
+    type: integer
+    x-validations: [">0", "app.PositiveInt"]
+  name:
+    type: string
+    x-validations: ["Size >=1", "Size <=100"]
+  email:
+    type: string
+    x-validations: ["app.EmailFormat"]
+  status:
+    type: string
+    x-validations: ["Immutable"]
+```
+
+| Правило | Семантика | Пример |
+|---------|-----------|--------|
+| `>N` `>=N` `<N` `<=N` `==N` `!=N` | Числовое сравнение значения поля | `>0`, `<=100` |
+| `Size >N` `Size >=N` ... `Length ...` | `len()` поля (строки, slice, map) | `Size >=1`, `Length <=50` |
+| `pkg.Name` | Именованный валидатор. `pkg.Name` — dotted-идентификатор (минимум одна точка) | `app.EmailFormat` |
+| `Immutable` | Маркер update-marker'а: поле пропускается в `Update<Name>` (кроме `name`). Не валидация. | `Immutable` |
+
+Правила на уровне свойства (`properties.<name>.x-validations`) применяются
+к значению поля. Правила на уровне схемы (`x-validations` рядом с
+`type: object`) — только именованные валидаторы, применяемые ко всей
+структуре (cross-field).
+
+### Сгенерированный код
+
+Для каждой схемы с хотя бы одним правилом генерируется:
+
+```go
+func (x Pet) ValidateOwn(reg *validator.Registry) error {
+    // Простые правила — inline if-проверки с инвертированным оператором.
+    if x.Age <= 0 {
+        return fmt.Errorf("field Age: must be > 0")
+    }
+    // Именованные property-валидаторы — reg.Get + Validate + wrap пути.
+    v, ok := reg.Get("app.NonEmptyName")
+    if !ok {
+        return fmt.Errorf("validator %q not registered", "app.NonEmptyName")
+    }
+    if err := v.Validate(x.Name); err != nil {
+        return fmt.Errorf("field Name: %w", err)
+    }
+    // Schema-level валидатор — вызывается на receiver'е, без обёртки пути.
+    // ...
+    return nil
+}
+```
+
+Для `Update<Name>` (PUT/PATCH body) генерируется отдельный `ValidateOwn`
+с `.IsSet() && !.IsNil()` guard'ами и `.Value()` accessor'ами —
+schema-level валидаторы пропускаются (они зарегистрированы под основной
+тип, а не под Update).
+
+### ExpectedValidatorNames
+
+Если в спеке есть хотя бы один named-валидатор, генератор создаёт
+`model/expected_validators.gen.go`:
+
+```go
+func ExpectedValidatorNames() []string {
+    return []string{
+        "app.ItemConsistency",
+        "app.NonEmptyName",
+    }
+}
+```
+
+Используется при старте сервера для fail-fast проверки registry.
+
+### Pattern регистрации валидаторов (server-side)
+
+```go
+package main
+
+import (
+    "log"
+    "nschugorev/oapigenerator/pkg/validator"
+
+    // Сгенерированная модель с ExpectedValidatorNames и ValidateOwn.
+    // import "your/module/gen/model"
+)
+
+func main() {
+    reg := validator.New()
+    reg.Register(app.EmailFormat{})
+    reg.Register(app.NonEmptyName{})
+    reg.Register(app.PetConsistency{})
+
+    // Fail-fast: если spec требует валидатор, которого нет в registry
+    // (или registry содержит лишний) — приложение не стартует.
+    if err := reg.AssertExact(model.ExpectedValidatorNames()); err != nil {
+        log.Fatalf("validator registry mismatch: %v", err)
+    }
+
+    // Обработка входящего запроса.
+    var req model.Pet // decode from JSON
+    if err := validator.Validate(req, reg); err != nil {
+        writeError(w, 400, err) // e.g. "field Name: must be >= 1"
+        return
+    }
+    // ...
+}
+```
+
+Walker обходит struct/slice/array/map/ptr/interface через reflection,
+вызывает `ValidateOwn` на каждой структуре и при ошибке заворачивает её
+с путём вида `Owner.Pets[2].Name`. Fail-fast: первая ошибка прерывает обход.
+
+Рабочий пример: `examples/validation/main.go` (запуск — `go run ./examples/validation/`).
+
 ## Make-таргеты
 
 ```sh
@@ -117,6 +253,7 @@ make clean         # удалить артефакты сборки
 ```
 oapigenerator/
 ├── cmd/oapigen/        # точка входа CLI (main.go, e2e-тесты)
+├── examples/           # runnable examples (validation pattern и т.д.)
 ├── internal/
 │   ├── parser/         # чтение OpenAPI 3.x + generation_flags loader
 │   ├── generator/      # ядро генератора (schema, client, server, http, mocks, sdk, response_headers, utc_time)
