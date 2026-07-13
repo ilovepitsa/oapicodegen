@@ -31,8 +31,8 @@ func Main() int {
 
 //nolint:gocyclo,cyclop,funlen // CLI pipeline, linear by nature
 func run(args []string, stderr *os.File) error {
-	fs := flag.NewFlagSet("oapigen", flag.ContinueOnError)
-	fs.SetOutput(stderr)
+	flagSet := flag.NewFlagSet("oapigen", flag.ContinueOnError)
+	flagSet.SetOutput(stderr)
 
 	var (
 		input                 string
@@ -43,23 +43,24 @@ func run(args []string, stderr *os.File) error {
 		projectFlagsPath      string
 	)
 
-	fs.StringVar(&input, "input", "", "path to OpenAPI 3.x spec file")
-	fs.StringVar(&output, "output", "", "output directory for generated Go packages")
-	fs.StringVar(&importPrefix, "import-prefix", "", "Go import path prefix for generated packages")
-	fs.BoolVar(&dryRun, "dry-run", false, "parse and generate without writing to filesystem")
-	fs.StringVar(
+	flagSet.StringVar(&input, "input", "", "path to OpenAPI 3.x spec file")
+	flagSet.StringVar(&output, "output", "", "output directory for generated Go packages")
+	flagSet.StringVar(&importPrefix, "import-prefix", "",
+		"Go import path prefix for generated packages")
+	flagSet.BoolVar(&dryRun, "dry-run", false, "parse and generate without writing to filesystem")
+	flagSet.StringVar(
 		&generationFlagsConfig, "generation-flags-config-path", "",
 		"path to global generation_flags.yaml",
 	)
-	fs.StringVar(
+	flagSet.StringVar(
 		&projectFlagsPath, "project-flags-path", "",
 		"path to per-project generation flags override",
 	)
 
-	logCfg := logging.NewLoggerConfiguratorFromFlags(fs)
-	fwCfg := configurator.NewFileWriterConfiguratorFromFlags(fs)
+	logCfg := logging.NewLoggerConfiguratorFromFlags(flagSet)
+	fwCfg := configurator.NewFileWriterConfiguratorFromFlags(flagSet)
 
-	if err := fs.Parse(args); err != nil {
+	if err := flagSet.Parse(args); err != nil {
 		return fmt.Errorf("parse flags: %w", err)
 	}
 
