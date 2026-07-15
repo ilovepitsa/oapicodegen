@@ -1,0 +1,19 @@
+openapi: 3.0.3
+info:
+  title: AuthBackend
+  version: 1.0.0
+paths:
+  /login:
+    post:
+      operationId: Login
+      tags: [AuthBackend]
+      responses:
+        '200':
+          description: ok
+components:
+  schemas:
+    LoginRequest:
+      type: object
+      properties:
+        token:
+          type: string

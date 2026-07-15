@@ -1,0 +1,36 @@
+- name: GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS
+  description: "Don't auto-fill defaults in server request binding"
+  enabled: true
+  defaultValue: false
+  targetValue: true
+  affects: [golang]
+
+- name: GOLANG_SPLIT_REQUEST_RESPONSE
+  description: "Separate Request/Response models"
+  enabled: true
+  defaultValue: false
+  targetValue: true
+  affects: [golang]
+
+- name: USE_REQUIRED_V2
+  description: "Support x-request-required/x-response-required"
+  enabled: true
+  defaultValue: false
+  targetValue: true
+  dependsOn:
+    GOLANG_SPLIT_REQUEST_RESPONSE: true
+  affects: [golang]
+
+- name: USE_UTC_FOR_DATE_TIME
+  description: "Use UTC for date-time fields"
+  enabled: false
+  defaultValue: false
+  targetValue: false
+  affects: [golang]
+
+- name: GOLANG_USE_OPTIONAL
+  description: "Use optional.Optional[T] for x-optional fields"
+  enabled: true
+  defaultValue: false
+  targetValue: true
+  affects: [golang]
