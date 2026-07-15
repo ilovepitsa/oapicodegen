@@ -17,6 +17,12 @@ paths:
     post:
       operationId: CreateUser
       tags: [UserBackend]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
       responses:
         '201':
           description: created
@@ -26,3 +32,8 @@ components:
       type: array
       items:
         type: string
+    CreateUserRequest:
+      type: object
+      properties:
+        user:
+          $ref: '../../../common/src/openapi/openapi.yaml#/components/schemas/User'

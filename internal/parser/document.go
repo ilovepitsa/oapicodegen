@@ -160,6 +160,18 @@ type Schema struct {
 	// валидаторы (cross-field). Простые правила на уровне схемы не
 	// поддерживаются — они идут на properties.
 	Validations []ValidationRule
+	// SourceFile — абсолютный путь к yaml-файлу, где определена top-level
+	// схема (components.schemas). Заполняется в markExternalRefs. Пустой
+	// для вложенных схем (properties, items, ...).
+	SourceFile string
+	// OwnerProject — проект-владелец top-level схемы. Заполняется в
+	// markExternalRefs. Nil для вложенных схем.
+	OwnerProject *Project
+	// ExternalRef — заполнен, если эта Schema является $ref на схему из
+	// другого сервиса. Содержит абсолютный путь к файлу целевой схемы +
+	// фрагмент (например "/input/common/src/openapi/openapi.yaml#/components/schemas/User").
+	// Пустой для локальных $ref.
+	ExternalRef string
 }
 
 // ValidationRule — абстрактное правило валидации из x-validations.

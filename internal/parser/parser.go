@@ -10,14 +10,18 @@ import (
 	"github.com/pb33f/libopenapi/datamodel"
 	highv3 "github.com/pb33f/libopenapi/datamodel/high/v3"
 	"github.com/pb33f/libopenapi/index"
+
+	nfs "nschugorev/oapigenerator/internal/fs"
 )
 
 // parseBytes парсит OpenAPI 3.x документ из байтов. location — путь для
 // разрешения относительных $ref (пустая строка = без BasePath). fsys —
-// filesystem для резолвинга cross-file $ref (nil = OS filesystem по умолчанию).
+// filesystem для чтения spec-файла и cross-file $ref.
 //
-// fsys оборачивается в *index.LocalFS libopenpi, потому что rolodex требует
-// реализации RolodexFS (plain fs.FS отвергается с "is not a RolodexFS").
+// Для real OS filesystem (nfs.RealFS) LocalFS не настраивается — libopenapi
+// использует default rolodex, что позволяет cross-service $ref выходить за
+// каталог текущей спеки. Для mock FS (тесты) fsys оборачивается в
+// index.LocalFS, чтобы rolodex мог читать из mock-файлов.
 func parseBytes(data []byte, location string, fsys fs.FS) (*Document, error) {
 	cfg := &datamodel.DocumentConfiguration{
 		AllowFileReferences:     true,
@@ -28,15 +32,9 @@ func parseBytes(data []byte, location string, fsys fs.FS) (*Document, error) {
 	}
 
 	if fsys != nil {
-		localFS, err := index.NewLocalFSWithConfig(&index.LocalFSConfig{
-			BaseDirectory: cfg.BasePath,
-			DirFS:         fsys,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("parser: wrap local fs: %w", err)
+		if err := configureLocalFS(cfg, fsys); err != nil {
+			return nil, err
 		}
-
-		cfg.LocalFS = localFS
 	}
 
 	doc, err := libopenapi.NewDocumentWithConfiguration(data, cfg)
@@ -50,6 +48,28 @@ func parseBytes(data []byte, location string, fsys fs.FS) (*Document, error) {
 	}
 
 	return convertDocument(&model.Model), nil
+}
+
+// configureLocalFS настраивает cfg.LocalFS для mock-filesystem (тесты).
+// Для real OS filesystem (nfs.RealFS) пропускается — libopenapi использует
+// default rolodex, что позволяет cross-service $ref выходить за каталог
+// текущей спеки.
+func configureLocalFS(cfg *datamodel.DocumentConfiguration, fsys fs.FS) error {
+	if _, isReal := fsys.(*nfs.RealFS); isReal {
+		return nil
+	}
+
+	localFS, err := index.NewLocalFSWithConfig(&index.LocalFSConfig{
+		BaseDirectory: cfg.BasePath,
+		DirFS:         fsys,
+	})
+	if err != nil {
+		return fmt.Errorf("parser: wrap local fs: %w", err)
+	}
+
+	cfg.LocalFS = localFS
+
+	return nil
 }
 
 func convertDocument(m *highv3.Document) *Document {

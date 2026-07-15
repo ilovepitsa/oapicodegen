@@ -112,6 +112,8 @@ func (pl *ProjectLoader) Load(
 		ps.ByName[project.Folder] = project
 	}
 
+	buildSchemaIndex(si, ps)
+
 	return ps, si, nil
 }
 
@@ -164,6 +166,9 @@ func (pl *ProjectLoader) loadProject(
 
 		project.Paths.AddMethod(svcName, op)
 	}
+
+	// Разметка source-marking полей (SourceFile, OwnerProject, ExternalRef)
+	markExternalRefs(project, desc.SpecPath)
 
 	return project, nil
 }

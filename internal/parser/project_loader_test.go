@@ -211,3 +211,67 @@ func TestProjectLoader_Load_WithFlagsLoader(t *testing.T) {
 			"project %q must have default features", p.Folder)
 	}
 }
+
+func TestProjectLoader_Load_SchemaIndexPopulated(t *testing.T) {
+	pl := NewProjectLoader()
+	_, si, err := pl.Load("testdata/multiservice", nil,
+		"nschugorev/oapigenerator/go", "/output")
+	require.NoError(t, err)
+	require.NotNil(t, si)
+	require.NotEmpty(t, si.Schemas, "SchemaIndex must be populated after Load")
+
+	const commonSpec = "testdata/multiservice/common/src/openapi/openapi.yaml"
+
+	entry, ok := si.Lookup(commonSpec, "User")
+	require.True(t, ok, "common.User must be in SchemaIndex")
+	assert.Equal(t, "User", entry.GoType)
+	assert.Equal(t, "nschugorev/oapigenerator/go/common", entry.GoImport)
+	assert.NotNil(t, entry.Project)
+
+	_, ok = si.Lookup(commonSpec, "Profile")
+	require.True(t, ok, "common.Profile must be in SchemaIndex")
+
+	const userSpec = "testdata/multiservice/userBackend/src/openapi/openapi.yaml"
+	entry, ok = si.Lookup(userSpec, "UserList")
+	require.True(t, ok, "userBackend.UserList must be in SchemaIndex")
+	assert.Equal(t, "nschugorev/oapigenerator/go/userBackend", entry.GoImport)
+}
+
+func TestProjectLoader_Load_SourceMarkingFields(t *testing.T) {
+	pl := NewProjectLoader()
+	ps, _, err := pl.Load("testdata/multiservice", nil,
+		"nschugorev/oapigenerator/go", "/output")
+	require.NoError(t, err)
+
+	const commonSpec = "testdata/multiservice/common/src/openapi/openapi.yaml"
+	common := ps.ByName["common"]
+	for _, s := range common.Model.Schemas() {
+		assert.Equal(t, commonSpec, s.SourceFile,
+			"schema %q must have SourceFile", s.Name)
+		assert.Equal(t, common, s.OwnerProject,
+			"schema %q must have OwnerProject", s.Name)
+	}
+
+	const userSpec = "testdata/multiservice/userBackend/src/openapi/openapi.yaml"
+	userBackend := ps.ByName["userBackend"]
+
+	var createReq *Schema
+	for _, s := range userBackend.Model.Schemas() {
+		assert.Equal(t, userSpec, s.SourceFile)
+		assert.Equal(t, userBackend, s.OwnerProject)
+
+		if s.Name == "CreateUserRequest" {
+			createReq = s
+		}
+	}
+
+	require.NotNil(t, createReq, "CreateUserRequest schema must exist")
+	require.Len(t, createReq.Properties, 1)
+
+	userProp := createReq.Properties[0]
+	require.NotNil(t, userProp.Schema)
+	assert.NotEmpty(t, userProp.Schema.ExternalRef,
+		"nested $ref to common.User must have ExternalRef set")
+	expectedExtRef := commonSpec + "#/components/schemas/User"
+	assert.Equal(t, expectedExtRef, userProp.Schema.ExternalRef)
+}
