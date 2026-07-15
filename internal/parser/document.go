@@ -16,7 +16,7 @@ type Document struct {
 	Servers    []Server
 	Paths      []*PathItem
 	Schemas    []*Schema
-	Operations []*Operation
+	Operations []*Method
 }
 
 // Info — секция info.
@@ -35,11 +35,12 @@ type Server struct {
 // PathItem — один path со всеми его операциями.
 type PathItem struct {
 	Path       string
-	Operations []*Operation
+	Operations []*Method
 }
 
-// Operation — HTTP-операция.
-type Operation struct {
+// Method — HTTP-операция. Соответствует доменной модели Service/Method
+// эталонного генератора (Operation в OpenAPI-терминологии).
+type Method struct {
 	Method      string
 	Path        string
 	OperationID string
@@ -50,6 +51,17 @@ type Operation struct {
 	Parameters  []*Parameter
 	RequestBody *RequestBody
 	Responses   []*Response
+
+	service *Service // back-reference, выставляется при Paths.AddMethod
+}
+
+// ServiceName возвращает имя сервиса (тег), которому принадлежит метод.
+// Nil-safe: возвращает "" если method ещё не привязан к Service.
+func (m *Method) ServiceName() string {
+	if m == nil || m.service == nil {
+		return ""
+	}
+	return m.service.Name
 }
 
 // Parameter — query/path/header/cookie-параметр.

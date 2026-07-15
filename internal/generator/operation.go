@@ -7,7 +7,7 @@ import (
 
 // operationMethodName возвращает Go-имя метода интерфейса для операции.
 // Если есть operationId — используется он, иначе имя выводится из method+path.
-func operationMethodName(op *parser.Operation) string {
+func operationMethodName(op *parser.Method) string {
 	if op.OperationID != "" {
 		return goName(op.OperationID)
 	}

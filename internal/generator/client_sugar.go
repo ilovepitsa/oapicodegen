@@ -38,7 +38,7 @@ func (g *Generator) renderClientSugar(m *typeMapper) []byte {
 	return w.Content()
 }
 
-func (g *Generator) renderSugarMethod(w *codegen.BufferWriter, op *parser.Operation, m *typeMapper) { //nolint:lll // function signature
+func (g *Generator) renderSugarMethod(w *codegen.BufferWriter, op *parser.Method, m *typeMapper) { //nolint:lll // function signature
 	name := operationMethodName(op)
 	successCode, successSchema := firstSuccessResponse(op.Responses)
 
@@ -98,7 +98,7 @@ func (g *Generator) renderSugarMethod(w *codegen.BufferWriter, op *parser.Operat
 // *<Name><Code>PayloadWithHeaders. Иначе — body-тип (*<SchemaType>).
 // Для ответа без body и без headers возвращает пустую строку (только error).
 func sugarReturnType(
-	op *parser.Operation,
+	op *parser.Method,
 	successCode string,
 	successSchema *parser.Schema,
 	m *typeMapper,

@@ -1,5 +1,7 @@
 package generator
 
+import "nschugorev/oapigenerator/internal/parser"
+
 const (
 	oapiTypeObject  = "object"
 	oapiTypeString  = "string"
@@ -27,8 +29,10 @@ const (
 	goTypeFloat32 = "float32"
 	goTypeFloat64 = "float64"
 
-	modeRequest  = "Request"
-	modeResponse = "Response"
+	// modeRequest/modeResponse — алиасы на parser-константы (SSOT).
+	// parser.SchemaIndex.LookupForMode использует те же значения.
+	modeRequest  = parser.ModeRequest
+	modeResponse = parser.ModeResponse
 
 	// optionalPkg — import-path runtime-пакета optional.Optional[T],
 	// который сгенерированный код использует для x-optional полей при

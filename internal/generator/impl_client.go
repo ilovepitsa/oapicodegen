@@ -120,7 +120,7 @@ func (g *Generator) renderImplClient(m *typeMapper) []byte {
 }
 
 //nolint:gocognit,gocyclo,cyclop,funlen,lll // template-style codegen, long signature
-func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.Operation, m *typeMapper) {
+func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.Method, m *typeMapper) {
 	name := operationMethodName(op)
 
 	w.Print("func (c *Client) ", name, "(ctx context.Context, req *apiclient.", name, "Request) ")
@@ -254,13 +254,13 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.O
 	w.Print("}\n\n")
 }
 
-func (g *Generator) renderImplResponseCase(w *codegen.BufferWriter, op *parser.Operation, r *parser.Response, m *typeMapper) { //nolint:lll // function signature
+func (g *Generator) renderImplResponseCase(w *codegen.BufferWriter, op *parser.Method, r *parser.Response, m *typeMapper) { //nolint:lll // function signature
 	w.Print("\tcase ", r.StatusCode, ":\n")
 	fieldName := responseFieldName(r.StatusCode)
 	g.renderImplResponseBody(w, op, r.StatusCode, r, fieldName, m)
 }
 
-func (g *Generator) renderImplResponseBody(w *codegen.BufferWriter, op *parser.Operation, label string, r *parser.Response, fieldName string, m *typeMapper) { //nolint:lll // function signature
+func (g *Generator) renderImplResponseBody(w *codegen.BufferWriter, op *parser.Method, label string, r *parser.Response, fieldName string, m *typeMapper) { //nolint:lll // function signature
 	schema := responseSchema(r)
 
 	if !hasResponseHeaders(r) {

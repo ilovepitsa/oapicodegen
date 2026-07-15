@@ -1,56 +1,56 @@
 package parser
 
-// Mode constants for LookupForMode. Match the conventions used by the
-// generator package (internal/generator/constants.go).
+// Mode-константы для LookupForMode. Единственный источник истины для
+// суффиксов split-mode ("Request"/"Response"); пакет generator алиасит
+// их через modeRequest/modeResponse.
 const (
 	ModeRequest  = "Request"
 	ModeResponse = "Response"
 )
 
-// ResourcesSet — глобальный индекс схем всех сервисов. Ключ — абсолютный
+// SchemaIndex — глобальный индекс схем всех сервисов. Ключ — абсолютный
 // путь к yaml-файлу схемы. Используется генератором для разрешения
 // cross-service $ref: вместо генерации дубликата типа в текущем сервисе,
 // эмитится Go-импорт в пакет сервиса-владельца.
-type ResourcesSet struct {
-	Schemas map[string]*ResourceSchema
+type SchemaIndex struct {
+	Schemas map[string]*SchemaEntry
 }
 
-// ResourceSchema — запись в индексе: где лежит схема, какой Go-импорт и
+// SchemaEntry — запись в индексе: где лежит схема, какой Go-импорт и
 // имя типа использовать при cross-service ссылках.
-type ResourceSchema struct {
+type SchemaEntry struct {
 	Project    *Project
 	SchemaName string // имя схемы во владельце (для диагностики)
 	GoImport   string // например "nschugorev/oapigenerator/go/common"
 	GoType     string // например "User"; с учётом split-mode: "UserRequest"/"UserResponse"
 }
 
-// LookupByFile возвращает ResourceSchema по абсолютному пути к yaml-файлу.
+// LookupByFile возвращает SchemaEntry по абсолютному пути к yaml-файлу.
 // Второе возвращаемое — false если путь не зарегистрирован.
-func (rs *ResourcesSet) LookupByFile(absPath string) (*ResourceSchema, bool) {
-	r, ok := rs.Schemas[absPath]
-	return r, ok
+func (si *SchemaIndex) LookupByFile(absPath string) (*SchemaEntry, bool) {
+	e, ok := si.Schemas[absPath]
+	return e, ok
 }
 
-// LookupForMode возвращает ResourceSchema с GoType, адаптированным под mode
+// LookupForMode возвращает SchemaEntry с GoType, адаптированным под mode
 // текущего использования ("", ModeRequest, ModeResponse). Если во владельце
 // не включён split-mode, GoType возвращается как есть.
-func (rs *ResourcesSet) LookupForMode(absPath, mode string) (*ResourceSchema, bool) {
-	r, ok := rs.LookupByFile(absPath)
+func (si *SchemaIndex) LookupForMode(absPath, mode string) (*SchemaEntry, bool) {
+	e, ok := si.LookupByFile(absPath)
 	if !ok {
 		return nil, false
 	}
 
-	if r.Project == nil || !r.Project.Features.SplitRequestResponse.Value {
-		return r, true
+	if e.Project == nil || !e.Project.Features.SplitRequestResponse.Value {
+		return e, true
 	}
 
-	// Split включён — суффиксуем тип в зависимости от mode.
-	out := *r
+	out := *e
 	switch mode {
 	case ModeRequest:
-		out.GoType = r.GoType + "Request"
+		out.GoType = e.GoType + "Request"
 	case ModeResponse:
-		out.GoType = r.GoType + "Response"
+		out.GoType = e.GoType + "Response"
 	}
 	return &out, true
 }

@@ -45,7 +45,7 @@ func (g *Generator) auditClientFile() codegen.File {
 // и без body со схемой.
 func (g *Generator) renderOpRequestAudit(
 	w *codegen.BufferWriter,
-	op *parser.Operation,
+	op *parser.Method,
 	m *typeMapper,
 ) {
 	name := operationMethodName(op)
@@ -166,7 +166,7 @@ func (g *Generator) renderRequestAuditMethod(
 //   - func (resp *<Op>Response) Response<Code>AuditData() <Op>Response<Code>AuditData
 func (g *Generator) renderOpResponseAudit(
 	w *codegen.BufferWriter,
-	op *parser.Operation,
+	op *parser.Method,
 	_ *typeMapper,
 ) {
 	opName := operationMethodName(op)

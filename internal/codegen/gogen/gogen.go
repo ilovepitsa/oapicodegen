@@ -15,10 +15,24 @@ import (
 	"strings"
 )
 
-// Import описывает одну Go-импорт-спеку: путь и опциональный алиас.
+// ImportType классифицирует импорт: локальный (внутри модуля) или внешний.
+// В первой итерации используется только LocalImport; ExternalImport и
+// StdImport добавятся, когда категоризация при рендере станет нужна.
+type ImportType int
+
+const (
+	// LocalImport — импорт внутри того же Go-модуля.
+	LocalImport ImportType = iota
+)
+
+// Import описывает одну Go-импорт-спеку: путь, опциональный алиас, имя пакета
+// и тип. Path и Alias используются рендером; Package и Type — семантические
+// метки для потребителей (например, PathImports на Project).
 type Import struct {
-	Path  string
-	Alias string
+	Path    string
+	Alias   string
+	Package string // имя пакета для использования в коде ("client", "httpclient")
+	Type    ImportType
 }
 
 // File — структурное описание Go-файла: пакет, импорты, тело.

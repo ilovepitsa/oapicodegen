@@ -11,7 +11,7 @@ const payloadWithHeadersSuffix = "PayloadWithHeaders"
 
 // payloadWithHeadersTypeName возвращает имя типа для обёртки body+headers.
 // Например: ListPetsResponse200PayloadWithHeaders.
-func payloadWithHeadersTypeName(op *parser.Operation, code string) string {
+func payloadWithHeadersTypeName(op *parser.Method, code string) string {
 	return operationMethodName(op) + "Response" + goName(code) + payloadWithHeadersSuffix
 }
 
@@ -21,7 +21,7 @@ func payloadWithHeadersTypeName(op *parser.Operation, code string) string {
 // (для server-side установки заголовков в HTTP-ответ).
 func (g *Generator) renderPayloadWithHeadersType(
 	w *codegen.BufferWriter,
-	op *parser.Operation,
+	op *parser.Method,
 	code string,
 	resp *parser.Response,
 	m *typeMapper,

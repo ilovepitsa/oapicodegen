@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"strings"
 
 	highv3 "github.com/pb33f/libopenapi/datamodel/high/v3"
@@ -22,7 +23,7 @@ func extractPaths(doc *Document, paths *highv3.Paths) {
 		ops := item.GetOperations()
 		if ops != nil {
 			for opPair := ops.First(); opPair != nil; opPair = opPair.Next() {
-				op := convertOperation(pathStr, opPair.Key(), opPair.Value())
+				op := convertMethod(pathStr, opPair.Key(), opPair.Value())
 				pi.Operations = append(pi.Operations, op)
 				doc.Operations = append(doc.Operations, op)
 			}
@@ -32,8 +33,8 @@ func extractPaths(doc *Document, paths *highv3.Paths) {
 	}
 }
 
-func convertOperation(path, method string, op *highv3.Operation) *Operation {
-	out := &Operation{
+func convertMethod(path, method string, op *highv3.Operation) *Method {
+	out := &Method{
 		Method:      strings.ToUpper(method),
 		Path:        path,
 		OperationID: op.OperationId,
@@ -64,6 +65,24 @@ func convertOperation(path, method string, op *highv3.Operation) *Operation {
 	}
 
 	return out
+}
+
+// serviceName определяет имя сервиса из тегов операции:
+//   - 0 тегов → "Service" (дефолт).
+//   - >1 тега → error (должен быть ровно один тег).
+//   - пустой тег → error.
+func serviceName(method, path string, tags []string) (string, error) {
+	if len(tags) == 0 {
+		return "Service", nil
+	}
+	if len(tags) != 1 {
+		return "", fmt.Errorf("must be exactly one tag for %s %s", method, path)
+	}
+	tag := tags[0]
+	if tag == "" {
+		return "", fmt.Errorf("tag must not be empty for %s %s", method, path)
+	}
+	return tag, nil
 }
 
 func convertParameter(p *highv3.Parameter) *Parameter {

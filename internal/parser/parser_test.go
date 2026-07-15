@@ -287,7 +287,7 @@ func findProperty(t *testing.T, s *Schema, name string) *Property {
 	return nil
 }
 
-func findOperation(t *testing.T, doc *Document, id string) *Operation {
+func findOperation(t *testing.T, doc *Document, id string) *Method {
 	t.Helper()
 	for _, op := range doc.Operations {
 		if op.OperationID == id {

@@ -82,7 +82,7 @@ func (g *Generator) renderClient(m *typeMapper) []byte {
 	return w.Content()
 }
 
-func (g *Generator) renderRequestStruct(w *codegen.BufferWriter, op *parser.Operation, m *typeMapper) { //nolint:lll // function signature with params
+func (g *Generator) renderRequestStruct(w *codegen.BufferWriter, op *parser.Method, m *typeMapper) { //nolint:lll // function signature with params
 	name := operationMethodName(op) + "Request"
 	w.Print("type ", name, " struct {\n")
 
@@ -154,7 +154,7 @@ func (g *Generator) renderBodyField(w *codegen.BufferWriter, rb *parser.RequestB
 	w.Print("\tBody ", fieldType, " `json:\"-\"`\n")
 }
 
-func (g *Generator) renderResponseStruct(w *codegen.BufferWriter, op *parser.Operation, m *typeMapper) { //nolint:lll // function signature
+func (g *Generator) renderResponseStruct(w *codegen.BufferWriter, op *parser.Method, m *typeMapper) { //nolint:lll // function signature
 	name := operationMethodName(op) + "Response"
 	w.Print("type ", name, " struct {\n")
 	w.Print("\tCode int\n")

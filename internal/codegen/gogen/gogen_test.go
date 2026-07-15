@@ -134,3 +134,20 @@ func NewUser(name string, age int) *User {
 	_, err := parser.ParseFile(fset, "generated.go", got, parser.AllErrors)
 	assert.NoError(t, err, "generated file should parse; content:\n%s", got)
 }
+
+func TestImport_PackageAndType(t *testing.T) {
+	imp := Import{
+		Path:    "nschugorev/oapigenerator/go/common/model",
+		Alias:   "common",
+		Package: "model",
+		Type:    LocalImport,
+	}
+	assert.Equal(t, "model", imp.Package)
+	assert.Equal(t, LocalImport, imp.Type)
+}
+
+func TestImportType_ZeroValue(t *testing.T) {
+	var imp Import
+	assert.Equal(t, ImportType(0), imp.Type)
+	assert.Equal(t, LocalImport, imp.Type, "zero ImportType must equal LocalImport")
+}

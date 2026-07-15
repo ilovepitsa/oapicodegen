@@ -120,7 +120,7 @@ func (g *Generator) renderBindBody(w *codegen.BufferWriter, needURLForm bool) {
 	w.Print("}\n\n")
 }
 
-func (g *Generator) renderImplServerMethod(w *codegen.BufferWriter, op *parser.Operation) {
+func (g *Generator) renderImplServerMethod(w *codegen.BufferWriter, op *parser.Method) {
 	name := operationMethodName(op)
 	handler := lowerFirst(name)
 	hasBody := op.RequestBody != nil
@@ -161,7 +161,7 @@ func (g *Generator) renderImplServerMethod(w *codegen.BufferWriter, op *parser.O
 // default-полями, попадающими в request-фильтр (не readOnly). При включённом
 // GOLANG_SPLIT_REQUEST_RESPONSE учитывается Request-фильтр, чтобы метод
 // SetDefaults гарантированно существовал на <Name>Request.
-func (g *Generator) shouldCallSetDefaults(op *parser.Operation) bool {
+func (g *Generator) shouldCallSetDefaults(op *parser.Method) bool {
 	if op.RequestBody == nil {
 		return false
 	}
@@ -223,7 +223,7 @@ func (g *Generator) resolveRefSchema(s *parser.Schema) *parser.Schema {
 	return nil
 }
 
-func (g *Generator) renderImplServerResponse(w *codegen.BufferWriter, op *parser.Operation) {
+func (g *Generator) renderImplServerResponse(w *codegen.BufferWriter, op *parser.Method) {
 	for _, r := range op.Responses {
 		if r.StatusCode == oapiCodeDefault {
 			continue
