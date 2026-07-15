@@ -18,12 +18,15 @@ func (p *Paths) AddMethod(serviceName string, m *Method) {
 	if p.servicesMap == nil {
 		p.servicesMap = map[string]*Service{}
 	}
+
 	s := p.servicesMap[serviceName]
+
 	if s == nil {
 		s = &Service{Name: serviceName, paths: p}
 		p.servicesMap[serviceName] = s
 		p.Services = append(p.Services, s)
 	}
+
 	s.Methods = append(s.Methods, m)
 	m.service = s
 }

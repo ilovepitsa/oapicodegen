@@ -2,12 +2,11 @@ package parser
 
 import (
 	"fmt"
+	"nschugorev/oapigenerator/internal/codegen/gogen"
+	"nschugorev/oapigenerator/internal/fs"
 	"os"
 	"path/filepath"
 	"sort"
-
-	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/fs"
 )
 
 // serviceDescriptor описывает один обнаруженный сервис во входном каталоге.
@@ -27,30 +26,37 @@ func walkServices(input string) ([]serviceDescriptor, error) {
 		return nil, fmt.Errorf("read input dir %q: %w", input, err)
 	}
 
-	var out []serviceDescriptor
+	out := make([]serviceDescriptor, 0, len(entries))
+
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
+
 		folder := entry.Name()
+
 		specPath := filepath.Join(input, folder, "src", "openapi", "openapi.yaml")
 		if _, err := os.Stat(specPath); err != nil {
 			continue // не сервис — пропускаем
 		}
+
 		desc := serviceDescriptor{
 			Folder:   folder,
 			SpecPath: specPath,
 		}
 		flagsPath := filepath.Join(input, folder, "generation_flags.yaml")
+
 		if _, err := os.Stat(flagsPath); err == nil {
 			desc.FlagsPath = flagsPath
 		}
+
 		out = append(out, desc)
 	}
 
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].Folder < out[j].Folder
 	})
+
 	return out, nil
 }
 
@@ -101,6 +107,7 @@ func (pl *ProjectLoader) Load(
 			ps.Common = project
 			project.Model.Prefix = "common"
 		}
+
 		ps.Projects = append(ps.Projects, project)
 		ps.ByName[project.Folder] = project
 	}
@@ -115,6 +122,7 @@ func (pl *ProjectLoader) loadProject(
 	importPrefix, output string,
 ) (*Project, error) {
 	fsys := fs.NewRealFS()
+
 	doc, err := ParseFile(fsys, desc.SpecPath)
 	if err != nil {
 		return nil, fmt.Errorf("parse spec: %w", err)
@@ -153,6 +161,7 @@ func (pl *ProjectLoader) loadProject(
 		if err != nil {
 			return nil, fmt.Errorf("service name for %s %s: %w", op.Method, op.Path, err)
 		}
+
 		project.Paths.AddMethod(svcName, op)
 	}
 
@@ -168,5 +177,6 @@ func (pl *ProjectLoader) resolveFeatures(
 	if flagsLoader == nil || flagsPath == "" {
 		return ProjectFeatures{}, nil
 	}
+
 	return flagsLoader.GetProjectFeatures(flagsPath)
 }

@@ -7,7 +7,8 @@ import "nschugorev/oapigenerator/internal/codegen/gogen"
 // вывода. Model и Paths — доменные модели схем и операций, создаются
 // фабриками CreateModel/CreatePaths.
 type Project struct {
-	Folder       string          // относительный путь от input ("userBackend", "common", "category/userService")
+	Folder string // относительный путь от input
+	// ("userBackend", "common", "category/userService")
 	SpecPath     string          // абсолютный путь к src/openapi/openapi.yaml
 	FlagsPath    string          // абсолютный путь к generation_flags.yaml
 	Features     ProjectFeatures // резолвнутые флаги (global + per-service override)
@@ -27,6 +28,7 @@ type ProjectSet struct {
 // ByNameLookup возвращает проект по имени. Второе возвращаемое — false если не найден.
 func (ps *ProjectSet) ByNameLookup(name string) (*Project, bool) {
 	p, ok := ps.ByName[name]
+
 	return p, ok
 }
 
@@ -36,6 +38,7 @@ func (p *Project) CreateModel(imp gogen.Import) *Model {
 	imp.Type = gogen.LocalImport
 	m := &Model{project: p, Import: imp}
 	p.Model = m
+
 	return m
 }
 
@@ -65,5 +68,6 @@ func (p *Project) CreatePaths(basePath string) *Paths {
 		project: p,
 	}
 	p.Paths = pi
+
 	return pi
 }

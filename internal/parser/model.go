@@ -24,6 +24,7 @@ func (m *Model) Index() {
 		if s.Name == "" {
 			continue
 		}
+
 		m.schemasIndex[s.Name] = s
 	}
 }
@@ -34,6 +35,8 @@ func (m *Model) Lookup(name string) (*Schema, bool) {
 	if m.schemasIndex == nil {
 		return nil, false
 	}
+
 	s, ok := m.schemasIndex[name]
+
 	return s, ok
 }

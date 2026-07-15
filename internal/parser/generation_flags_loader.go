@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	realfs "nschugorev/oapigenerator/internal/fs"
 	"nschugorev/oapigenerator/internal/genflags"
+
+	realfs "nschugorev/oapigenerator/internal/fs"
 
 	"gopkg.in/yaml.v3"
 )

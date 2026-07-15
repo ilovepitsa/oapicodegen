@@ -29,6 +29,7 @@ type SchemaEntry struct {
 // Второе возвращаемое — false если путь не зарегистрирован.
 func (si *SchemaIndex) LookupByFile(absPath string) (*SchemaEntry, bool) {
 	e, ok := si.Schemas[absPath]
+
 	return e, ok
 }
 
@@ -46,11 +47,13 @@ func (si *SchemaIndex) LookupForMode(absPath, mode string) (*SchemaEntry, bool) 
 	}
 
 	out := *e
+
 	switch mode {
 	case ModeRequest:
 		out.GoType = e.GoType + "Request"
 	case ModeResponse:
 		out.GoType = e.GoType + "Response"
 	}
+
 	return &out, true
 }

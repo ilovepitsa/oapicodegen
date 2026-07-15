@@ -26,6 +26,7 @@ func TestParse_Schemas(t *testing.T) {
 	for _, s := range doc.Schemas {
 		names = append(names, s.Name)
 	}
+
 	assert.ElementsMatch(
 		t,
 		[]string{"Pet", "Error", "PetCollection", "AnyPet", "OnePet", "MergedPet"},
@@ -44,6 +45,7 @@ func TestParse_PetSchemaFields(t *testing.T) {
 	for _, p := range pet.Properties {
 		propNames = append(propNames, p.Name)
 	}
+
 	assert.ElementsMatch(t, []string{"id", "name", "tag", "status"}, propNames)
 
 	idProp := findProperty(t, pet, "id")
@@ -139,7 +141,9 @@ func TestParse_OperationResponses(t *testing.T) {
 	require.Len(t, listPets.Responses, 2)
 
 	var resp200 *Response
+
 	var resp4xx *Response
+
 	for _, r := range listPets.Responses {
 		if r.StatusCode == "200" { //nolint:usestdlibvars // StatusCode — строковое поле, http.StatusOK не подходит (int)
 			resp200 = r
@@ -147,6 +151,7 @@ func TestParse_OperationResponses(t *testing.T) {
 			resp4xx = r
 		}
 	}
+
 	require.NotNil(t, resp200)
 	require.NotNil(t, resp4xx)
 
@@ -255,6 +260,7 @@ func TestParse_EmptyDocument(t *testing.T) {
 
 func parsePetstore(t *testing.T) *Document {
 	t.Helper()
+
 	data, err := os.ReadFile("testdata/petstore.yaml")
 	require.NoError(t, err)
 	doc, err := Parse(data)
@@ -265,11 +271,13 @@ func parsePetstore(t *testing.T) *Document {
 
 func findSchema(t *testing.T, doc *Document, name string) *Schema {
 	t.Helper()
+
 	for _, s := range doc.Schemas {
 		if s.Name == name {
 			return s
 		}
 	}
+
 	t.Fatalf("schema %q not found", name)
 
 	return nil
@@ -277,11 +285,13 @@ func findSchema(t *testing.T, doc *Document, name string) *Schema {
 
 func findProperty(t *testing.T, s *Schema, name string) *Property {
 	t.Helper()
+
 	for _, p := range s.Properties {
 		if p.Name == name {
 			return p
 		}
 	}
+
 	t.Fatalf("property %q not found", name)
 
 	return nil
@@ -289,11 +299,13 @@ func findProperty(t *testing.T, s *Schema, name string) *Property {
 
 func findOperation(t *testing.T, doc *Document, id string) *Method {
 	t.Helper()
+
 	for _, op := range doc.Operations {
 		if op.OperationID == id {
 			return op
 		}
 	}
+
 	t.Fatalf("operation %q not found", id)
 
 	return nil

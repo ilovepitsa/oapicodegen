@@ -209,6 +209,7 @@ components:
 
 func parseSpec(t *testing.T, spec string) *Document {
 	t.Helper()
+
 	doc, err := Parse([]byte(spec))
 	require.NoError(t, err)
 

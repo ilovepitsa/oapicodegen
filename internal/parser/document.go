@@ -61,6 +61,7 @@ func (m *Method) ServiceName() string {
 	if m == nil || m.service == nil {
 		return ""
 	}
+
 	return m.service.Name
 }
 

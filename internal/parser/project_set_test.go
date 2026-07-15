@@ -1,11 +1,11 @@
 package parser_test
 
 import (
+	"nschugorev/oapigenerator/internal/codegen/gogen"
+	"nschugorev/oapigenerator/internal/parser"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/parser"
 )
 
 func TestProjectSet_ByNameLookup(t *testing.T) {

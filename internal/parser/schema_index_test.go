@@ -1,9 +1,8 @@
 package parser_test
 
 import (
-	"testing"
-
 	"nschugorev/oapigenerator/internal/parser"
+	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -60,6 +59,7 @@ func TestSchemaIndex_LookupForMode_SplitEnabled(t *testing.T) {
 			SplitRequestResponse: parser.ProjectFeature{Value: true},
 		},
 	}
+
 	const key = "/input/common/src/openapi/schemas/User.yaml"
 	si := &parser.SchemaIndex{
 		Schemas: map[string]*parser.SchemaEntry{

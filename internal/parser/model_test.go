@@ -1,10 +1,10 @@
 package parser
 
 import (
+	"nschugorev/oapigenerator/internal/codegen/gogen"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"nschugorev/oapigenerator/internal/codegen/gogen"
 )
 
 func TestModel_Schemas_Empty(t *testing.T) {

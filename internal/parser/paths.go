@@ -75,13 +75,16 @@ func serviceName(method, path string, tags []string) (string, error) {
 	if len(tags) == 0 {
 		return "Service", nil
 	}
+
 	if len(tags) != 1 {
 		return "", fmt.Errorf("must be exactly one tag for %s %s", method, path)
 	}
+
 	tag := tags[0]
 	if tag == "" {
 		return "", fmt.Errorf("tag must not be empty for %s %s", method, path)
 	}
+
 	return tag, nil
 }
 

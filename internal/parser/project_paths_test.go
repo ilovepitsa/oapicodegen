@@ -1,11 +1,10 @@
 package parser
 
 import (
+	"nschugorev/oapigenerator/internal/codegen/gogen"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"nschugorev/oapigenerator/internal/codegen/gogen"
 )
 
 func TestPathImports_Fields(t *testing.T) {

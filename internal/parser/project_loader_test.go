@@ -1,15 +1,15 @@
 package parser
 
 import (
+	"nschugorev/oapigenerator/internal/codegen/gogen"
+	"nschugorev/oapigenerator/internal/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/fs"
+	"github.com/stretchr/testify/require"
 )
 
 func TestServiceDescriptor_Fields(t *testing.T) {
@@ -25,7 +25,7 @@ func TestServiceDescriptor_Fields(t *testing.T) {
 
 func TestWalkServices_DiscoversAllServices(t *testing.T) {
 	descs, err := walkServices("testdata/multiservice")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, descs, 3)
 
 	byFolder := map[string]serviceDescriptor{}
@@ -43,7 +43,7 @@ func TestWalkServices_DiscoversAllServices(t *testing.T) {
 
 func TestWalkServices_NoServicesDir(t *testing.T) {
 	_, err := walkServices("testdata/nonexistent")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestNewProjectLoader(t *testing.T) {
@@ -59,7 +59,7 @@ func TestProjectLoader_Load_SingleService(t *testing.T) {
 		"nschugorev/oapigenerator/go",
 		"/output",
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, ps)
 	assert.NotNil(t, si)
 	// Projects включает все сервисы, в том числе common (см. ProjectSet.Projects).
@@ -74,7 +74,7 @@ func TestProjectLoader_Load_ModelSchemasTransferred(t *testing.T) {
 	pl := NewProjectLoader()
 	ps, _, err := pl.Load("testdata/multiservice", nil,
 		"nschugorev/oapigenerator/go", "/output")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	common := ps.Common
 	assert.NotNil(t, common.Model)
@@ -97,7 +97,7 @@ func TestProjectLoader_Load_PathsServicesGroupedByTag(t *testing.T) {
 	pl := NewProjectLoader()
 	ps, _, err := pl.Load("testdata/multiservice", nil,
 		"nschugorev/oapigenerator/go", "/output")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	userBackend := ps.ByName["userBackend"]
 	assert.NotNil(t, userBackend.Paths)
@@ -115,7 +115,7 @@ func TestProjectLoader_Load_CommonHasNoServices(t *testing.T) {
 	pl := NewProjectLoader()
 	ps, _, err := pl.Load("testdata/multiservice", nil,
 		"nschugorev/oapigenerator/go", "/output")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// common/spec имеет paths: {} — нет операций → нет сервисов
 	assert.Empty(t, ps.Common.Paths.Services)
@@ -125,7 +125,7 @@ func TestProjectLoader_Load_PathImportsPopulated(t *testing.T) {
 	pl := NewProjectLoader()
 	ps, _, err := pl.Load("testdata/multiservice", nil,
 		"nschugorev/oapigenerator/go", "/output")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	userBackend := ps.ByName["userBackend"]
 	pi := userBackend.Paths.Imports
@@ -143,7 +143,7 @@ func TestProjectLoader_Load_CommonPrefixSet(t *testing.T) {
 	pl := NewProjectLoader()
 	ps, _, err := pl.Load("testdata/multiservice", nil,
 		"nschugorev/oapigenerator/go", "/output")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, "common", ps.Common.Model.Prefix,
 		"common project must have Model.Prefix set for cross-service aliasing")
@@ -153,7 +153,7 @@ func TestProjectLoader_Load_InputNotFound(t *testing.T) {
 	pl := NewProjectLoader()
 	_, _, err := pl.Load("testdata/does-not-exist", nil,
 		"nschugorev/oapigenerator/go", "/output")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "walk services")
 }
 
@@ -166,7 +166,7 @@ func TestProjectLoader_Load_MalformedSpec(t *testing.T) {
 	pl := NewProjectLoader()
 	_, _, err := pl.Load(tmp, nil,
 		"nschugorev/oapigenerator/go", "/output")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "load project")
 }
 
@@ -192,19 +192,19 @@ paths:
 	pl := NewProjectLoader()
 	_, _, err := pl.Load(tmp, nil,
 		"nschugorev/oapigenerator/go", "/output")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "must be exactly one tag")
 }
 
 func TestProjectLoader_Load_WithFlagsLoader(t *testing.T) {
 	flagsLoader := NewGenerationFlagsLoader(fs.NewRealFS())
 	err := flagsLoader.Load("testdata/multiservice/generation_flags.yaml")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	pl := NewProjectLoader()
 	ps, _, err := pl.Load("testdata/multiservice", flagsLoader,
 		"nschugorev/oapigenerator/go", "/output")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	for _, p := range ps.Projects {
 		assert.False(t, p.Features.SplitRequestResponse.Value,

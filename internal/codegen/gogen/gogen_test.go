@@ -29,8 +29,8 @@ func TestCreate_WithBody(t *testing.T) {
 	f := ff.Create(&File{Package: "main", Body: []byte("var x = 1\n")})
 	got := string(f.Content())
 
-	assert.True(t, strings.Contains(got, "var x = 1"), "expected body; got:\n%s", got)
-	assert.True(t, strings.Contains(got, "package main"), "expected package decl; got:\n%s", got)
+	assert.Contains(t, got, "var x = 1", "expected body; got:\n%s", got)
+	assert.Contains(t, got, "package main", "expected package decl; got:\n%s", got)
 }
 
 func TestCreate_ImportsSorted(t *testing.T) {
@@ -148,6 +148,7 @@ func TestImport_PackageAndType(t *testing.T) {
 
 func TestImportType_ZeroValue(t *testing.T) {
 	var imp Import
+
 	assert.Equal(t, ImportType(0), imp.Type)
 	assert.Equal(t, LocalImport, imp.Type, "zero ImportType must equal LocalImport")
 }
