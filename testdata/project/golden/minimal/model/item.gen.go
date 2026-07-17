@@ -26,12 +26,14 @@ func (x Item) ValidateOwn(reg *validator.Registry) error {
 	if x.Tag != nil && len(*x.Tag) > 50 {
 		return fmt.Errorf("field Tag: must be <= 50")
 	}
-	v, ok := reg.Get("app.ItemConsistency")
-	if !ok {
-		return fmt.Errorf("validator %q not registered", "app.ItemConsistency")
-	}
-	if err := v.Validate(x); err != nil {
-		return err
+	{
+		v, ok := reg.Get("app.ItemConsistency")
+		if !ok {
+			return fmt.Errorf("validator %q not registered", "app.ItemConsistency")
+		}
+		if err := v.Validate(x); err != nil {
+			return err
+		}
 	}
 	return nil
 }

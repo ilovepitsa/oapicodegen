@@ -276,27 +276,34 @@ func renderNamedValidatorCall(w *codegen.BufferWriter, name, accessor, fieldPath
 
 // renderNamedValidatorCallIndented — то же с отступом indent для вложенных
 // в guard-блоки.
+//
+// Каждый lookup+вызов обёрнут в свой block-scope `{ ... }`, чтобы `v, ok :=`
+// не конфликтовало при повторных вызовах в том же ValidateOwn (property-level
+// + schema-level валидаторы).
 func renderNamedValidatorCallIndented(
 	w *codegen.BufferWriter,
 	name, accessor, fieldPath, indent string,
 ) {
 	notRegisteredMsg := strconv.Quote("validator %q not registered")
 
-	w.Print(indent, "\tv, ok := reg.Get(", strconv.Quote(name), ")\n")
-	w.Print(indent, "\tif !ok {\n")
-	w.Print(indent, "\t\treturn fmt.Errorf(", notRegisteredMsg, ", ", strconv.Quote(name), ")\n")
-	w.Print(indent, "\t}\n")
+	w.Print(indent, "\t{\n")
+	w.Print(indent, "\t\tv, ok := reg.Get(", strconv.Quote(name), ")\n")
+	w.Print(indent, "\t\tif !ok {\n")
+	w.Print(indent, "\t\t\treturn fmt.Errorf(", notRegisteredMsg, ", ", strconv.Quote(name), ")\n")
+	w.Print(indent, "\t\t}\n")
 
 	if fieldPath == "" {
 		// Schema-level — ошибка без обёртывания путём поля.
-		w.Print(indent, "\tif err := v.Validate(", accessor, "); err != nil {\n")
-		w.Print(indent, "\t\treturn err\n")
-		w.Print(indent, "\t}\n")
+		w.Print(indent, "\t\tif err := v.Validate(", accessor, "); err != nil {\n")
+		w.Print(indent, "\t\t\treturn err\n")
+		w.Print(indent, "\t\t}\n")
 	} else {
-		w.Print(indent, "\tif err := v.Validate(", accessor, "); err != nil {\n")
-		w.Print(indent, "\t\treturn fmt.Errorf(", strconv.Quote("field "+fieldPath+": %w"), ", err)\n")
-		w.Print(indent, "\t}\n")
+		w.Print(indent, "\t\tif err := v.Validate(", accessor, "); err != nil {\n")
+		w.Print(indent, "\t\t\treturn fmt.Errorf(", strconv.Quote("field "+fieldPath+": %w"), ", err)\n")
+		w.Print(indent, "\t\t}\n")
 	}
+
+	w.Print(indent, "\t}\n")
 }
 
 // collectExpectedValidatorNames собирает уникальные имена именованных

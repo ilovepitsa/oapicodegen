@@ -1,6 +1,7 @@
 package main
 
 import (
+	"nschugorev/oapigenerator/internal/codegen"
 	"nschugorev/oapigenerator/internal/golden"
 	"os"
 	"path/filepath"
@@ -84,4 +85,13 @@ func walkFiles(t *testing.T, root string) map[string][]byte {
 	require.NoError(t, err)
 
 	return files
+}
+
+// TestE2E_GoldenCompiles проверяет, что зафиксированные golden-файлы
+// компилируются `go build ./...` в testdata/project/golden/ (отдельный module
+// с go.mod и replace на основной модуль). Это единственный end-to-end
+// тест compile-check: генератор → файлы → go build.
+func TestE2E_GoldenCompiles(t *testing.T) {
+	err := codegen.CompileCheck(e2eGoldenPath)
+	require.NoError(t, err, "golden directory must compile with go build ./...")
 }

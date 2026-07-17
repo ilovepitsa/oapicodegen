@@ -9,7 +9,7 @@
 //     struct-дерево и вызывает ValidateOwn на каждой структуре.
 //
 // Модель Pet ниже рукописная, но повторяет структуру сгенерированного кода
-// (см. testdata/minimal/golden/model/item.gen.go для реального примера).
+// (см. testdata/project/golden/minimal/model/item.gen.go для реального примера).
 // В реальном приложении Pet генерируется oapigen из OpenAPI-спеки с
 // x-validations, а валидаторы пишет пользователь.
 package main
@@ -65,7 +65,7 @@ func (p Pet) ValidateOwn(reg *validator.Registry) error {
 }
 
 // ExpectedValidatorNames — пример сгенерированной функции (см.
-// testdata/minimal/golden/model/expected_validators.gen.go). В реальном
+// testdata/project/golden/minimal/model/expected_validators.gen.go). В реальном
 // коде генерируется oapigen из всех x-validations в спеке.
 func ExpectedValidatorNames() []string {
 	return []string{

@@ -19,22 +19,26 @@ func (x ItemCreate) ValidateOwn(reg *validator.Registry) error {
 	if len(x.Name) < 1 {
 		return fmt.Errorf("field Name: must be >= 1")
 	}
-	v, ok := reg.Get("app.NonEmptyName")
-	if !ok {
-		return fmt.Errorf("validator %q not registered", "app.NonEmptyName")
-	}
-	if err := v.Validate(x.Name); err != nil {
-		return fmt.Errorf("field Name: %w", err)
+	{
+		v, ok := reg.Get("app.NonEmptyName")
+		if !ok {
+			return fmt.Errorf("validator %q not registered", "app.NonEmptyName")
+		}
+		if err := v.Validate(x.Name); err != nil {
+			return fmt.Errorf("field Name: %w", err)
+		}
 	}
 	if x.Tag != nil && len(*x.Tag) > 50 {
 		return fmt.Errorf("field Tag: must be <= 50")
 	}
-	v, ok := reg.Get("app.ItemCreateConsistency")
-	if !ok {
-		return fmt.Errorf("validator %q not registered", "app.ItemCreateConsistency")
-	}
-	if err := v.Validate(x); err != nil {
-		return err
+	{
+		v, ok := reg.Get("app.ItemCreateConsistency")
+		if !ok {
+			return fmt.Errorf("validator %q not registered", "app.ItemCreateConsistency")
+		}
+		if err := v.Validate(x); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -92,12 +96,14 @@ func (x UpdateItemCreate) ValidateOwn(reg *validator.Registry) error {
 		return fmt.Errorf("field Name: must be >= 1")
 	}
 	if x.Name.IsSet() && !x.Name.IsNil() {
-		v, ok := reg.Get("app.NonEmptyName")
-		if !ok {
-			return fmt.Errorf("validator %q not registered", "app.NonEmptyName")
-		}
-		if err := v.Validate(x.Name.Value()); err != nil {
-			return fmt.Errorf("field Name: %w", err)
+		{
+			v, ok := reg.Get("app.NonEmptyName")
+			if !ok {
+				return fmt.Errorf("validator %q not registered", "app.NonEmptyName")
+			}
+			if err := v.Validate(x.Name.Value()); err != nil {
+				return fmt.Errorf("field Name: %w", err)
+			}
 		}
 	}
 	return nil
