@@ -31,7 +31,7 @@ func (g *Generator) renderClientSugar(m *typeMapper) []byte {
 	w.Print("\treturn &ClientSugared{impl: impl}\n")
 	w.Print("}\n\n")
 
-	for _, op := range g.doc.Operations {
+	for _, op := range g.operations() {
 		g.renderSugarMethod(w, op, m)
 	}
 

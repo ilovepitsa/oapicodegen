@@ -11,8 +11,8 @@ func (g *Generator) serverFile() codegen.File {
 	m := g.newTypeMapper("server")
 	m.addImport("context", "")
 
-	if g.modulePath != "" {
-		m.addImport(g.modulePath+"/interfaces/client", "client")
+	if g.project != nil {
+		m.addImport(g.project.Paths.Imports.ClientInterfaces.Path, "client")
 	}
 
 	body := g.renderServer(m)
@@ -29,7 +29,7 @@ func (g *Generator) renderServer(m *typeMapper) []byte {
 
 	w.Print("type Server interface {\n")
 
-	for _, op := range g.doc.Operations {
+	for _, op := range g.operations() {
 		name := operationMethodName(op)
 
 		if op.Deprecated {
@@ -46,9 +46,9 @@ func (g *Generator) renderServer(m *typeMapper) []byte {
 }
 
 // qualifyClient добавляет префикс "client." к имени типа, если сервер
-// рендерится в отдельном пакете (modulePath задан).
+// рендерится в отдельном пакете (model-импорт задан).
 func qualifyClient(name, suffix string, m *typeMapper) string {
-	if m.modulePath == "" {
+	if m.modelImport.Path == "" {
 		return name + suffix
 	}
 

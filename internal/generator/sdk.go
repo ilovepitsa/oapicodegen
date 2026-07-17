@@ -17,9 +17,9 @@ func (g *Generator) sdkFile() codegen.File {
 
 	m.addImport(httpclientPkg, "httpclient")
 
-	if g.modulePath != "" {
-		m.addImport(g.modulePath+"/interfaces/client", "apiclient")
-		m.addImport(g.modulePath+"/impl/httpclient", "implclient")
+	if g.project != nil {
+		m.addImport(g.project.Paths.Imports.ClientInterfaces.Path, "apiclient")
+		m.addImport(g.project.Paths.Imports.ClientHTTP.Path, "implclient")
 	}
 
 	body := g.renderSDK()

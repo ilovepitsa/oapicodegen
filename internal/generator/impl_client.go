@@ -19,8 +19,8 @@ func (g *Generator) implClientFile() codegen.File {
 
 	m.addImport(httpclientPkg, "httpclient")
 
-	if g.modulePath != "" {
-		m.addImport(g.modulePath+"/interfaces/client", "apiclient")
+	if g.project != nil {
+		m.addImport(g.project.Paths.Imports.ClientInterfaces.Path, "apiclient")
 	}
 
 	needJSON, needBytes, needURL := g.implClientImports()
@@ -53,7 +53,7 @@ func (g *Generator) implClientFile() codegen.File {
 func (g *Generator) implClientImports() (bool, bool, bool) {
 	var needJSON, needBytes, needURL bool
 
-	for _, op := range g.doc.Operations {
+	for _, op := range g.operations() {
 		if op.RequestBody != nil {
 			if requestBodyIsURLForm(op.RequestBody) {
 				needBytes = true
@@ -82,7 +82,7 @@ func (g *Generator) implClientImports() (bool, bool, bool) {
 // implClientNeedsStrconv проверяет, есть ли хотя бы один header с не-string типом —
 // тогда декодер использует strconv и нужен импорт.
 func (g *Generator) implClientNeedsStrconv() bool {
-	for _, op := range g.doc.Operations {
+	for _, op := range g.operations() {
 		for _, r := range op.Responses {
 			for _, hdr := range r.Headers {
 				if headerGoBaseType(hdr.Schema) != goTypeString {
@@ -112,7 +112,7 @@ func (g *Generator) renderImplClient(m *typeMapper) []byte {
 	w.Print("\treturn &Client{http: c}, nil\n")
 	w.Print("}\n\n")
 
-	for _, op := range g.doc.Operations {
+	for _, op := range g.operations() {
 		g.renderImplClientMethod(w, op, m)
 	}
 

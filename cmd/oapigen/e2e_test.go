@@ -11,23 +11,26 @@ import (
 )
 
 const (
-	e2eSpecPath   = "../../testdata/minimal/spec.yaml"
-	e2eGoldenPath = "../../testdata/minimal/golden"
-	e2eImportPfx  = "nschugorev/oapigenerator/testdata/minimal/golden"
+	e2eInputDir   = "../../testdata/project"
+	e2eGoldenPath = "../../testdata/project/golden"
+	e2eImportPfx  = "nschugorev/oapigenerator/testdata/project/golden"
 )
 
-// TestE2E_Minimal проверяет полный пайплайн cmd/oapigen на минимальной спеке
-// со стандартными конструкциями OpenAPI 3.x: object/array/oneOf/$ref/enum/
-// nullable/additionalProperties + path/query/body параметры и CRUD-операции.
+// TestE2E_Minimal проверяет полный пайплайн cmd/oapigen на проекте из одного
+// сервиса testdata/project/minimal. CLI обходит каталог, находит сервис,
+// генерирует пакеты в <output>/minimal/... и сравнивает с golden.
+//
+// Compile-check пропущен (-skip-compile-check): в tmp-каталоге нет go.mod,
+// настройка отдельного модуля для каждого запуска выходит за рамки e2e.
 func TestE2E_Minimal(t *testing.T) {
 	output := t.TempDir()
-	stderr := os.NewFile(0, os.DevNull)
-	t.Cleanup(func() { _ = stderr.Close() })
+	stderr := nullFile(t)
 
 	err := run([]string{
-		"-input", e2eSpecPath,
+		"-input", e2eInputDir,
 		"-output", output,
 		"-import-prefix", e2eImportPfx,
+		"-skip-compile-check",
 		"-log-level", "error",
 	}, stderr)
 	require.NoError(t, err)
@@ -47,6 +50,10 @@ func TestE2E_Minimal(t *testing.T) {
 
 	wantFiles := walkFiles(t, e2eGoldenPath)
 	for rel := range wantFiles {
+		// skip non-generated files (go.mod, etc.)
+		if filepath.Ext(rel) != ".go" {
+			continue
+		}
 		_, ok := gotFiles[rel]
 		assert.True(t, ok, "golden file %q has no corresponding generated file", rel)
 	}

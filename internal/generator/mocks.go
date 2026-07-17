@@ -23,11 +23,11 @@ func (g *Generator) mockFile(side, mockName, ifaceRef string) codegen.File {
 	m.addImport("reflect", "")
 	m.addImport("go.uber.org/mock/gomock", "")
 
-	if g.modulePath != "" {
-		m.addImport(g.modulePath+"/interfaces/client", "apiclient")
+	if g.project != nil {
+		m.addImport(g.project.Paths.Imports.ClientInterfaces.Path, "apiclient")
 
 		if side == "server" {
-			m.addImport(g.modulePath+"/interfaces/server", "apiserver")
+			m.addImport(g.project.Paths.Imports.ServerInterfaces.Path, "apiserver")
 		}
 	}
 
@@ -70,7 +70,7 @@ func (g *Generator) renderGomockMock(mockName, ifaceRef string) []byte {
 	w.Print("\treturn m.recorder\n")
 	w.Print("}\n\n")
 
-	for _, op := range g.doc.Operations {
+	for _, op := range g.operations() {
 		name := operationMethodName(op)
 		g.renderGomockMethod(w, mockName, recorderName, name)
 	}

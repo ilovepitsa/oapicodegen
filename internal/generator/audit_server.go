@@ -25,11 +25,11 @@ func (g *Generator) auditClientFile() codegen.File {
 	m := g.newTypeMapper("client")
 	w := codegen.NewBufferWriter()
 
-	for _, op := range g.doc.Operations {
+	for _, op := range g.operations() {
 		g.renderOpRequestAudit(w, op, m)
 	}
 
-	for _, op := range g.doc.Operations {
+	for _, op := range g.operations() {
 		g.renderOpResponseAudit(w, op, m)
 	}
 

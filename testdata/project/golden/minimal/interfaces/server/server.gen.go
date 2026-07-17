@@ -4,7 +4,7 @@ package server
 
 import (
 	"context"
-	client "nschugorev/oapigenerator/testdata/minimal/golden/interfaces/client"
+	client "nschugorev/oapigenerator/testdata/project/golden/minimal/interfaces/client"
 )
 
 type Server interface {

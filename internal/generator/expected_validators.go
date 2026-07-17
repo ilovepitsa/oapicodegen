@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"nschugorev/oapigenerator/internal/codegen"
 	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/parser"
 	"strconv"
 )
 
@@ -12,7 +11,7 @@ import (
 // в документе есть хотя бы один named-валидатор. Вызывается один раз за
 // генерацию.
 func (g *Generator) writeExpectedValidatorsFile(fw codegen.FileWriter) error {
-	file, ok := g.expectedValidatorsFile(g.doc)
+	file, ok := g.expectedValidatorsFile()
 	if !ok {
 		return nil
 	}
@@ -35,8 +34,8 @@ func (g *Generator) writeExpectedValidatorsFile(fw codegen.FileWriter) error {
 // Используется приложением при старте: validator.Registry.AssertExact(
 // model.ExpectedValidatorNames()) падает, если какой-то валидатор не
 // зарегистрирован или зарегистрирован лишний.
-func (g *Generator) expectedValidatorsFile(doc *parser.Document) (codegen.File, bool) {
-	names := collectExpectedValidatorNames(doc)
+func (g *Generator) expectedValidatorsFile() (codegen.File, bool) {
+	names := collectExpectedValidatorNames(g.project.Model.Schemas())
 	if len(names) == 0 {
 		return nil, false
 	}

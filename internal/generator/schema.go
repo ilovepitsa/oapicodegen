@@ -33,7 +33,7 @@ func (g *Generator) renderSchema(sh *parser.Schema, m *typeMapper) []byte {
 		writeDocComment(w, sh.Description)
 	}
 
-	if g.features.SplitRequestResponse.Value && g.splittable[sh.Name] {
+	if g.project.Features.SplitRequestResponse.Value && g.splittable[sh.Name] {
 		g.renderSplitStruct(w, sh, m, name)
 
 		return w.Content()
@@ -132,7 +132,7 @@ func (g *Generator) renderUpdateStruct(sh *parser.Schema, m *typeMapper, name st
 		writeDocComment(w, "Update"+name+" — PATCH/PUT variant of "+name+".")
 	}
 
-	if g.features.SplitRequestResponse.Value {
+	if g.project.Features.SplitRequestResponse.Value {
 		m.mode = modeRequest
 	} else {
 		m.mode = ""
@@ -264,7 +264,7 @@ func (g *Generator) renderField(w *codegen.BufferWriter, p *parser.Property, m *
 	fieldType := m.goType(p.Schema)
 	required := g.requiredForMode(p, m.mode)
 
-	if g.features.UseOptional.Value && p.Optional {
+	if g.project.Features.UseOptional.Value && p.Optional {
 		m.addImport(optionalPkg, "optional")
 		w.Print(fieldName, " optional.Optional[", fieldType, "] `json:\"", p.Name, "\" yaml:\"", p.Name, "\"`\n") //nolint:lll // struct tag line
 
@@ -295,7 +295,7 @@ func (g *Generator) renderField(w *codegen.BufferWriter, p *parser.Property, m *
 //     required = p.RequestRequired && p.ResponseRequired (required только
 //     если в обоих списках); иначе fallback на p.Required.
 func (g *Generator) requiredForMode(p *parser.Property, mode string) bool {
-	if !g.features.UseRequiredV2.Value {
+	if !g.project.Features.UseRequiredV2.Value {
 		return p.Required
 	}
 

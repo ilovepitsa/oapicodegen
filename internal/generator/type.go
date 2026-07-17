@@ -8,25 +8,34 @@ import (
 
 // typeMapper мапит parser.Schema → Go-тип, собирая нужные импорты.
 // currentPkg — пакет, в который сейчас рендерится код ("model" / "client" / "server").
-// modulePath — Go import-path корня генерируемого кода (для ссылок на model).
+// modelImport — Go import-path model-пакета (для ссылок на model из других пакетов).
+// Пустой Path означает, что импорт не нужен (внутри model-пакета).
 // mode — "" / "Request" / "Response": суффикс для splittable schema-ссылок
 // при включённом GOLANG_SPLIT_REQUEST_RESPONSE.
+// schemaIndex — глобальный индекс схем для разрешения cross-service $ref.
 type typeMapper struct {
-	currentPkg string
-	modulePath string
-	utcTime    bool
-	mode       string
-	splittable map[string]bool
-	imports    []gogen.Import
+	currentPkg  string
+	modelImport gogen.Import
+	utcTime     bool
+	mode        string
+	splittable  map[string]bool
+	schemaIndex *parser.SchemaIndex
+	imports     []gogen.Import
 }
 
 // newTypeMapper создаёт typeMapper с флагами из Generator.
 func (g *Generator) newTypeMapper(pkg string) *typeMapper {
+	var modelImp gogen.Import
+	if g.project != nil {
+		modelImp = g.project.Paths.Imports.Model
+	}
+
 	return &typeMapper{
-		currentPkg: pkg,
-		modulePath: g.modulePath,
-		utcTime:    g.features.UseUTCForDateTime.Value,
-		splittable: g.splittable,
+		currentPkg:  pkg,
+		modelImport: modelImp,
+		utcTime:     g.project.Features.UseUTCForDateTime.Value,
+		splittable:  g.splittable,
+		schemaIndex: g.schemaIndex,
 	}
 }
 
@@ -65,6 +74,10 @@ func isInherentlyNilable(t string) bool {
 //
 //nolint:gocyclo,cyclop // early-return chain by schema type
 func (m *typeMapper) baseType(s *parser.Schema) string {
+	if s.ExternalRef != "" {
+		return m.qualifyExternalType(s.ExternalRef)
+	}
+
 	if s.Ref != "" {
 		return m.qualifyModelType(refToName(s.Ref))
 	}
@@ -169,11 +182,11 @@ func (m *typeMapper) qualifyModelType(name string) string {
 		goName += m.mode
 	}
 
-	if m.currentPkg == "model" || m.modulePath == "" {
+	if m.currentPkg == "model" || m.modelImport.Path == "" {
 		return goName
 	}
 
-	m.addImport(m.modulePath+"/model", "model")
+	m.addImport(m.modelImport.Path, "model")
 
 	return "model." + goName
 }
@@ -188,11 +201,11 @@ func (m *typeMapper) isSplittable(name string) bool {
 // qualifyUTCTime возвращает имя UTCTime-типа для текущего пакета.
 // В model — просто UTCTime; в остальных — model.UTCTime + импорт.
 func (m *typeMapper) qualifyUTCTime() string {
-	if m.currentPkg == "model" || m.modulePath == "" {
+	if m.currentPkg == "model" || m.modelImport.Path == "" {
 		return "UTCTime"
 	}
 
-	m.addImport(m.modulePath+"/model", "model")
+	m.addImport(m.modelImport.Path, "model")
 
 	return "model.UTCTime"
 }
@@ -203,4 +216,50 @@ func refToName(ref string) string {
 	}
 
 	return ref
+}
+
+// externalRefSeparator — разделитель между abs-путём файла и именем схемы
+// в ExternalRef. Должен совпадать с parser.schemaRefSeparator.
+const externalRefSeparator = "#/components/schemas/"
+
+// qualifyExternalType разрешает cross-service $ref через SchemaIndex и
+// возвращает Go-тип вида "<alias>.<Type>". Добавляет импорт model-пакета
+// сервиса-владельца. Если SchemaIndex не задан или схема не найдена —
+// возвращает goTypeAny (fallback).
+//
+// externalRef имеет вид "<absPath>#/components/schemas/<Name>", где absPath —
+// абсолютный путь к openapi.yaml сервиса-владельца.
+func (m *typeMapper) qualifyExternalType(externalRef string) string {
+	if m.schemaIndex == nil {
+		return goTypeAny
+	}
+
+	idx := strings.Index(externalRef, externalRefSeparator)
+	if idx < 0 {
+		return goTypeAny
+	}
+
+	absPath := externalRef[:idx]
+	schemaName := externalRef[idx+len(externalRefSeparator):]
+
+	entry, ok := m.schemaIndex.LookupForMode(absPath, schemaName, m.mode)
+	if !ok {
+		return goTypeAny
+	}
+
+	alias := crossServiceAlias(entry.GoImport)
+	m.addImport(entry.GoImport+"/model", alias)
+
+	return alias + "." + entry.GoType
+}
+
+// crossServiceAlias генерирует Go-alias для импорта model-пакета другого
+// сервиса. Использует последний компонент import path, приведённый к нижнему
+// регистру (Go convention для имён пакететов).
+func crossServiceAlias(goImport string) string {
+	if idx := strings.LastIndex(goImport, "/"); idx >= 0 {
+		return strings.ToLower(goImport[idx+1:])
+	}
+
+	return strings.ToLower(goImport)
 }

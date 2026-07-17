@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	httpclient "nschugorev/oapigenerator/pkg/httpclient"
-	apiclient "nschugorev/oapigenerator/testdata/minimal/golden/interfaces/client"
-	model "nschugorev/oapigenerator/testdata/minimal/golden/model"
+	apiclient "nschugorev/oapigenerator/testdata/project/golden/minimal/interfaces/client"
+	model "nschugorev/oapigenerator/testdata/project/golden/minimal/model"
 	"strings"
 )
 

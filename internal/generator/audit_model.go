@@ -32,12 +32,12 @@ func (g *Generator) auditModelFile(sh *parser.Schema) codegen.File {
 
 // schemaReferencedByOperation сообщает, ссылается ли request body или
 // response любой операции на схему sh (по $ref-имени).
-func schemaReferencedByOperation(sh *parser.Schema, doc *parser.Document) bool {
+func schemaReferencedByOperation(sh *parser.Schema, operations []*parser.Method) bool {
 	if sh == nil || sh.Name == "" {
 		return false
 	}
 
-	for _, op := range doc.Operations {
+	for _, op := range operations {
 		if schemaInRequest(op.RequestBody, sh.Name) || schemaInResponses(op.Responses, sh.Name) {
 			return true
 		}

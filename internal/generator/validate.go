@@ -174,7 +174,7 @@ func (g *Generator) fieldAccessor(
 
 	// optional-wrapped field: Update-struct always, main-struct when
 	// UseOptional flag is on AND x-optional marker is set.
-	wrapped := isUpdate || (g.features.UseOptional.Value && p.Optional)
+	wrapped := isUpdate || (g.project.Features.UseOptional.Value && p.Optional)
 
 	var accessor, guard string
 
@@ -301,10 +301,10 @@ func renderNamedValidatorCallIndented(
 
 // collectExpectedValidatorNames собирает уникальные имена именованных
 // валидаторов со всех схем документа (property-level + schema-level).
-func collectExpectedValidatorNames(doc *parser.Document) []string {
+func collectExpectedValidatorNames(schemas []*parser.Schema) []string {
 	seen := make(map[string]bool)
 
-	for _, sh := range doc.Schemas {
+	for _, sh := range schemas {
 		for _, rule := range sh.Validations {
 			if nr, ok := rule.(parser.NamedRule); ok {
 				seen[nr.Name] = true

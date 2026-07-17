@@ -1,12 +1,12 @@
-// Package generator генерирует Go-код из parser.Document. Первая итерация:
+// Package generator генерирует Go-код из parser.Project. Первая итерация:
 // только стандартный OpenAPI 3.x (без x-* расширений, audit-data, split
 // Request/Response, update-схем, URL-form-encoding — всё это в бэклоге).
 //
 // Layout (multi-package):
 //
-//	<modulePath>/model/              — schemas + JSON-методы
-//	<modulePath>/interfaces/client/  — Client interface + Request/Response + sugar
-//	<modulePath>/interfaces/server/  — Server interface (переиспользует Request/Response из client)
+//	<import-prefix>/model/              — schemas + JSON-методы
+//	<import-prefix>/interfaces/client/  — Client interface + Request/Response + sugar
+//	<import-prefix>/interfaces/server/  — Server interface
 //
 // Для каждой схемы из components.schemas генерируется <name>.gen.go с
 // определением Go-типа (struct / alias). Для oneOf/anyOf дополнительно
@@ -22,10 +22,9 @@ import (
 
 // Generator конфигурируется через Option-ы и хранит общее состояние генерации.
 type Generator struct {
-	doc        *parser.Document
-	modulePath string
-	factory    *gogen.FileFactory
-	features   parser.ProjectFeatures
+	project     *parser.Project
+	schemaIndex *parser.SchemaIndex
+	factory     *gogen.FileFactory
 
 	// splittable — имена object-схем, которые при включённом
 	// GOLANG_SPLIT_REQUEST_RESPONSE рендерятся как <Name>Request + <Name>Response.
@@ -36,34 +35,29 @@ type Generator struct {
 // Option настраивает Generator.
 type Option func(*Generator)
 
-// WithModulePath задаёт Go import-path корня генерируемого кода
-// (например "github.com/foo/bar/gen/petstore"). От него строятся пути
-// к пакетам model/, interfaces/client/, interfaces/server/.
-func WithModulePath(p string) Option {
-	return func(g *Generator) { g.modulePath = p }
-}
-
-// WithProjectFeatures прокидывает резолвнутые generation flags в Generator.
-// Без вызова option все флаги остаются false (zero value ProjectFeatures).
-func WithProjectFeatures(pf parser.ProjectFeatures) Option {
-	return func(g *Generator) { g.features = pf }
-}
-
 // Generate обходит все схемы и операции, пишет Go-файлы через fw.
-func Generate(fw codegen.FileWriter, doc *parser.Document, opts ...Option) error {
+func Generate(
+	fw codegen.FileWriter,
+	project *parser.Project,
+	si *parser.SchemaIndex,
+	opts ...Option,
+) error {
 	g := &Generator{
-		doc:     doc,
-		factory: gogen.NewFileFactory("oapigen"),
+		project:     project,
+		schemaIndex: si,
+		factory:     gogen.NewFileFactory("oapigen"),
 	}
 	for _, opt := range opts {
 		opt(g)
 	}
 
-	if g.features.SplitRequestResponse.Value {
-		g.splittable = computeSplittable(doc)
+	schemas := project.Model.Schemas()
+
+	if g.project.Features.SplitRequestResponse.Value {
+		g.splittable = computeSplittable(schemas)
 	}
 
-	for _, sh := range doc.Schemas {
+	for _, sh := range schemas {
 		if sh.Name == "" {
 			continue
 		}
@@ -81,13 +75,34 @@ func Generate(fw codegen.FileWriter, doc *parser.Document, opts ...Option) error
 		return err
 	}
 
-	if len(doc.Operations) > 0 {
+	if hasOperations(project) {
 		if err := g.writeOperationFiles(fw); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+// hasOperations сообщает, есть ли в проекте хотя бы один метод.
+func hasOperations(project *parser.Project) bool {
+	for _, svc := range project.Paths.Services {
+		if len(svc.Methods) > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// operations возвращает плоский срез всех методов проекта (по всем сервисам).
+func (g *Generator) operations() []*parser.Method {
+	var out []*parser.Method
+	for _, svc := range g.project.Paths.Services {
+		out = append(out, svc.Methods...)
+	}
+
+	return out
 }
 
 func (g *Generator) writeSchemaFiles(fw codegen.FileWriter, sh *parser.Schema) error {
@@ -107,7 +122,7 @@ func (g *Generator) writeSchemaFiles(fw codegen.FileWriter, sh *parser.Schema) e
 		}
 	}
 
-	if schemeHasURLFormat(sh, g.doc) {
+	if schemeHasURLFormat(sh, g.operations()) {
 		uf := g.urlFormMethodsFile(sh)
 		uname := "model/" + fileName(sh.Name) + "_url_form.gen.go"
 
@@ -125,7 +140,7 @@ func (g *Generator) writeSchemaFiles(fw codegen.FileWriter, sh *parser.Schema) e
 		}
 	}
 
-	if schemaReferencedByOperation(sh, g.doc) {
+	if schemaReferencedByOperation(sh, g.operations()) {
 		af := g.auditModelFile(sh)
 		aname := "model/" + fileName(sh.Name) + "_audit_data.gen.go"
 
@@ -141,7 +156,7 @@ func (g *Generator) writeSchemaFiles(fw codegen.FileWriter, sh *parser.Schema) e
 // для схемы. True только при включённом split-режиме для splittable-схемы с
 // хотя бы одним shared-полем (не readOnly && не writeOnly).
 func (g *Generator) shouldGenerateConverters(sh *parser.Schema) bool {
-	if !g.features.SplitRequestResponse.Value {
+	if !g.project.Features.SplitRequestResponse.Value {
 		return false
 	}
 
@@ -155,7 +170,7 @@ func (g *Generator) shouldGenerateConverters(sh *parser.Schema) bool {
 // writeUTCTimeFile пишет model/utc_time.gen.go, если включён флаг
 // USE_UTC_FOR_DATE_TIME. Вызывается один раз за генерацию.
 func (g *Generator) writeUTCTimeFile(fw codegen.FileWriter) error {
-	if !g.features.UseUTCForDateTime.Value {
+	if !g.project.Features.UseUTCForDateTime.Value {
 		return nil
 	}
 
@@ -179,10 +194,10 @@ func (g *Generator) writeUTCTimeFile(fw codegen.FileWriter) error {
 // Ссылки из properties других splittable-схем безопасны — renderSplitStruct
 // выставляет mode. Ссылки из operation body/response тоже безопасны —
 // они рендерятся в renderRequestStruct/renderResponseStruct с mode.
-func computeSplittable(doc *parser.Document) map[string]bool {
+func computeSplittable(schemas []*parser.Schema) map[string]bool {
 	out := make(map[string]bool)
 
-	for _, sh := range doc.Schemas {
+	for _, sh := range schemas {
 		if sh.Name == "" {
 			continue
 		}
@@ -193,7 +208,7 @@ func computeSplittable(doc *parser.Document) map[string]bool {
 		}
 	}
 
-	for _, sh := range doc.Schemas {
+	for _, sh := range schemas {
 		excludeReferencedByComposite(sh, out)
 	}
 

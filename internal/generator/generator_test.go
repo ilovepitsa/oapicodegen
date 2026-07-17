@@ -41,7 +41,7 @@ func TestGenerate_PetstoreGolden(t *testing.T) {
 	dir := golden.NewDir(t, golden.WithPath("testdata/golden/petstore"), golden.WithRecreateOnUpdate())
 	fw := golden.NewCodegenFS(t, dir)
 
-	require.NoError(t, Generate(fw, doc, WithModulePath(testModulePath)))
+	require.NoError(t, Generate(fw, testProject(t, doc, testModulePath), nil))
 }
 
 func TestGenerate_SimpleStruct(t *testing.T) {
@@ -1211,7 +1211,7 @@ func TestSchemaTreeHasDefaults_CyclicRefTerminates(t *testing.T) {
 			{Name: "inner", Schema: &oapiparser.Schema{Ref: "#/components/schemas/Inner"}},
 		},
 	}
-	g := &Generator{doc: &oapiparser.Document{Schemas: []*oapiparser.Schema{inner, aSchema}}}
+	g := testGeneratorFromSchemas(inner, aSchema)
 
 	// Цикл: aSchema → inner ($ref Inner) → Inner.level (default). Должно вернуться true.
 	assert.True(t, g.schemaTreeHasDefaults(aSchema, nil, map[string]bool{aSchema.Name: true}))
@@ -1225,7 +1225,7 @@ func TestSchemaTreeHasDefaults_CyclicRefTerminates(t *testing.T) {
 	emptyB.Properties = []*oapiparser.Property{
 		{Name: "a", Schema: &oapiparser.Schema{Ref: "#/components/schemas/EmptyA"}},
 	}
-	g2 := &Generator{doc: &oapiparser.Document{Schemas: []*oapiparser.Schema{emptyA, emptyB}}}
+	g2 := testGeneratorFromSchemas(emptyA, emptyB)
 
 	assert.False(t, g2.schemaTreeHasDefaults(emptyA, nil, map[string]bool{emptyA.Name: true}))
 }
@@ -1497,11 +1497,11 @@ info: {title: t, version: '1'}
 paths: {}
 `)
 	fw := &collectWriter{files: map[string][]byte{}}
-	require.NoError(t, Generate(fw, doc, WithModulePath(testModulePath)))
+	require.NoError(t, Generate(fw, testProject(t, doc, testModulePath), nil))
 	assert.Empty(t, fw.files)
 }
 
-func TestGenerate_WithModulePath(t *testing.T) {
+func TestGenerate_WithProject(t *testing.T) {
 	doc := parseSpec(t, `
 openapi: 3.0.3
 info: {title: t, version: '1'}
@@ -1954,27 +1954,56 @@ func (c *collectWriter) WriteFile(name string, f codegen.File) error {
 
 func (c *collectWriter) Close() error { return nil }
 
-func TestWithProjectFeatures_DefaultsToZero(t *testing.T) {
-	g := &Generator{}
-	WithProjectFeatures(oapiparser.ProjectFeatures{
-		ServerNoAutoDefaults: oapiparser.ProjectFeature{Value: true},
-		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
-		UseRequiredV2:        oapiparser.ProjectFeature{Value: true},
-		UseUTCForDateTime:    oapiparser.ProjectFeature{Value: true},
-	})(g)
+// testProject строит *parser.Project из распарсенного Document для тестов
+// генератора. Аналог моста buildProject в cmd/oapigen/main.go.
+func testProject(t *testing.T, doc *oapiparser.Document, modulePath string) *oapiparser.Project {
+	t.Helper()
 
-	assert.True(t, g.features.ServerNoAutoDefaults.Value)
-	assert.True(t, g.features.SplitRequestResponse.Value)
-	assert.True(t, g.features.UseRequiredV2.Value)
-	assert.True(t, g.features.UseUTCForDateTime.Value)
+	project := &oapiparser.Project{
+		Folder:       "test",
+		ImportPrefix: modulePath,
+	}
+	project.CreateModel(gogen.Import{
+		Path:  modulePath + "/model",
+		Alias: "model",
+	})
+	project.CreatePaths(modulePath)
+	project.Model.SetSchemas(doc.Schemas)
+
+	for _, op := range doc.Operations {
+		svcName, err := oapiparser.ServiceNameForMethod(op)
+		require.NoError(t, err)
+
+		project.Paths.AddMethod(svcName, op)
+	}
+
+	return project
 }
 
-func TestWithProjectFeatures_NotCalled_AllFalse(t *testing.T) {
-	g := &Generator{}
-	assert.False(t, g.features.ServerNoAutoDefaults.Value)
-	assert.False(t, g.features.SplitRequestResponse.Value)
-	assert.False(t, g.features.UseRequiredV2.Value)
-	assert.False(t, g.features.UseUTCForDateTime.Value)
+// testGenerator строит Generator с Project из doc, но без modulePath
+// (для unit-тестов рендереров, которым не нужен cross-package импорт).
+func testGenerator(t *testing.T, doc *oapiparser.Document) *Generator {
+	t.Helper()
+
+	return &Generator{
+		project: testProject(t, doc, ""),
+		factory: gogen.NewFileFactory("oapigen"),
+	}
+}
+
+// testGeneratorFromSchemas строит Generator с Project, содержащим только
+// заданные схемы (без операций). Для unit-тестов resolution-логики
+// (schemaTreeHasDefaults и т.п.).
+func testGeneratorFromSchemas(schemas ...*oapiparser.Schema) *Generator {
+	project := &oapiparser.Project{Folder: "test"}
+	project.CreateModel(gogen.Import{Alias: "model"})
+	project.CreatePaths("")
+	project.Model.SetSchemas(schemas)
+
+	return &Generator{
+		project: project,
+		factory: gogen.NewFileFactory("oapigen"),
+	}
 }
 
 func parseSpec(t *testing.T, spec string) *oapiparser.Document {
@@ -1988,7 +2017,7 @@ func parseSpec(t *testing.T, spec string) *oapiparser.Document {
 func generateFiles(t *testing.T, doc *oapiparser.Document) map[string][]byte {
 	t.Helper()
 	fw := &collectWriter{files: map[string][]byte{}}
-	require.NoError(t, Generate(fw, doc, WithModulePath(testModulePath)))
+	require.NoError(t, Generate(fw, testProject(t, doc, testModulePath), nil))
 
 	return fw.files
 }
@@ -2000,7 +2029,9 @@ func generateFilesWithFeatures(
 ) map[string][]byte {
 	t.Helper()
 	fw := &collectWriter{files: map[string][]byte{}}
-	require.NoError(t, Generate(fw, doc, WithModulePath(testModulePath), WithProjectFeatures(pf)))
+	project := testProject(t, doc, testModulePath)
+	project.Features = pf
+	require.NoError(t, Generate(fw, project, nil))
 
 	return fw.files
 }
@@ -2771,10 +2802,7 @@ components:
 func generatePetURLFormFile(t *testing.T, doc *oapiparser.Document) []byte {
 	t.Helper()
 
-	g := &Generator{
-		doc:     doc,
-		factory: gogen.NewFileFactory("oapigen"),
-	}
+	g := testGenerator(t, doc)
 
 	for _, sh := range doc.Schemas {
 		if sh.Name == "Pet" {
@@ -2819,8 +2847,8 @@ components:
 	pet := findSchemaByName(t, doc, "Pet")
 	other := findSchemaByName(t, doc, "Other")
 
-	assert.True(t, schemeHasURLFormat(pet, doc), "Pet is referenced from form-urlencoded body")
-	assert.False(t, schemeHasURLFormat(other, doc), "Other is not referenced from any form body")
+	assert.True(t, schemeHasURLFormat(pet, doc.Operations), "Pet is referenced from form-urlencoded body")
+	assert.False(t, schemeHasURLFormat(other, doc.Operations), "Other is not referenced from any form body")
 }
 
 func TestSchemeHasURLFormat_JSONBody_False(t *testing.T) {
@@ -2849,7 +2877,7 @@ components:
 `)
 
 	pet := findSchemaByName(t, doc, "Pet")
-	assert.False(t, schemeHasURLFormat(pet, doc), "JSON body should not trigger URL form generation")
+	assert.False(t, schemeHasURLFormat(pet, doc.Operations), "JSON body should not trigger URL form generation")
 }
 
 func TestMarshalURLForm_PrimitiveFields(t *testing.T) {
@@ -3509,10 +3537,7 @@ components:
 func generateConverterFile(t *testing.T, doc *oapiparser.Document, schemaName string) []byte {
 	t.Helper()
 
-	g := &Generator{
-		doc:     doc,
-		factory: gogen.NewFileFactory("oapigen"),
-	}
+	g := testGenerator(t, doc)
 
 	for _, sh := range doc.Schemas {
 		if sh.Name == schemaName {
@@ -3788,10 +3813,7 @@ components:
 func generatePetAuditModelFile(t *testing.T, doc *oapiparser.Document) []byte {
 	t.Helper()
 
-	g := &Generator{
-		doc:     doc,
-		factory: gogen.NewFileFactory("oapigen"),
-	}
+	g := testGenerator(t, doc)
 
 	for _, sh := range doc.Schemas {
 		if sh.Name == "Pet" {
@@ -3946,8 +3968,8 @@ components:
 	pet := findSchemaByName(t, doc, "Pet")
 	other := findSchemaByName(t, doc, "Other")
 
-	assert.True(t, schemaReferencedByOperation(pet, doc), "Pet is referenced by request body")
-	assert.False(t, schemaReferencedByOperation(other, doc), "Other is not referenced")
+	assert.True(t, schemaReferencedByOperation(pet, doc.Operations), "Pet is referenced by request body")
+	assert.False(t, schemaReferencedByOperation(other, doc.Operations), "Other is not referenced")
 }
 
 func TestSchemaReferencedByOperation_Response(t *testing.T) {
@@ -3974,7 +3996,7 @@ components:
         name: {type: string}
 `)
 	pet := findSchemaByName(t, doc, "Pet")
-	assert.True(t, schemaReferencedByOperation(pet, doc), "Pet is referenced by response")
+	assert.True(t, schemaReferencedByOperation(pet, doc.Operations), "Pet is referenced by response")
 }
 
 func TestSchemaReferencedByOperation_NotReferenced(t *testing.T) {
@@ -3992,7 +4014,7 @@ components:
         name: {type: string}
 `)
 	pet := findSchemaByName(t, doc, "Pet")
-	assert.False(t, schemaReferencedByOperation(pet, doc), "Pet is not referenced by any operation")
+	assert.False(t, schemaReferencedByOperation(pet, doc.Operations), "Pet is not referenced by any operation")
 }
 
 // --- T27.4 server-layer audit-data tests ---
@@ -4001,9 +4023,8 @@ func generateAuditClientFile(t *testing.T, doc *oapiparser.Document) []byte {
 	t.Helper()
 
 	g := &Generator{
-		doc:        doc,
-		factory:    gogen.NewFileFactory("oapigen"),
-		modulePath: testModulePath,
+		project: testProject(t, doc, testModulePath),
+		factory: gogen.NewFileFactory("oapigen"),
 	}
 
 	return g.auditClientFile().Content()
@@ -4321,4 +4342,155 @@ components:
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("generated audit-data model package did not compile: %v\n--- output ---\n%s", err, out)
 	}
+}
+
+func TestCrossServiceRef_GeneratesImport(t *testing.T) {
+	const commonSpec = "/input/common/src/openapi/openapi.yaml"
+	commonProject := &oapiparser.Project{
+		Folder:       "common",
+		ImportPrefix: "github.com/foo/bar/go/common",
+	}
+
+	userSchema := &oapiparser.Schema{
+		Name:       "User",
+		Type:       "object",
+		SourceFile: commonSpec,
+	}
+	userSchema.Properties = []*oapiparser.Property{
+		{Name: "id", Schema: &oapiparser.Schema{Type: "string"}},
+	}
+
+	commonProject.CreateModel(gogen.Import{
+		Path:  "github.com/foo/bar/go/common/model",
+		Alias: "model",
+	})
+	commonProject.CreatePaths("github.com/foo/bar/go/common")
+	commonProject.Model.SetSchemas([]*oapiparser.Schema{userSchema})
+
+	extRef := commonSpec + "#/components/schemas/User"
+	wrapperSchema := &oapiparser.Schema{
+		Name: "Wrapper",
+		Type: "object",
+		Properties: []*oapiparser.Property{
+			{Name: "user", Schema: &oapiparser.Schema{ExternalRef: extRef}},
+		},
+	}
+
+	userBackendProject := &oapiparser.Project{
+		Folder:       "userBackend",
+		ImportPrefix: "github.com/foo/bar/go/userBackend",
+	}
+	userBackendProject.CreateModel(gogen.Import{
+		Path:  "github.com/foo/bar/go/userBackend/model",
+		Alias: "model",
+	})
+	userBackendProject.CreatePaths("github.com/foo/bar/go/userBackend")
+	userBackendProject.Model.SetSchemas([]*oapiparser.Schema{wrapperSchema})
+
+	si := &oapiparser.SchemaIndex{
+		Schemas: map[string]*oapiparser.SchemaEntry{
+			commonSpec + "#/components/schemas/User": {
+				Project:    commonProject,
+				SchemaName: "User",
+				GoImport:   "github.com/foo/bar/go/common",
+				GoType:     "User",
+			},
+		},
+	}
+
+	g := &Generator{
+		project:     userBackendProject,
+		schemaIndex: si,
+		factory:     gogen.NewFileFactory("oapigen"),
+	}
+
+	m := g.newTypeMapper("model")
+	got := m.baseType(&oapiparser.Schema{ExternalRef: extRef})
+
+	assert.Equal(t, "common.User", got)
+
+	var foundImport bool
+	for _, imp := range m.imports {
+		if imp.Path == "github.com/foo/bar/go/common/model" && imp.Alias == "common" {
+			foundImport = true
+
+			break
+		}
+	}
+	assert.True(t, foundImport, "must add import for common/model with alias 'common'")
+}
+
+func TestCrossServiceRef_NoSchemaIndex_FallbackToAny(t *testing.T) {
+	project := &oapiparser.Project{Folder: "test"}
+	project.CreateModel(gogen.Import{Alias: "model"})
+	project.CreatePaths("")
+
+	g := &Generator{
+		project: project,
+		factory: gogen.NewFileFactory("oapigen"),
+	}
+
+	m := g.newTypeMapper("model")
+	got := m.baseType(&oapiparser.Schema{
+		ExternalRef: "/input/common/src/openapi/openapi.yaml#/components/schemas/User",
+	})
+
+	assert.Equal(t, goTypeAny, got, "without SchemaIndex, external ref falls back to any")
+}
+
+func TestCrossServiceRef_SplitModeAddsSuffix(t *testing.T) {
+	const commonSpec = "/input/common/src/openapi/openapi.yaml"
+	commonProject := &oapiparser.Project{
+		Folder:       "common",
+		ImportPrefix: "github.com/foo/bar/go/common",
+		Features: oapiparser.ProjectFeatures{
+			SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+		},
+	}
+
+	userSchema := &oapiparser.Schema{
+		Name:       "User",
+		Type:       "object",
+		SourceFile: commonSpec,
+	}
+	userSchema.Properties = []*oapiparser.Property{
+		{Name: "id", Schema: &oapiparser.Schema{Type: "string"}},
+	}
+
+	commonProject.CreateModel(gogen.Import{Alias: "model"})
+	commonProject.CreatePaths("github.com/foo/bar/go/common")
+	commonProject.Model.SetSchemas([]*oapiparser.Schema{userSchema})
+
+	extRef := commonSpec + "#/components/schemas/User"
+
+	userBackendProject := &oapiparser.Project{
+		Folder:       "userBackend",
+		ImportPrefix: "github.com/foo/bar/go/userBackend",
+	}
+	userBackendProject.CreateModel(gogen.Import{Alias: "model"})
+	userBackendProject.CreatePaths("github.com/foo/bar/go/userBackend")
+
+	si := &oapiparser.SchemaIndex{
+		Schemas: map[string]*oapiparser.SchemaEntry{
+			commonSpec + "#/components/schemas/User": {
+				Project:    commonProject,
+				SchemaName: "User",
+				GoImport:   "github.com/foo/bar/go/common",
+				GoType:     "User",
+			},
+		},
+	}
+
+	g := &Generator{
+		project:     userBackendProject,
+		schemaIndex: si,
+		factory:     gogen.NewFileFactory("oapigen"),
+	}
+
+	m := g.newTypeMapper("model")
+	m.mode = oapiparser.ModeRequest
+
+	got := m.baseType(&oapiparser.Schema{ExternalRef: extRef})
+	assert.Equal(t, "common.UserRequest", got,
+		"owner project has split enabled → suffix added by LookupForMode")
 }

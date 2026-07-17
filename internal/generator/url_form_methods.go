@@ -36,12 +36,12 @@ func (g *Generator) urlFormMethodsFile(sh *parser.Schema) codegen.File {
 // schemeHasURLFormat сообщает, ссылается ли form-urlencoded request body
 // какой-либо операции на схему sh (по $ref-имени). Inline-схемы без Name
 // не поддерживаются — используйте $ref на components.schemas.
-func schemeHasURLFormat(sh *parser.Schema, doc *parser.Document) bool {
+func schemeHasURLFormat(sh *parser.Schema, operations []*parser.Method) bool {
 	if sh == nil || sh.Name == "" {
 		return false
 	}
 
-	for _, op := range doc.Operations {
+	for _, op := range operations {
 		if op.RequestBody == nil {
 			continue
 		}
@@ -224,7 +224,7 @@ func (g *Generator) urlFormFieldSupported(p *parser.Property) bool {
 		return false
 	}
 
-	if g.features.UseOptional.Value && p.Optional {
+	if g.project.Features.UseOptional.Value && p.Optional {
 		return false
 	}
 

@@ -8,8 +8,8 @@ import (
 	"github.com/labstack/echo/v4"
 	"io"
 	"net/http"
-	apiclient "nschugorev/oapigenerator/testdata/minimal/golden/interfaces/client"
-	apiserver "nschugorev/oapigenerator/testdata/minimal/golden/interfaces/server"
+	apiclient "nschugorev/oapigenerator/testdata/project/golden/minimal/interfaces/client"
+	apiserver "nschugorev/oapigenerator/testdata/project/golden/minimal/interfaces/server"
 )
 
 type ServerHTTP struct {

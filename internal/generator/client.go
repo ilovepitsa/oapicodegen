@@ -38,7 +38,7 @@ func (g *Generator) clientFile() codegen.File {
 func (g *Generator) clientExtraImports() (bool, bool) {
 	var needJSON, needFmt bool
 
-	for _, op := range g.doc.Operations {
+	for _, op := range g.operations() {
 		for _, r := range op.Responses {
 			if !hasResponseHeaders(r) {
 				continue
@@ -62,7 +62,7 @@ func (g *Generator) renderClient(m *typeMapper) []byte {
 
 	w.Print("type Client interface {\n")
 
-	for _, op := range g.doc.Operations {
+	for _, op := range g.operations() {
 		name := operationMethodName(op)
 
 		if op.Deprecated {
@@ -74,7 +74,7 @@ func (g *Generator) renderClient(m *typeMapper) []byte {
 
 	w.Print("}\n\n")
 
-	for _, op := range g.doc.Operations {
+	for _, op := range g.operations() {
 		g.renderRequestStruct(w, op, m)
 		g.renderResponseStruct(w, op, m)
 	}

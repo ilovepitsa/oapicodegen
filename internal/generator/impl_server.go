@@ -14,15 +14,15 @@ func (g *Generator) implServerFile() codegen.File {
 
 	m.addImport("github.com/labstack/echo/v4", "")
 
-	if g.modulePath != "" {
-		m.addImport(g.modulePath+"/interfaces/client", "apiclient")
-		m.addImport(g.modulePath+"/interfaces/server", "apiserver")
+	if g.project != nil {
+		m.addImport(g.project.Paths.Imports.ClientInterfaces.Path, "apiclient")
+		m.addImport(g.project.Paths.Imports.ServerInterfaces.Path, "apiserver")
 	}
 
 	needBody := false
 	needURLForm := false
 
-	for _, op := range g.doc.Operations {
+	for _, op := range g.operations() {
 		if op.RequestBody != nil {
 			needBody = true
 
@@ -70,7 +70,7 @@ func (g *Generator) renderImplServer(needBody, needURLForm bool) []byte {
 
 	w.Print("func (s *ServerHTTP) Register(e *echo.Echo) {\n")
 
-	for _, op := range g.doc.Operations {
+	for _, op := range g.operations() {
 		method := strings.ToUpper(op.Method)
 		epath := echoPath(op.Path)
 		handler := lowerFirst(operationMethodName(op))
@@ -79,7 +79,7 @@ func (g *Generator) renderImplServer(needBody, needURLForm bool) []byte {
 
 	w.Print("}\n\n")
 
-	for _, op := range g.doc.Operations {
+	for _, op := range g.operations() {
 		g.renderImplServerMethod(w, op)
 	}
 
@@ -142,7 +142,7 @@ func (g *Generator) renderImplServerMethod(w *codegen.BufferWriter, op *parser.M
 	// и body-схема имеет default-поля, попадающие в request-фильтр (не readOnly).
 	// При включённом split метод генерируется для <Name>Request варианта;
 	// проверка requestDefaultsCovered гарантирует, что метод существует.
-	if !g.features.ServerNoAutoDefaults.Value && g.shouldCallSetDefaults(op) {
+	if !g.project.Features.ServerNoAutoDefaults.Value && g.shouldCallSetDefaults(op) {
 		w.Print("\treq.Body.SetDefaults()\n")
 	}
 
@@ -172,7 +172,7 @@ func (g *Generator) shouldCallSetDefaults(op *parser.Method) bool {
 	}
 
 	keep := func(*parser.Property) bool { return true }
-	if g.features.SplitRequestResponse.Value {
+	if g.project.Features.SplitRequestResponse.Value {
 		keep = func(p *parser.Property) bool {
 			return p.Schema == nil || !p.Schema.ReadOnly
 		}
@@ -182,21 +182,24 @@ func (g *Generator) shouldCallSetDefaults(op *parser.Method) bool {
 }
 
 // resolveBodySchema возвращает object-схему тела запроса. Если body — $ref,
-// ищет схему по имени в doc.Schemas; иначе возвращает inline-схему.
-// Возвращает nil для не-object схем (array/alias/enum) — SetDefaults
-// для них не генерируется.
+// ищет схему по имени в project.Model; иначе возвращает inline-схему.
+// Возвращает nil для не-object схем (array/alias/enum) и для cross-service
+// $ref (ExternalRef) — они разрешаются через SchemaIndex в typeMapper, а не
+// здесь. SetDefaults для них не генерируется.
 func (g *Generator) resolveBodySchema(rb *parser.RequestBody) *parser.Schema {
 	sh := bodySchema(rb)
 	if sh == nil {
 		return nil
 	}
 
+	if sh.ExternalRef != "" {
+		return nil
+	}
+
 	if sh.Ref != "" {
 		name := refToName(sh.Ref)
-		for _, s := range g.doc.Schemas {
-			if s.Name == name {
-				return s
-			}
+		if s, ok := g.project.Model.Lookup(name); ok {
+			return s
 		}
 
 		return nil
@@ -205,19 +208,18 @@ func (g *Generator) resolveBodySchema(rb *parser.RequestBody) *parser.Schema {
 	return sh
 }
 
-// resolveRefSchema возвращает схему из doc.Schemas по $ref.
-// Если s — не $ref (inline-схема) или имя не найдено — возвращает nil.
-// Используется в SetDefaults для разрешения вложенных object-схем (M3).
+// resolveRefSchema возвращает схему из project.Model по $ref.
+// Если s — не $ref (inline-схема), cross-service $ref (ExternalRef), или имя
+// не найдено — возвращает nil. Используется в SetDefaults для разрешения
+// вложенных object-схем (M3).
 func (g *Generator) resolveRefSchema(s *parser.Schema) *parser.Schema {
-	if s == nil || s.Ref == "" {
+	if s == nil || s.ExternalRef != "" || s.Ref == "" {
 		return nil
 	}
 
 	name := refToName(s.Ref)
-	for _, sh := range g.doc.Schemas {
-		if sh.Name == name {
-			return sh
-		}
+	if sh, ok := g.project.Model.Lookup(name); ok {
+		return sh
 	}
 
 	return nil

@@ -67,6 +67,13 @@ func convertMethod(path, method string, op *highv3.Operation) *Method {
 	return out
 }
 
+// ServiceNameForMethod возвращает имя сервиса для метода на основе его тегов.
+// Экспортированная обёртка над serviceName для использования вне пакета parser
+// (например, в main.go при construction Project из Document).
+func ServiceNameForMethod(m *Method) (string, error) {
+	return serviceName(m.Method, m.Path, m.Tags)
+}
+
 // serviceName определяет имя сервиса из тегов операции:
 //   - 0 тегов → "Service" (дефолт).
 //   - >1 тега → error (должен быть ровно один тег).

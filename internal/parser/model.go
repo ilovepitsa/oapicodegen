@@ -16,6 +16,13 @@ type Model struct {
 // Schemas возвращает схемы сервиса. До заполнения ProjectLoader'ом — nil.
 func (m *Model) Schemas() []*Schema { return m.schemas }
 
+// SetSchemas заменяет схемы сервиса и перестраивает индекс. Используется
+// в main.go (временный мост до T26.7) и тестах генератора.
+func (m *Model) SetSchemas(schemas []*Schema) {
+	m.schemas = schemas
+	m.Index()
+}
+
 // Index строит schemasIndex по m.schemas. Идемпотентен. Должен вызываться
 // после заполнения schemas (в ProjectLoader.Load).
 func (m *Model) Index() {
