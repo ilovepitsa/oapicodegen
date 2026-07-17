@@ -67,33 +67,58 @@ make build
 
 ## Использование
 
+`-input` — каталог проекта (multi-service layout). CLI обходит подпапки и
+находит сервисы по наличию `<service>/src/openapi/openapi.yaml`. Для каждого
+сервиса генерируются Go-пакеты в `<output>/<service>/...`.
+
 ```sh
-# Сгенерировать Go-код из OpenAPI-спек в ./spec в ./go/gen
+# Структура входного каталога:
+# ./mws/
+# ├── common/                      # общий проект (опциональный)
+# │   └── src/openapi/openapi.yaml
+# └── userBackend/                 # сервис
+#     ├── generation_flags.yaml    # per-service override (опционально)
+#     └── src/openapi/openapi.yaml
+
 go run ./cmd/oapigen \
-  -input ./spec \
+  -input ./mws \
   -output ./go/gen \
-  -import-prefix nschugorev/oapigenerator/go/gen
+  -import-prefix github.com/foo/bar/gen
 ```
+
+После генерации CLI запускает `go build ./...` в `-output` для проверки
+компиляции (см. `-skip-compile-check`). Чтобы проверка прошла, в `-output`
+должен лежать `go.mod` с зависимостями сгенерированного кода.
 
 Флаги:
 
 | Флаг | По умолчанию | Назначение |
 |------|--------------|------------|
-| `-input` | — | Путь к OpenAPI 3.x spec-файлу (обязательный) |
+| `-input` | — | Каталог проекта с подпапками сервисов (обязательный) |
 | `-output` | — | Каталог для сгенерированного кода (обязательный, если не `-dry-run`) |
 | `-import-prefix` | — | Go import-path префикс для пакетов (обязательный) |
 | `-dry-run` | `false` | Парсить и генерировать без записи на FS |
+| `-skip-compile-check` | `false` | Пропустить `go build ./...` в `-output` после генерации |
 | `-generation-flags-config-path` | — | Путь к глобальному `generation_flags.yaml` |
-| `-project-flags-path` | — | Путь к per-project override (требует `-generation-flags-config-path`) |
 | `-log-level` | `info` | debug\|info\|warn\|error\|fatal |
 | `-log-format` | `console` | console\|json |
 | `-log-development` | `false` | zap development mode (stacktraces, no sampling) |
 
+Per-service override флагов — через файл `<service>/generation_flags.yaml`
+рядом со спекой (см. раздел [Generation flags](#generation-flags)).
+
 ## Generation flags
 
-Generation flags настраивают поведение генератора через YAML-конфиг и опциональный
-per-project override. Загружаются через `-generation-flags-config-path` (глобальный
-`generation_flags.yaml`) и `-project-flags-path` (перекрытие для конкретного проекта).
+Generation flags настраивают поведение генератора через YAML-конфиг
+(`generation_flags.yaml`) и опциональный per-service override.
+
+- **Глобальный конфиг** — передаётся через `-generation-flags-config-path`.
+  Содержит список флагов с `defaultValue`, `targetValue`, `dependsOn` (см.
+  формат ниже). `defaultValue` используется, если для сервиса нет per-service
+  override.
+- **Per-service override** — файл `<service>/generation_flags.yaml` рядом со
+  спекой. Простой YAML `flag-name: bool`. Перекрывает `defaultValue` (но не
+  `targetValue`) для конкретного сервиса.
 
 Поддерживаемые флаги (имена совпадают с ключами в `generation_flags.yaml`):
 
@@ -116,7 +141,8 @@ per-project override. Загружаются через `-generation-flags-confi
   dependsOn: {}
 ```
 
-Per-project override — простой YAML `flag-name: bool`:
+Per-service override — простой YAML `flag-name: bool`, размещается в
+`<service>/generation_flags.yaml` рядом со спекой:
 
 ```yaml
 GOLANG_SPLIT_REQUEST_RESPONSE: true
@@ -280,7 +306,7 @@ oapigenerator/
 │   ├── cli/logging/    # zap-логирование из флагов
 │   ├── ptr/ must/ fs/  # вспомогательные пакеты
 │   └── golden/         # golden-тесты
-├── testdata/           # эталонные OpenAPI-спеки и golden-файлы
+├── testdata/project/    # эталонный multi-service проект + golden-файлы (отдельный go.mod)
 ├── TASKS.md            # план задач
 └── ARCHITECTURE.md     # архитектурный обзор
 ```

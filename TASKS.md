@@ -220,7 +220,7 @@
 ## Этап 5 — тесты и инфраструктура
 
 ### T24 — e2e-тесты генерации (стандартный OpenAPI) — DONE
-- `testdata/minimal/` — эталонная мини-спека **только со стандартными конструкциями** (object/array/oneOf/$ref, без `x-*`)
+- `testdata/project/minimal/` — эталонная мини-спека **только со стандартными конструкциями** (object/array/oneOf/$ref, без `x-*`); до T26.8 лежала в `testdata/minimal/`
 - Сравнение вывода с golden-файлами через `internal/golden`
 - Ветка: `feat/e2e-tests`
 - Зависимости: T23, T10
@@ -405,6 +405,89 @@
 - Server impl (`internal/generator/impl_server.go`) — 4-вариантная логика (headers × schema):
   NoContent для пустых body, JSON для body, `renderHeaderSet` для заголовков
 - Ветка: см. git log
+
+### T26 — Multi-service layout — DONE (T26.1–T26.9)
+
+Миграция на multi-service layout: `-input` — каталог проекта, CLI обходит
+подпапки и генерирует Go-пакеты в `<output>/<service>/...`. Cross-service
+`$ref` разрешается через `SchemaIndex`. После генерации — `go build ./...`
+compile-check.
+
+Подзадачи:
+
+#### T26.1 — `Project`/`ProjectSet`/`SchemaIndex`/`PathImports` типы — DONE
+- `internal/parser/project_set.go` — `Project` (Folder, SpecPath, FlagsPath, Features, Model, Paths, OutputDir, ImportPrefix), `ProjectSet` (Common, Projects, ByName)
+- `internal/parser/schema_index.go` — `SchemaIndex` с key = absPath + "#/components/schemas/" + schemaName, `Lookup(absPath, name)`, `LookupForMode(absPath, name, mode)`
+- `internal/parser/paths.go` — `PathImports` с типизированными `gogen.Import` для model/interfaces/impl/sdk
+- `internal/parser/paths.go:ServiceNameForMethod` — экспортированный helper для вычисления имени сервиса из тегов операции
+- Ветка: `feat/project-set-types`
+
+#### T26.1a — `Service`/`Method` + разделение `Document` — DONE
+- `internal/parser/paths.go` — `Service` (Name, Methods), `Method` (Operation, Path, Method, Parameters, RequestBody, Responses)
+- `Paths.Services` заменяет прямой доступ к `Document.Operations` в генераторе
+- `Project.CreatePaths` строит `PathImports` из import-prefix
+- Ветка: `feat/project-set-types`
+
+#### T26.2 — `ProjectLoader` — DONE
+- `internal/parser/project_loader.go` — `walkServices` обнаруживает `<service>/src/openapi/openapi.yaml`, `Load(input, flagsLoader, importPrefix, output)` строит `ProjectSet` + `SchemaIndex`
+- Per-service generation_flags.yaml загружается автоматически (`<service>/generation_flags.yaml`)
+- Ветка: `feat/project-set-types`
+
+#### T26.3 — Source marking + SchemaIndex population — DONE
+- `internal/parser/source_marking.go` — `markExternalRefs` заполняет `Schema.SourceFile`/`OwnerProject`/`ExternalRef`; `buildSchemaIndex` индексирует top-level схемы
+- `internal/parser/parser.go` — `configureLocalFS` пропускает `index.LocalFS` для real OS FS (разрешает cross-service `$ref`)
+- Ветка: `feat/project-set-types`
+
+#### T26.4 — Generator on `Project` — DONE
+- `Generator` хранит `*parser.Project` + `*parser.SchemaIndex` вместо `*Document`
+- `g.operations()` / `g.project.Model.Schemas()` заменяют `g.doc.Operations` / `g.doc.Schemas`
+- `typeMapper.modelImport` из `g.project.Paths.Imports.Model`
+- `cmd/oapigen/main.go` — временный `buildProject` мост (убран в T26.7)
+- Ветка: `feat/project-set-types`
+
+#### T26.5 — Cross-package Go imports — DONE
+- `internal/generator/type.go` — `qualifyExternalType` через `SchemaIndex.LookupForMode`; alias = последний компонент import-path в нижнем регистре
+- `internal/generator/impl_server.go` — `resolveBodySchema`/`resolveRefSchema` возвращают nil для `ExternalRef != ""` (cross-service схемы не участвуют в `SetDefaults`)
+- Ветка: `feat/project-set-types`
+
+#### T26.6 — Post-generation compile check — DONE
+- `internal/codegen/compilecheck.go` — `CompileCheck(outputDir)` проверяет `go.mod` + запускает `go build ./...`
+- Ветка: `feat/compile-check`
+
+#### T26.7 — CLI migration — DONE
+- `cmd/oapigen/main.go` — `-input` теперь каталог проекта (был: spec-файл)
+- Удалён `-project-flags-path` (per-service override теперь через `<service>/generation_flags.yaml`)
+- Добавлен `-skip-compile-check` флаг
+- Удалён `buildProject` мост — используется `parser.NewProjectLoader().Load()` напрямую
+- FileWriter оборачивается `codegen.WithPath(fw, project.Folder)` для каждого проекта
+- Ветка: `feat/project-set-types`
+
+#### T26.8 — Testdata migration — DONE
+- Удалены `testdata/minimal/`, `testdata/split/`
+- Создан `testdata/project/` (single-service `minimal` + `golden/`)
+- `testdata/project/golden/go.mod` — отдельный модуль с `replace` на основной
+- Bugfix: `internal/generator/validate.go` — `renderNamedValidatorCallIndented` оборачивает каждый `reg.Get` в block-scope (раньше `v, ok :=` конфликтовал при повторных вызовах в одном `ValidateOwn`)
+- `TestE2E_GoldenCompiles` — e2e-проверка `go build ./...` в golden-директории
+- Ветка: `feat/project-set-types`
+
+#### T26.9 — Docs update — DONE
+- `README.md` — переписан раздел "Использование" (multi-service пример), обновлена таблица флагов (убран `-project-flags-path`, добавлен `-skip-compile-check`)
+- `ARCHITECTURE.md` — новая секция "Multi-service layout" с диаграммой `Walk → Parse → ProjectSet + SchemaIndex → Generate → CompileCheck`
+- `TASKS.md` — вставлены T26.1–T26.9 + stubs T27/T28
+- Ветка: `feat/project-set-types`
+
+### T27 (stub) — Visitor pattern refactoring
+
+Stub. Полный дизайн — отдельный brainstorming после T26. Идея: рефакторинг
+`internal/generator/*` на visitor-pattern для унификации обхода `Schema`/`Method`
+и разделения рендера от обхода. Снизит дублирование между schema/client/server/
+impl/mocks/sdk-генераторами.
+
+### T28 (stub) — Subpackage splitting
+
+Stub. Дробление `model/` по подпапкам на основе структуры FS spec-файла:
+`schemas/<subfolder>/...` → `model/<subfolder>/...`. Отдельный brainstorming
+позже.
 
 ### Глубокий бэклог (без детализации)
 - `ServerAuditData` + `x-audit-data` + audit-data схемы — комплаенс-логирование: для каждой операции описывается audit-схема (что логировать при вызове — кто, что, с какими параметрами, результат), серверный интерфейс получает методы `ServerAuditData`. Не часть стандартного OpenAPI.
