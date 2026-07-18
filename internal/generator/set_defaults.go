@@ -227,7 +227,7 @@ func isNonPrimitiveStringFormat(s *parser.Schema) bool {
 	}
 
 	switch s.Format {
-	case "date-time", "date", "binary":
+	case oapiFormatDateTime, oapiFormatDate, oapiFormatBinary:
 		return true
 	}
 

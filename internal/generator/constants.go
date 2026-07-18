@@ -8,10 +8,14 @@ const (
 	oapiTypeInteger = "integer"
 	oapiTypeNumber  = "number"
 	oapiTypeBoolean = "boolean"
+	oapiTypeArray   = "array"
 
-	oapiFormatInt32 = "int32"
-	oapiFormatInt64 = "int64"
-	oapiFormatFloat = "float"
+	oapiFormatInt32    = "int32"
+	oapiFormatInt64    = "int64"
+	oapiFormatFloat    = "float"
+	oapiFormatDateTime = "date-time"
+	oapiFormatDate     = "date"
+	oapiFormatBinary   = "binary"
 
 	oapiParamPath   = "path"
 	oapiParamQuery  = "query"

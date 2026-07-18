@@ -90,7 +90,7 @@ func (m *typeMapper) baseType(s *parser.Schema) string {
 		return goTypeAny
 	}
 
-	if s.Type == "array" {
+	if s.Type == oapiTypeArray {
 		if s.Items != nil {
 			return "[]" + m.goType(s.Items)
 		}
@@ -153,7 +153,7 @@ func (m *typeMapper) primitiveGoType(s *parser.Schema) string {
 // stringGoType мапит строковый OpenAPI-тип в Go-тип с учётом format и флага UTC.
 func (m *typeMapper) stringGoType(s *parser.Schema) string {
 	switch s.Format {
-	case "date-time":
+	case oapiFormatDateTime:
 		if m.utcTime {
 			return m.qualifyUTCTime()
 		}
@@ -161,11 +161,11 @@ func (m *typeMapper) stringGoType(s *parser.Schema) string {
 		m.addImport("time", "")
 
 		return "time.Time"
-	case "date":
+	case oapiFormatDate:
 		m.addImport("time", "")
 
 		return "time.Time"
-	case "binary":
+	case oapiFormatBinary:
 		return "[]byte"
 	}
 

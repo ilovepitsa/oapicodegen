@@ -17,7 +17,12 @@ import (
 	"fmt"
 	"nschugorev/oapigenerator/internal/codegen"
 	"nschugorev/oapigenerator/internal/codegen/gogen"
+	"nschugorev/oapigenerator/internal/generator/compose"
+	"nschugorev/oapigenerator/internal/generator/render"
+	"nschugorev/oapigenerator/internal/generator/walk"
 	"nschugorev/oapigenerator/internal/parser"
+
+	schemarender "nschugorev/oapigenerator/internal/generator/render/schema"
 )
 
 // Generator конфигурируется через Option-ы и хранит общее состояние генерации.
@@ -25,6 +30,7 @@ type Generator struct {
 	project     *parser.Project
 	schemaIndex *parser.SchemaIndex
 	factory     *gogen.FileFactory
+	composer    *compose.FileComposer
 
 	// splittable — имена object-схем, которые при включённом
 	// GOLANG_SPLIT_REQUEST_RESPONSE рендерятся как <Name>Request + <Name>Response.
@@ -47,6 +53,8 @@ func Generate(
 		schemaIndex: si,
 		factory:     gogen.NewFileFactory("oapigen"),
 	}
+	g.composer = compose.NewFileComposer(g.factory)
+
 	for _, opt := range opts {
 		opt(g)
 	}
@@ -106,50 +114,141 @@ func (g *Generator) operations() []*parser.Method {
 }
 
 func (g *Generator) writeSchemaFiles(fw codegen.FileWriter, sh *parser.Schema) error {
-	sf := g.schemaFile(sh)
-	fname := "model/" + fileName(sh.Name) + ".gen.go"
+	sf, err := g.renderSchemaFile(sh)
+	if err != nil {
+		return err
+	}
 
+	fname := "model/" + fileName(sh.Name) + ".gen.go"
 	if err := fw.WriteFile(fname, sf); err != nil {
 		return fmt.Errorf("write %s: %w", fname, err)
 	}
 
-	if needsJSONMethods(sh) {
-		jf := g.jsonMethodsFile(sh)
-		jname := "model/" + fileName(sh.Name) + "_json.gen.go"
+	return g.writeSchemaAuxFiles(fw, sh)
+}
 
-		if err := fw.WriteFile(jname, jf); err != nil {
-			return fmt.Errorf("write %s: %w", jname, err)
-		}
+// writeSchemaAuxFiles пишет вспомогательные файлы схемы (_json, _url_form,
+// _converters, _audit_data) при выполнении условий. Вынесено из writeSchemaFiles
+// для снижения cyclomatic complexity (каждый aux-файл — отдельная ветка).
+func (g *Generator) writeSchemaAuxFiles(fw codegen.FileWriter, sh *parser.Schema) error {
+	ops := g.operations()
+	aux := []struct {
+		cond   bool
+		suffix string
+		render schemaAuxRenderer
+	}{
+		{needsJSONMethods(sh), "json", g.jsonMethodsFile},
+		{schemeHasURLFormat(sh, ops), "url_form", g.urlFormMethodsFile},
+		{g.shouldGenerateConverters(sh), "converters", g.converterMethodsFile},
+		{schemaReferencedByOperation(sh, ops), "audit_data", g.auditModelFile},
 	}
 
-	if schemeHasURLFormat(sh, g.operations()) {
-		uf := g.urlFormMethodsFile(sh)
-		uname := "model/" + fileName(sh.Name) + "_url_form.gen.go"
-
-		if err := fw.WriteFile(uname, uf); err != nil {
-			return fmt.Errorf("write %s: %w", uname, err)
-		}
-	}
-
-	if g.shouldGenerateConverters(sh) {
-		cf := g.converterMethodsFile(sh)
-		cname := "model/" + fileName(sh.Name) + "_converters.gen.go"
-
-		if err := fw.WriteFile(cname, cf); err != nil {
-			return fmt.Errorf("write %s: %w", cname, err)
-		}
-	}
-
-	if schemaReferencedByOperation(sh, g.operations()) {
-		af := g.auditModelFile(sh)
-		aname := "model/" + fileName(sh.Name) + "_audit_data.gen.go"
-
-		if err := fw.WriteFile(aname, af); err != nil {
-			return fmt.Errorf("write %s: %w", aname, err)
+	for _, a := range aux {
+		if err := g.writeSchemaAuxFile(fw, sh, a.cond, a.suffix, a.render); err != nil {
+			return err
 		}
 	}
 
 	return nil
+}
+
+// schemaAuxRenderer генерирует body для aux-файла схемы.
+type schemaAuxRenderer func(sh *parser.Schema) codegen.File
+
+// writeSchemaAuxFile пишет один aux-файл, если cond истинно. suffix добавляется
+// к базовому имени файла: "<name>_<suffix>.gen.go".
+func (g *Generator) writeSchemaAuxFile(
+	fw codegen.FileWriter,
+	sh *parser.Schema,
+	cond bool,
+	suffix string,
+	render schemaAuxRenderer,
+) error {
+	if !cond {
+		return nil
+	}
+
+	body := render(sh)
+	fname := "model/" + fileName(sh.Name) + "_" + suffix + ".gen.go"
+
+	if err := fw.WriteFile(fname, body); err != nil {
+		return fmt.Errorf("write %s: %w", fname, err)
+	}
+
+	return nil
+}
+
+// renderSchemaFile рендерит основной schema-файл. Alias/enum/map-alias схемы
+// идут через composer + render/schema (Task 7); прочие (struct/array/union/
+// allof) — через legacy schemaFile-путь с typeMapper напрямую.
+func (g *Generator) renderSchemaFile(sh *parser.Schema) (codegen.File, error) {
+	if isAliasLike(sh) || isEnumLike(sh) {
+		return g.writeSchemaFilesViaComposer(sh)
+	}
+
+	return g.schemaFile(sh), nil
+}
+
+// isAliasLike сообщает, рендерится ли схема как alias (`type X string`) или
+// map-alias (`type X map[string]Y`, `type X struct{}`). True для примитивных
+// типов без enum и для object-схем без properties (map-alias). Такие схемы
+// идут через AliasRenderer + compose.FileComposer (Task 7).
+func isAliasLike(sh *parser.Schema) bool {
+	if sh.Ref != "" || len(sh.Enum) > 0 {
+		return false
+	}
+
+	if len(sh.OneOf) > 0 || len(sh.AnyOf) > 0 || len(sh.AllOf) > 0 {
+		return false
+	}
+
+	if sh.Type == oapiTypeObject && len(sh.Properties) == 0 {
+		return true
+	}
+
+	switch sh.Type {
+	case oapiTypeString, oapiTypeInteger, oapiTypeNumber, oapiTypeBoolean:
+		return true
+	default:
+		return false
+	}
+}
+
+// isEnumLike сообщает, рендерится ли схема как enum (type + const-блок).
+// True, если задан sh.Enum. Enum-схемы идут через EnumRenderer +
+// compose.FileComposer (Task 7).
+func isEnumLike(sh *parser.Schema) bool {
+	return len(sh.Enum) > 0
+}
+
+// writeSchemaFilesViaComposer собирает schema-файл через FileComposer с
+// новым renderer'ом для alias/enum/map-alias. RenderContext строится с
+// TypeMapper-adapter'ом, который дренажит импорты typeMapper'а в общий
+// ImportTracker renderer'а. AliasRenderer и EnumRenderer оба передаются в
+// walker — для конкретной схемы сработает только один (OnAlias/OnMap или
+// OnEnum), второй останется noop'ом.
+func (g *Generator) writeSchemaFilesViaComposer(sh *parser.Schema) (codegen.File, error) {
+	imports := render.NewImportTracker()
+	tm := g.newRenderTypeMapper("model", "", imports)
+
+	ctx := &render.RenderContext{
+		Project:      g.project,
+		SchemaIndex:  g.schemaIndex,
+		Features:     g.project.Features,
+		Splittable:   g.splittable,
+		ModulePath:   g.project.ImportPrefix,
+		ImportPrefix: g.project.ImportPrefix,
+		TypeMapper:   tm,
+	}
+
+	renderers := []walk.SchemaRenderer{schemarender.NewAliasRenderer(), schemarender.NewEnumRenderer()}
+
+	cf, err := g.composer.ComposeSchemaFile(sh, renderers, ctx)
+	if err != nil {
+		return nil, fmt.Errorf("compose schema %q: %w", sh.Name, err)
+	}
+
+	return cf, nil
 }
 
 // shouldGenerateConverters сообщает, нужно ли генерировать <Name>_converters.gen.go
@@ -210,6 +309,10 @@ func computeSplittable(schemas []*parser.Schema) map[string]bool {
 
 	for _, sh := range schemas {
 		excludeReferencedByComposite(sh, out)
+	}
+
+	for _, sh := range schemas {
+		sh.IsSplit = out[sh.Name]
 	}
 
 	return out

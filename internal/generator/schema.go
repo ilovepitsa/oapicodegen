@@ -24,6 +24,11 @@ func (g *Generator) schemaFile(sh *parser.Schema) codegen.File {
 	})
 }
 
+// renderSchema рендерит body для не-alias/не-enum/не-mapAlias схем (struct,
+// array, union, allof). Alias/enum/mapAlias рендерятся через composer +
+// render/schema AliasRenderer/EnumRenderer (Task 7), см. writeSchemaFiles.
+// renderSchema вызывается только из schemaFile (legacy-путь).
+//
 //nolint:gocyclo,cyclop // dispatch switch, branching is inherent
 func (g *Generator) renderSchema(sh *parser.Schema, m *typeMapper) []byte {
 	w := codegen.NewBufferWriter()
@@ -43,22 +48,32 @@ func (g *Generator) renderSchema(sh *parser.Schema, m *typeMapper) []byte {
 	case len(sh.OneOf) > 0 || len(sh.AnyOf) > 0:
 		g.renderUnion(w, sh, m, name)
 	case len(sh.AllOf) == 1 && sh.AllOf[0].Ref == "" && sh.AllOf[0].Type != oapiTypeObject:
-		g.renderAlias(w, sh.AllOf[0], m, name)
+		// allOf с единственным inline-не-object членом трактуется как alias.
+		// Редиректим через render/schema.AliasRenderer, переиспользуя
+		// composer-инфраструктуру (Task 7) для консистентности.
+		g.renderAllOfSingleInlineAlias(w, sh, m, name)
 	case len(sh.AllOf) > 0:
 		g.renderAllOf(w, sh, m, name)
-	case sh.Type == "array":
+	case sh.Type == oapiTypeArray:
 		g.renderArraySchema(w, sh, m, name)
-	case len(sh.Enum) > 0:
-		g.renderEnum(w, sh, name)
-	case sh.Type == oapiTypeObject && len(sh.Properties) == 0:
-		g.renderMapAlias(w, sh, m, name)
 	case sh.Type == oapiTypeObject || len(sh.Properties) > 0:
 		g.renderStruct(w, sh, m, name)
-	default:
-		g.renderAlias(w, sh, m, name)
 	}
 
 	return w.Content()
+}
+
+// renderAllOfSingleInlineAlias рендерит `type <Name> <GoType>` для allOf с
+// единственным inline-не-object членом. Логика перенесена из старого
+// renderAlias (Task 7): тот же m.goType(sh.AllOf[0]), но вызывается только
+// из renderSchema для allOf-single-inline-alias кейса.
+func (g *Generator) renderAllOfSingleInlineAlias(
+	w *codegen.BufferWriter,
+	sh *parser.Schema,
+	m *typeMapper,
+	name string,
+) {
+	w.Print("type ", name, " ", m.goType(sh.AllOf[0]), "\n")
 }
 
 // renderSplitStruct рендерит <Name>Request и <Name>Response вместо одного
@@ -322,27 +337,11 @@ func fieldIsOptional(required bool, fieldType string) bool {
 	return !required && !strings.HasPrefix(fieldType, "*") && !isInherentlyNilable(fieldType)
 }
 
-func (g *Generator) renderEnum(w *codegen.BufferWriter, sh *parser.Schema, name string) {
-	baseGo := enumBaseType(sh)
-	w.Print("type ", name, " ", baseGo, "\n\n")
-
-	w.Print("const (\n")
-
-	seen := make(map[string]bool, len(sh.Enum))
-
-	for i, v := range sh.Enum {
-		valStr := enumStringValue(v)
-		if seen[valStr] {
-			continue
-		}
-
-		seen[valStr] = true
-
-		w.Print("\t", enumValueName(name, valStr, i), " ", name, " = ", enumLiteral(v, baseGo), "\n") //nolint:lll // const declaration line
-	}
-
-	w.Print(")\n")
-}
+// enumBaseType и enumStringValue используются set_defaults.go для
+// default-value-литералов enum-схем. enumValueName живёт в naming.go и
+// используется set_defaults.go. renderEnum, renderAlias, renderMapAlias и
+// enumLiteral удалены в Task 7 — их функциональность перенесена в
+// render/schema/enum.go и render/schema/alias.go (composer-путь).
 
 func enumBaseType(sh *parser.Schema) string {
 	switch sh.Type {
@@ -373,15 +372,6 @@ func enumStringValue(v any) string {
 	}
 
 	return fmt.Sprint(v)
-}
-
-func enumLiteral(v any, baseGo string) string {
-	switch baseGo {
-	case oapiTypeString:
-		return fmt.Sprintf("%q", fmt.Sprint(v))
-	default:
-		return fmt.Sprint(v)
-	}
 }
 
 func (g *Generator) renderArraySchema(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) { //nolint:lll // function signature
@@ -432,25 +422,6 @@ func (g *Generator) renderAllOf(w *codegen.BufferWriter, sh *parser.Schema, m *t
 	}
 
 	w.Print("}\n")
-}
-
-func (g *Generator) renderAlias(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) { //nolint:lll // function signature
-	w.Print("type ", name, " ", m.goType(sh), "\n")
-}
-
-func (g *Generator) renderMapAlias(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) { //nolint:lll // function signature
-	if sh.AdditionalPropertiesFalse {
-		w.Print("type ", name, " struct{}\n")
-
-		return
-	}
-
-	elem := goTypeAny
-	if sh.AdditionalProperties != nil {
-		elem = m.goType(sh.AdditionalProperties)
-	}
-
-	w.Print("type ", name, " map[string]", elem, "\n")
 }
 
 func writeDocComment(w *codegen.BufferWriter, desc string) {

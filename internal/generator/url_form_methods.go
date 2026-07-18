@@ -177,7 +177,7 @@ func marshalConverter(s *parser.Schema, m *typeMapper, fieldName string, pointer
 
 func marshalStringConverter(s *parser.Schema, m *typeMapper, accessor string) string {
 	switch s.Format {
-	case "date-time":
+	case oapiFormatDateTime:
 		m.addImport("time", "")
 
 		if m.utcTime {
@@ -185,7 +185,7 @@ func marshalStringConverter(s *parser.Schema, m *typeMapper, accessor string) st
 		}
 
 		return accessor + ".Format(time.RFC3339)"
-	case "date":
+	case oapiFormatDate:
 		m.addImport("time", "")
 
 		if m.utcTime {
@@ -240,7 +240,7 @@ func urlFormSchemaSupported(s *parser.Schema) bool {
 		return false
 	}
 
-	if s.Type == "array" || s.AdditionalProperties != nil || s.AdditionalPropertiesFalse {
+	if s.Type == oapiTypeArray || s.AdditionalProperties != nil || s.AdditionalPropertiesFalse {
 		return false
 	}
 
@@ -254,7 +254,7 @@ func urlFormSchemaSupported(s *parser.Schema) bool {
 func urlFormPrimitiveSupported(s *parser.Schema) bool {
 	switch s.Type {
 	case oapiTypeString:
-		return s.Format != "binary"
+		return s.Format != oapiFormatBinary
 	case oapiTypeInteger, oapiTypeNumber, oapiTypeBoolean:
 		return true
 	}
@@ -381,7 +381,7 @@ func (g *Generator) renderUnmarshalPointerField(
 // stringHasFormat сообщает, есть ли у string-схемы format, требующий
 // специального декодирования (date-time/date).
 func stringHasFormat(s *parser.Schema) bool {
-	return s.Type == oapiTypeString && (s.Format == "date-time" || s.Format == "date")
+	return s.Type == oapiTypeString && (s.Format == oapiFormatDateTime || s.Format == oapiFormatDate)
 }
 
 // unmarshalDecoder возвращает компоненты декодирования поля из string.
@@ -448,7 +448,7 @@ func unmarshalStringDecoder(s *parser.Schema, m *typeMapper, valueSource string)
 	m.addImport("time", "")
 
 	switch s.Format {
-	case "date-time":
+	case oapiFormatDateTime:
 		if m.utcTime {
 			return unmarshalParts{
 				parseCall:  "time.Parse(time.RFC3339, " + valueSource + ")",
@@ -460,7 +460,7 @@ func unmarshalStringDecoder(s *parser.Schema, m *typeMapper, valueSource string)
 			parseCall:  "time.Parse(time.RFC3339, " + valueSource + ")",
 			assignExpr: "parsed",
 		}
-	case "date":
+	case oapiFormatDate:
 		return unmarshalParts{
 			parseCall:  "time.Parse(time.DateOnly, " + valueSource + ")",
 			assignExpr: "parsed",

@@ -11,7 +11,7 @@ import (
 )
 
 // recordingRenderer записывает последовательность хуков для проверки порядка обхода.
-// Все 13 хуков SchemaRenderer переопределены, поэтому noopSchemaRenderer не
+// Все 13 хуков SchemaRenderer переопределены, поэтому NoopSchemaRenderer не
 // embed'ится (иначе unused-линтер падает на неиспользуемом поле).
 type recordingRenderer struct {
 	calls []string
@@ -87,7 +87,7 @@ func TestSchemaWalker_ArrayWithItem(t *testing.T) {
 	arr := &parser.Schema{
 		Name:  "PetList",
 		Type:  "array",
-		Items: &parser.Schema{Name: "Pet", Type: "object"},
+		Items: &parser.Schema{Name: "Pet", Type: "object", Properties: []*parser.Property{}},
 	}
 	rec := &recordingRenderer{}
 	w := NewSchemaWalker(rec)
@@ -96,12 +96,15 @@ func TestSchemaWalker_ArrayWithItem(t *testing.T) {
 	assert.Equal(t, []string{
 		"OnArray:PetList",
 		"OnArrayItem:PetList[0]=Pet",
-		"OnStruct:Pet",
+		"OnMap:Pet",
 	}, rec.calls)
 }
 
 func TestSchemaWalker_ErrorStopsWalk(t *testing.T) {
 	parent := &parser.Schema{Name: "Pet", Type: "object"}
+	parent.Properties = []*parser.Property{
+		{Name: "id", Schema: &parser.Schema{Name: "string", Type: "string"}},
+	}
 	failing := &failingRenderer{failOn: "Pet"}
 	w := NewSchemaWalker(failing)
 	err := w.Walk(parent)
@@ -110,8 +113,47 @@ func TestSchemaWalker_ErrorStopsWalk(t *testing.T) {
 	assert.Contains(t, err.Error(), "boom: Pet")
 }
 
+func TestSchemaWalker_SplitStructDispatches(t *testing.T) {
+	split := &parser.Schema{Name: "Pet", Type: "object", IsSplit: true}
+	split.Properties = []*parser.Property{
+		{Name: "id", Schema: &parser.Schema{Name: "int", Type: "integer"}},
+	}
+
+	rec := &recordingRenderer{}
+	w := NewSchemaWalker(rec)
+	require.NoError(t, w.Walk(split))
+
+	assert.Equal(t, []string{
+		"OnSplitStruct:Pet",
+		"OnStructProperty:Pet.id",
+		"OnAlias:int",
+	}, rec.calls)
+}
+
+// TestSchemaWalker_EmptyObjectDispatchesToMap проверяет, что object-схема
+// без properties (map-alias: object + AdditionalProperties / AdditionalPropertiesFalse)
+// диспатчится в OnMap, а не OnStruct — это позволяет AliasRenderer'у
+// рендерить `type X map[string]Y` вместо struct-определения.
+//
+// OnMapValue не вызывается: walker диспатчит его только для Type=="map"
+// (не standard OpenAPI). Map-alias имеет Type=="object", поэтому значение
+// AdditionalProperties рендерится внутри OnMap через TypeMapper.GoType.
+func TestSchemaWalker_EmptyObjectDispatchesToMap(t *testing.T) {
+	empty := &parser.Schema{
+		Name:                 "StringMap",
+		Type:                 "object",
+		AdditionalProperties: &parser.Schema{Name: "string", Type: "string"},
+	}
+
+	rec := &recordingRenderer{}
+	w := NewSchemaWalker(rec)
+	require.NoError(t, w.Walk(empty))
+
+	assert.Equal(t, []string{"OnMap:StringMap"}, rec.calls)
+}
+
 type failingRenderer struct {
-	noopSchemaRenderer
+	NoopSchemaRenderer
 	failOn string
 }
 
@@ -224,7 +266,7 @@ func TestMethodWalker_Order(t *testing.T) {
 }
 
 type failingMethodRenderer struct {
-	noopMethodRenderer
+	NoopMethodRenderer
 	failOn string
 }
 

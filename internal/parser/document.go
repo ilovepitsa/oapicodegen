@@ -172,6 +172,11 @@ type Schema struct {
 	// фрагмент (например "/input/common/src/openapi/openapi.yaml#/components/schemas/User").
 	// Пустой для локальных $ref.
 	ExternalRef string
+	// IsSplit — выставляется generator'ом в computeSplittable, означает что
+	// схема рендерится как <Name>Request + <Name>Response при включённом
+	// GOLANG_SPLIT_REQUEST_RESPONSE. Walker использует это для dispatch'а
+	// OnSplitStruct vs OnStruct.
+	IsSplit bool
 }
 
 // ValidationRule — абстрактное правило валидации из x-validations.

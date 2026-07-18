@@ -58,13 +58,11 @@ func (w *SchemaWalker) Walk(s *parser.Schema) error {
 // dispatchType вызывает один из type-dispatch хуков в зависимости от типа schema.
 // Логика соответствует switch в Generator.renderSchema (после миграции будет в render/).
 //
-// ВАЖНО: parser.Schema.IsSplit ещё не существует — добавляется в Task 4.
-// Пока walker вызывает OnStruct для всех object-схем. OnSplitStruct будет
-// вызываться после Task 4, когда поле IsSplit появится.
+// Split-схемы (IsSplit=true) идут в OnSplitStruct, остальные object-схемы — в OnStruct.
 func (w *SchemaWalker) dispatchType(s *parser.Schema) error {
 	switch {
 	case s.Type == schemaTypeObject:
-		return w.callEach(func(r SchemaRenderer) error { return r.OnStruct(s) })
+		return w.dispatchObject(s)
 	case s.Type == schemaTypeArray:
 		return w.callEach(func(r SchemaRenderer) error { return r.OnArray(s) })
 	case s.Type == schemaTypeMap || s.AdditionalProperties != nil:
@@ -80,6 +78,25 @@ func (w *SchemaWalker) dispatchType(s *parser.Schema) error {
 	default:
 		return w.callEach(func(r SchemaRenderer) error { return r.OnAlias(s) })
 	}
+}
+
+// dispatchObject вызывает OnSplitStruct для split-схем, OnMap — для
+// map-alias'ов (object без properties: дополнительная семантика через
+// AdditionalProperties / AdditionalPropertiesFalse), иначе OnStruct.
+//
+// Map-alias выделен отдельной веткой, чтобы рендер мог обрабатывать его
+// иначе, чем обычный struct (тип `map[string]X` или `struct{}` вместо
+// struct-определения). Логика зеркалит switch в generator.renderSchema.
+func (w *SchemaWalker) dispatchObject(s *parser.Schema) error {
+	if s.IsSplit {
+		return w.callEach(func(r SchemaRenderer) error { return r.OnSplitStruct(s) })
+	}
+
+	if len(s.Properties) == 0 {
+		return w.callEach(func(r SchemaRenderer) error { return r.OnMap(s) })
+	}
+
+	return w.callEach(func(r SchemaRenderer) error { return r.OnStruct(s) })
 }
 
 // dispatchChildren вызывает per-child хуки (без рекурсивного спуска). Каждый
