@@ -1,5 +1,6 @@
-// Package schema: StructRenderer рендерит object-схемы (struct definition +
-// SetDefaults/ValidateOwn через callbacks) и их split/Update-варианты.
+// Package schema: StructRenderer рендерит object-схемы (struct definition).
+// SetDefaults, ValidateOwn, Update<Name> рендерятся отдельными renderer'ами в
+// том же pack'е (SetDefaultsRenderer, ValidateOwnRenderer, UpdateStructRenderer).
 //
 // StructRenderer НЕ использует OnStructProperty — он итерирует s.Properties
 // напрямую в OnStruct/OnSplitStruct. Это соответствует существующей структуре
@@ -19,12 +20,10 @@ import (
 	"strings"
 )
 
-// StructRenderer рендерит struct-определения для object-схем: <Name>,
-// опционально Update<Name> (когда sh.IsUsedInUpdate), и split-варианты
-// <Name>Request + <Name>Response (через OnSplitStruct).
-//
-// SetDefaults и ValidateOwn делегируются в render.SchemaCallbacks —
-// реализации живут на Generator'е (Tasks 10-11 переедут в render/).
+// StructRenderer рендерит struct-определения для object-схем: <Name> и
+// split-варианты <Name>Request + <Name>Response (через OnSplitStruct).
+// SetDefaults/ValidateOwn/Update<Name> рендерятся отдельными renderer'ами в
+// том же pack'е (SetDefaultsRenderer, ValidateOwnRenderer, UpdateStructRenderer).
 //
 // StructRenderer реализует SkipDescendants — walker не должен спускаться
 // в properties, иначе вложенные $ref на object-схемы отрендерились бы
@@ -51,10 +50,8 @@ func (r *StructRenderer) Skip(_ *parser.Schema) bool { return true }
 //	    ...
 //	}
 //
-//	// SetDefaults и ValidateOwn — через callbacks.
-//
-// Если у схемы выставлен IsUsedInUpdate, после основной структуры
-// добавляется Update<Name>-вариант (PATCH/PUT request body).
+// SetDefaults/ValidateOwn рендерятся SetDefaultsRenderer/ValidateOwnRenderer
+// в том же pack'е. Update<Name> рендерится UpdateStructRenderer'ом.
 func (r *StructRenderer) OnStruct(s *parser.Schema) error {
 	name := goName(s.Name)
 
@@ -63,19 +60,6 @@ func (r *StructRenderer) OnStruct(s *parser.Schema) error {
 	}
 
 	r.renderStructBody(s, name, nil)
-
-	cb := r.Ctx.Callbacks
-	if cb != nil {
-		if cb.SchemaTreeHasDefaults(s, nil) {
-			cb.RenderSetDefaults(r.Buf, s, r.currentMode(), name, nil)
-		}
-
-		cb.RenderValidateOwn(r.Buf, s, r.currentMode(), name, false, nil)
-	}
-
-	if s.IsUsedInUpdate {
-		r.renderUpdateStruct(s, name)
-	}
 
 	return nil
 }
@@ -86,10 +70,8 @@ func (r *StructRenderer) OnStruct(s *parser.Schema) error {
 // (readOnly + regular). TypeMapper переключается между modeRequest и
 // modeResponse, чтобы $ref на splittable-схемы разрешался корректно.
 //
-// Если у схемы выставлен IsUsedInUpdate, после split-вариантов добавляется
-// Update<Name> (PATCH/PUT request body). Update рендерится с mode=Request
-// (update-тело — request-контекст), поэтому $ref на splittable-схемы
-// разрешаются в <Name>Request.
+// Update<Name> для splittable-схем рендерится UpdateStructRenderer'ом в том
+// же pack'е.
 func (r *StructRenderer) OnSplitStruct(s *parser.Schema) error {
 	name := goName(s.Name)
 
@@ -107,16 +89,12 @@ func (r *StructRenderer) OnSplitStruct(s *parser.Schema) error {
 		return p.Schema == nil || !p.Schema.WriteOnly
 	})
 
-	if s.IsUsedInUpdate {
-		r.renderUpdateStruct(s, name)
-	}
-
 	return nil
 }
 
 // renderStructBody рендерит `type <Name> struct { ... }` с полями, проходящими
 // фильтр keep (nil = все). Не рендерит SetDefaults/ValidateOwn — это
-// ответственность вызывающего.
+// ответственность других renderer'ов в pack'е.
 func (r *StructRenderer) renderStructBody(
 	s *parser.Schema,
 	name string,
@@ -135,9 +113,9 @@ func (r *StructRenderer) renderStructBody(
 	r.Buf.Print("}\n\n")
 }
 
-// renderFilteredStruct рендерит struct с фильтром keep + SetDefaults +
-// ValidateOwn. Используется для <Name>Request/<Name>Response вариантов.
-// keep передаётся в callbacks как фильтр свойств.
+// renderFilteredStruct рендерит struct с фильтром keep. Используется для
+// <Name>Request/<Name>Response вариантов. ValidateOwn для split-вариантов
+// рендерится ValidateOwnRenderer в том же pack'е.
 func (r *StructRenderer) renderFilteredStruct(
 	s *parser.Schema,
 	name string,
@@ -154,35 +132,13 @@ func (r *StructRenderer) renderFilteredStruct(
 	}
 
 	r.Buf.Print("}\n\n")
-
-	cb := r.Ctx.Callbacks
-	if cb == nil {
-		return
-	}
-
-	if cb.SchemaTreeHasDefaults(s, keep) {
-		cb.RenderSetDefaults(r.Buf, s, r.currentMode(), name, keep)
-	}
-
-	cb.RenderValidateOwn(r.Buf, s, r.currentMode(), name, false, keep)
 }
 
-// currentMode извлекает текущий режим typeMapper'а. StructRenderer не хранит
-// режим отдельно — он выставляется через TypeMapper.SetMode перед вызовом
-// renderFilteredStruct, и callbacks читают тот же режим из typeMapper'а
-// (через generatorCallbacks.mode, который копируется в свежий typeMapper).
+// currentMode делегирован в package-level currentMode (см. mode.go).
+// Сохранён как метод-обёртка для обратной совместимости с существующими
+// вызовами r.currentMode() внутри StructRenderer.
 func (r *StructRenderer) currentMode() string {
-	if mg, ok := r.Ctx.TypeMapper.(modeGetter); ok {
-		return mg.Mode()
-	}
-
-	return ""
-}
-
-// modeGetter — optional-интерфейс для чтения текущего режима typeMapper'а.
-// typeMapperAdapter реализует его; тестовые fakes могут опускать.
-type modeGetter interface {
-	Mode() string
+	return currentMode(r.Ctx)
 }
 
 // renderField рендерит одно поле struct'ы. Логика:
@@ -221,29 +177,11 @@ func (r *StructRenderer) renderField(p *parser.Property) {
 	r.Buf.Print(fieldName, " ", fieldType, " `json:\"", p.Name, omitEmpty, "\" yaml:\"", p.Name, omitEmpty, "\"`\n") //nolint:lll // struct tag line
 }
 
-// requiredForMode возвращает, является ли поле required в текущем режиме
-// генерации. Логика зависит от флага USE_REQUIRED_V2 (см. комментарий к
-// generator.requiredForMode — там же SSOT). Режим читается через
-// TypeMapper.SetMode — StructRenderer хранит режим в typeMapper'е, не локально.
+// requiredForMode делегирован в package-level requiredForMode (см. mode.go).
+// Сохранён как метод-обёртку для обратной совместимости с существующими
+// вызовами r.requiredForMode(p) внутри StructRenderer.
 func (r *StructRenderer) requiredForMode(p *parser.Property) bool {
-	if !r.Ctx.Features.UseRequiredV2.Value {
-		return p.Required
-	}
-
-	switch r.currentMode() {
-	case modeRequest:
-		return p.RequestRequired
-	case modeResponse:
-		return p.ResponseRequired
-	default:
-		// Моно-режим при v2 on: если поле есть в x-* списках, required
-		// только если в обоих; иначе fallback на OAS required.
-		if p.RequestRequired || p.ResponseRequired {
-			return p.RequestRequired && p.ResponseRequired
-		}
-
-		return p.Required
-	}
+	return requiredForMode(r.Ctx, p)
 }
 
 // fieldIsOptional сообщает, нужно ли оборачивать поле в pointer.
@@ -253,130 +191,4 @@ func (r *StructRenderer) requiredForMode(p *parser.Property) bool {
 // Дублировано из generator.fieldIsOptional.
 func fieldIsOptional(required bool, fieldType string) bool {
 	return !required && !strings.HasPrefix(fieldType, "*") && !isInherentlyNilable(fieldType)
-}
-
-// renderUpdateStruct рендерит Update<Name> — вариант схемы для PUT/PATCH
-// request body. Содержит только свойства с IsUsedInUpdate=true. Каждое поле
-// оборачивается в optional.Optional[T] безусловно — это даёт PATCH-семантику:
-// отличаем "поле не задано" от "поле = null" от "поле = значение".
-//
-// mode typeMapper'а выставляется в Request при включённом split, чтобы
-// $ref на splittable-схемы разрешались в <Name>Request (update-тело —
-// это request-контекст). Без split mode="" — refs разрешаются в базовое
-// имя. Update-режим временно выставляется и восстанавливается после
-// рендера, чтобы не повлиять на последующие OnStruct-вызовы.
-//
-// v1-ограничение: marker не помечает nested $ref / array items, поэтому
-// Update-суффикс к ссылкам не применяется — refs указывают на исходные
-// схемы (или их Request-вариант при split).
-func (r *StructRenderer) renderUpdateStruct(s *parser.Schema, name string) {
-	if s.Description != "" {
-		writeDocComment(r.Buf, "Update"+name+" — PATCH/PUT variant of "+name+".")
-	}
-
-	originalMode := r.currentMode()
-
-	updateMode := ""
-	if r.Ctx.Features.SplitRequestResponse.Value {
-		updateMode = modeRequest
-	}
-
-	r.Ctx.TypeMapper.SetMode(updateMode)
-
-	r.Buf.Print("type Update", name, " struct {\n")
-
-	for _, p := range s.Properties {
-		if !p.IsUsedInUpdate {
-			continue
-		}
-
-		r.renderUpdateField(p)
-	}
-
-	r.Buf.Print("}\n\n")
-
-	r.renderUpdateGetters(s, name)
-
-	if cb := r.Ctx.Callbacks; cb != nil {
-		cb.RenderValidateOwn(r.Buf, s, updateMode, "Update"+name, true, func(p *parser.Property) bool {
-			return p.IsUsedInUpdate
-		})
-	}
-
-	r.Ctx.TypeMapper.SetMode(originalMode)
-}
-
-// renderUpdateField рендерит поле Update<Name>-структуры. Все поля
-// оборачиваются в optional.Optional[T] безусловно — независимо от флага
-// GOLANG_USE_OPTIONAL и метки p.Optional. Теги json/yaml без omitempty:
-// presence определяется самой обёрткой Optional.
-func (r *StructRenderer) renderUpdateField(p *parser.Property) {
-	if p.Schema != nil && p.Schema.Description != "" {
-		writeDocComment(r.Buf, p.Schema.Description)
-	}
-
-	if p.Schema != nil && p.Schema.Deprecated {
-		r.Buf.Print("// Deprecated: schema marks this field as deprecated\n")
-	}
-
-	fieldName := goName(p.Name)
-	fieldType := r.updateFieldType(p.Schema)
-
-	r.Imports.Add(gogen.Import{Path: optionalPkg, Alias: "optional"})
-	r.Buf.Print(fieldName, " optional.Optional[", fieldType, "] `json:\"", p.Name, "\" yaml:\"", p.Name, "\"`\n") //nolint:lll // struct tag line
-}
-
-// updateFieldType возвращает Go-тип поля Update<Name> без nullable-указателя
-// — Optional уже различает null через IsNil. TypeMapper.GoType добавляет
-// pointer для nullable-полей, что здесь избыточно. Поэтому мы используем
-// adapter-метод BaseType, если доступен; иначе — GoType (менее точно, но
-// корректно для тестовых fakes).
-func (r *StructRenderer) updateFieldType(s *parser.Schema) string {
-	if bt, ok := r.Ctx.TypeMapper.(baseTypeMapper); ok {
-		return bt.BaseType(s)
-	}
-
-	return r.Ctx.TypeMapper.GoType(s)
-}
-
-// baseTypeMapper — optional-интерфейс для typeMapper'а, возвращающий
-// Go-тип без nullable-указателя. typeMapperAdapter реализует его; тестовые
-// fakes могут опускать.
-type baseTypeMapper interface {
-	BaseType(s *parser.Schema) string
-}
-
-// renderUpdateGetters рендерит Get<Field>() (*T, bool) методы для каждого
-// поля Update<Name>. Семантика:
-//   - !IsSet() → (nil, false) — поле не в запросе, не меняем.
-//   - IsSet() && IsNil() → (nil, true) — пользователь прислал null, чистим.
-//   - IsSet() && !IsNil() → (&value, true) — новое значение.
-func (r *StructRenderer) renderUpdateGetters(s *parser.Schema, name string) {
-	for _, p := range s.Properties {
-		if !p.IsUsedInUpdate {
-			continue
-		}
-
-		r.renderUpdateGetter(p, name)
-	}
-}
-
-func (r *StructRenderer) renderUpdateGetter(p *parser.Property, name string) {
-	fieldName := goName(p.Name)
-	fieldType := r.updateFieldType(p.Schema)
-	getterName := "Get" + fieldName
-
-	r.Buf.Print("// ", getterName, " возвращает значение поля ", fieldName, " и флаг presence.\n")
-	r.Buf.Print("// Семантика: (nil, false) — поле не задано; (nil, true) — задано как null;\n")
-	r.Buf.Print("// (&value, true) — задано значением.\n")
-	r.Buf.Print("func (u *Update", name, ") ", getterName, "() (*", fieldType, ", bool) {\n")
-	r.Buf.Print("\tif !u.", fieldName, ".IsSet() {\n")
-	r.Buf.Print("\t\treturn nil, false\n")
-	r.Buf.Print("\t}\n")
-	r.Buf.Print("\tif u.", fieldName, ".IsNil() {\n")
-	r.Buf.Print("\t\treturn nil, true\n")
-	r.Buf.Print("\t}\n")
-	r.Buf.Print("\tv := u.", fieldName, ".Value()\n")
-	r.Buf.Print("\treturn &v, true\n")
-	r.Buf.Print("}\n\n")
 }

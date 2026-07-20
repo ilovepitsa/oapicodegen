@@ -269,7 +269,12 @@ func (g *Generator) writeStructFileViaComposer(sh *parser.Schema) (codegen.File,
 	ctx.TypeMapper = g.newRenderTypeMapper("model", "", ctx)
 	ctx.Callbacks = &generatorCallbacks{g: g, ctx: ctx}
 
-	renderers := []walk.SchemaRenderer{schemarender.NewStructRenderer()}
+	renderers := []walk.SchemaRenderer{
+		schemarender.NewStructRenderer(),
+		schemarender.NewSetDefaultsRenderer(),
+		schemarender.NewValidateOwnRenderer(),
+		schemarender.NewUpdateStructRenderer(),
+	}
 
 	cf, err := g.composer.ComposeSchemaFile(sh, renderers, ctx) //nolint:lll // renderer-list literal, splitting harms readability
 	if err != nil {

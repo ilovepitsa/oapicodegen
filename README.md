@@ -1,7 +1,7 @@
 # oapigenerator
 
 Go-генератор серверного и клиентского кода из OpenAPI 3.x спецификаций.
-Только Go-генерация, без Kotlin/TypeScript/Terraform, со собственными
+Только Go-генерация, со собственными
 вспомогательными библиотеками в `internal/` и `pkg/`.
 
 ## Статус
@@ -73,7 +73,7 @@ make build
 
 ```sh
 # Структура входного каталога:
-# ./mws/
+# ./input/
 # ├── common/                      # общий проект (опциональный)
 # │   └── src/openapi/openapi.yaml
 # └── userBackend/                 # сервис
@@ -81,7 +81,7 @@ make build
 #     └── src/openapi/openapi.yaml
 
 go run ./cmd/oapigen \
-  -input ./mws \
+  -input ./input \
   -output ./go/gen \
   -import-prefix github.com/foo/bar/gen
 ```

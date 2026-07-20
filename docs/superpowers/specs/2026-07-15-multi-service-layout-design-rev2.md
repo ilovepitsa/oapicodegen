@@ -5,39 +5,6 @@
 - Статус: draft, supersedes rev1 (`2026-07-14-multi-service-layout-design.md`)
 - Автор: Никита Щугорев
 
-## 0. Что изменилось относительно rev1
-
-Rev1 опирался на «образец `../api/mwsapigen` в урезанном виде», но при сверке с
-эталоном обнаружились расхождения. Rev2 вносит три корректировки:
-
-1. **Коллизия имён `ResourcesSet`.** В `../api/mwsapigen` `ResourcesSet` —
-   REST resource ID templates (`projects/{project}/disks/{disk}`), грузится из
-   отдельного YAML, никак не связана с cross-service `$ref`. Rev1 использовал то
-   же имя для другой сущности (индекс схем по abs-пути). Rev2 переименовывает
-   нашу сущность в `SchemaIndex` + `SchemaEntry`.
-2. **Структура `Project` выровнена с эталоном.** Вместо плоских полей
-   `Name`/`SpecPath`/`FlagsPath`/`Document`/`OutputDir`/`ImportPrefix` —
-   `Folder` + `Model *Model` + `Paths *Paths` + `Features` + `OutputDir` +
-   `ImportPrefix`. Введены `PathImports` с 8 типизированными `gogen.Import`,
-   фабрики `CreateModel(imp)` / `CreatePaths(basePath)`. `gogen.Import`
-   расширяется полями `Package` + `Type` (`LocalImport`).
-3. **`Service`/`Method` абстракция.** `parser.Operation` → `Method`,
-   вводится `Service` (группировка по тегу), `Paths.Services []*Service`.
-   `Document` становится промежуточным типом парсера: `Schemas` переносятся в
-   `Model.schemas`, `Operations` — в `Paths.Services` через `AddMethod`.
-
-Что осталось как в rev1 (осознанные упрощения против эталона):
-
-- Walk-дискавери сервисов (не явный `Config.Entries` как в эталоне).
-- Cross-service `$ref` any-to-any (не только в `common` как в эталоне).
-- Special-case `common` отсутствует (в эталоне common грузится первым и
-  передаётся в `load()` каждого сервиса).
-
-Разделы rev1, не затронутые этими корректировками (§1 Goals & Scope, §2 Layout
-& Discovery, §4 Cross-service `$ref` resolution механика, §5 Post-generation
-compile check, §6 Удаление старого режима + миграция testdata, §7 Visitor
-pattern stub), остаются в силе — см. rev1.
-
 ## 1. Типы T26.1 (минимальные, без Service/Method)
 
 ### 1.1 `gogen.Import` — расширение
@@ -88,9 +55,7 @@ type PathImports struct {
 ```
 
 Имена подпапок — текущие из генератора (`impl/httpclient`, `impl/echoserver`,
-`impl/mocks/{client,server}`). Расхождение с эталоном (`impl/vanillahttp`,
-`impl/mocks`) осознанное: переименование подпапок не в скоупе T26.
-
+`impl/mocks/{client,server}`). 
 ### 1.3 `Project` — новая структура
 
 `internal/parser/project_set.go` (переписать):
@@ -323,7 +288,7 @@ type Service struct {
 func (s *Service) LowerName() string { return strings.ToLower(s.Name) }
 ```
 
-Валидация тегов (соответствие эталону loader.go:271-284):
+Валидация тегов:
 
 - Тегов 0 → сервис `"Service"` (дефолт).
 - Тегов >1 → fail с указанием `path:method`.
@@ -408,8 +373,7 @@ func (m *Model) Index() // строит schemasIndex
 ```
 
 `Prefix` нужен для common-проекта (alias `common` в импортах). В T26.1a вводится
-минимально — без `OriginalSchemas`/`SplitRequestResponseSchemas` эталона (это
-отдельная доменная область, T27+).
+минимально — без `OriginalSchemas`/`SplitRequestResponseSchemas` 
 
 ### 2.6 Влияние на генератор (T26.4)
 
@@ -422,18 +386,6 @@ func (m *Model) Index() // строит schemasIndex
 Файловые пути в `writeOperationFiles` (generator.go:234-242) остаются
 относительными (`"interfaces/client/client.gen.go"`) — `FileWriter` уже
 получает basePath через `codegen.WithPath(fw, project.OutputDir)`.
-
-### 2.7 Что выпадает из эталона осознанно
-
-- `debugDoc *libopenapi.DocumentModel[highv3.Document]` — не нужен, нет debug JSON рендера.
-- `RenderDebugJSON` / `RenderDebugPathsJSON` — не нужны.
-- `OpenSource ProjectOpenSourceData` — T22 в бэклоге.
-- `GetParams() []ValidationParam` — относится к cmdtree (T21, бэклог).
-- `Model.SplitRequestResponseSchemas` — отдельная доменная механика. Split-mode
-  у нас реализован иначе (`computeSplittable` в generator.go:182).
-- `ResourcesSet` (REST resource IDs) — бэклог, не тянем.
-
-## 3. План задач T26 (rev2)
 
 ### Граф зависимостей
 
@@ -544,10 +496,9 @@ T26.4, T26.5, T26.6. Ветка: `feat/oapigen-multiservice`.
 
 | Решение | Выбор | Альтернативы | Обоснование |
 |---|---|---|---|
-| Имя для индекса схем | `SchemaIndex` + `SchemaEntry` | `ResourcesSet` (коллизия с эталоном), `SchemaRegistry`, `ExternalSchemaMap`, `CrossServiceSchemaIndex` | Точно отражает структуру (map по abs-пути), не конфликтует с `pkg/validator.Registry` или REST-resource `ResourcesSet` эталона |
-| Структура `Project` | `Folder` + `Model *Model` + `Paths *Paths` + `Features` (выровнено с эталоном) | Плоские поля (rev1) | Типизированные `PathImports` убирают строковую конкатенацию; готовый фундамент для T27 visitor |
-| `gogen.Import` | Расширить `Package` + `Type` | Оставить `Path`+`Alias`, path strings в `PathImports` | Типизация импортов артефактов; соответствие эталону |
+| Имя для индекса схем | `SchemaIndex` + `SchemaEntry` | `ResourcesSet`, `SchemaRegistry`, `ExternalSchemaMap`, `CrossServiceSchemaIndex` | Точно отражает структуру (map по abs-пути), не конфликтует с `pkg/validator.Registry` или REST-resource `ResourcesSet` |
+| Структура `Project` | `Folder` + `Model *Model` + `Paths *Paths` + `Features` | Плоские поля (rev1) | Типизированные `PathImports` убирают строковую конкатенацию; готовый фундамент для T27 visitor |
+| `gogen.Import` | Расширить `Package` + `Type` | Оставить `Path`+`Alias`, path strings в `PathImports` | Типизация импортов артефактов |
 | `Service`/`Method` абстракция | Вводится (T26.1a) | Отложить до T27 | Генератору нужна группировка по тегу для эмитции server interfaces; T26.4/T26.5 уже потребуют |
-| Разделение `Document` | `Document` → промежуточный парсера; `Model.schemas` + `Paths.Services` | Сохранить `Document` на Project | Соответствие эталону; `Document` не утекает в generator |
+| Разделение `Document` | `Document` → промежуточный парсера; `Model.schemas` + `Paths.Services` | Сохранить `Document` на Project |  `Document` не утекает в generator |
 | Подход миграции | Инкрементальный (T26.1 + T26.1a) | Big-bang rewrite T26.1 | T26.1 = типы + аксессоры (узкий скоуп); T26.1a = доменная переработка парсера (отдельная ответственность) |
-| Что осознанно не тянем из эталона | `debugDoc`, `OpenSource`, `GetParams`, `SplitRequestResponseSchemas`, REST-resource `ResourcesSet` | Полное копирование | T21/T22 в бэклоге; split-mode у нас уже иначе; debug-рендер не нужен |

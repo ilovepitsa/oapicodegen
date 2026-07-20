@@ -38,8 +38,7 @@ type PathItem struct {
 	Operations []*Method
 }
 
-// Method — HTTP-операция. Соответствует доменной модели Service/Method
-// эталонного генератора (Operation в OpenAPI-терминологии).
+// Method — HTTP-операция (Operation в OpenAPI-терминологии).
 type Method struct {
 	Method      string
 	Path        string

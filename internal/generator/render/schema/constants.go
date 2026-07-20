@@ -18,6 +18,14 @@ const (
 	oapiFormatInt64 = "int64"
 	oapiFormatFloat = "float"
 
+	// oapiFormatDateTime/Date/Binary — string-форматы, маппящиеся на
+	// не-примитивные Go-типы (time.Time, []byte). Используются
+	// SetDefaultsRenderer'ом для пропуска полей, чьи default-литералы
+	// нельзя присвоить (см. isNonPrimitiveStringFormat).
+	oapiFormatDateTime = "date-time"
+	oapiFormatDate     = "date"
+	oapiFormatBinary   = "binary"
+
 	goTypeAny     = "any"
 	goTypeFloat32 = "float32"
 	goTypeFloat64 = "float64"

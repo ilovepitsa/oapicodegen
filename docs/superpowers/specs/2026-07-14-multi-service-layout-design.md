@@ -26,10 +26,7 @@
 - Удаление старого single-spec режима.
 - Post-generation `go build ./...` compile check.
 - Требование: каталог `-output` — корень Go-модуля (один `go.mod` на весь вывод).
-- Новые testdata: `testdata/project/` с `common` + 2 сервисами, cross-service ref'ами.
-- Архитектурные абстракции `ProjectSet` / `Project` / `ResourcesSet` / `ProjectLoader`
-  по образцу `../api/mwsapigen` (в урезанном виде: без cmdtree, без tf-provider,
-  без opensource-yaml, без мультиязычности).
+- Новые testdata: `testdata/project/` с `common` + 2 сервисами, cross-service ref'ами. .
 
 ### Не входит (отдельные будущие спеки)
 
@@ -38,7 +35,7 @@
 - Visitor pattern refactoring. Stub-задача T27. Полный дизайн — отдельный
   brainstorming после реализации T26 и появления хотя бы одного нового
   артефакта, на котором станет ясно, какие абстракции visitor'а нужны.
-- Кастомные `x-*` расширения, audit-data, cmdtree (T21), terraform, opensource-yaml
+- Кастомные `x-*` расширения, audit-data, opensource-yaml
   (T22) — остаются в глубоком бэклоге TASKS.md без изменений.
 
 ### Принципы (сохраняются из существующей ARCHITECTURE.md)

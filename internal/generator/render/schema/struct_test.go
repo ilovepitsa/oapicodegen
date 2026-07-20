@@ -96,6 +96,12 @@ func TestStructRenderer_OptionalFieldUsesPointer(t *testing.T) {
 	assert.True(t, containsCollapsed(got, "Tag *string `json:\"tag,omitempty\" yaml:\"tag,omitempty\"`"))
 }
 
+// TestStructRenderer_CallbacksFiredInOrder проверяет, что StructRenderer
+// после Task 4/5 не вызывает RenderValidateOwn ни для основной <Name>-структуры,
+// ни для Update<Name>-варианта (Update перенесён в UpdateStructRenderer).
+// Тестовая схема не выставляет IsUsedInUpdate, но даже если бы выставляла —
+// callbacks не срабатывают. hasDefaults остаётся в fakeCallbacks для
+// совместимости с тестами SetDefaultsRenderer'а.
 func TestStructRenderer_CallbacksFiredInOrder(t *testing.T) {
 	t.Parallel()
 
@@ -111,7 +117,7 @@ func TestStructRenderer_CallbacksFiredInOrder(t *testing.T) {
 		},
 	}))
 
-	assert.Equal(t, []string{"SetDefaults", "ValidateOwn"}, cb.calls)
+	assert.Empty(t, cb.calls)
 }
 
 func TestStructRenderer_SplitStructEmitsRequestAndResponse(t *testing.T) {
@@ -146,27 +152,6 @@ func TestStructRenderer_SplitStructEmitsRequestAndResponse(t *testing.T) {
 	// Response: WriteOnly=false → name + id (но не w).
 	assert.True(t, containsCollapsed(got, "type PetRequest struct { Name *string `json:\"name,omitempty\""))
 	assert.True(t, containsCollapsed(got, "type PetResponse struct { Name *string `json:\"name,omitempty\""))
-}
-
-func TestStructRenderer_UpdateStructEmittedWhenIsUsedInUpdate(t *testing.T) {
-	t.Parallel()
-
-	tm := &fakeTypeMapper{got: "string"}
-	r := newStructRenderer(t, tm, nil)
-
-	require.NoError(t, r.OnStruct(&parser.Schema{
-		Name:           "Pet",
-		Type:           "object",
-		IsUsedInUpdate: true,
-		Properties: []*parser.Property{
-			{Name: "name", Schema: &parser.Schema{Type: "string"}, IsUsedInUpdate: true},
-		},
-	}))
-
-	got := string(r.Buf.Content())
-	assert.Contains(t, got, "type UpdatePet struct {")
-	assert.True(t, containsCollapsed(got, "Name optional.Optional[string] `json:\"name\" yaml:\"name\"`"))
-	assert.Contains(t, got, "func (u *UpdatePet) GetName() (*string, bool) {")
 }
 
 func TestStructRenderer_DescriptionEmitsDocComment(t *testing.T) {
@@ -242,5 +227,6 @@ func TestStructRenderer_SkipReturnsTrue(t *testing.T) {
 }
 
 // убеждаемся, что gogen импорт используется (он нужен для ImportTracker.Add
-// в StructRenderer.renderField / renderUpdateField).
+// в StructRenderer.renderField, а также для slices.ContainsFunc-проверок
+// импортов в тестах).
 var _ = gogen.Import{}

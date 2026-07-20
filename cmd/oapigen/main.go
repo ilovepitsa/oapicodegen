@@ -2,7 +2,7 @@
 //
 // Связывает parser → generator и пишет Go-пакеты в output-каталог.
 //
-//	usage: oapigen -input ./mws -output ./gen -import-prefix github.com/foo/bar/gen
+//	usage: oapigen -input ./input -output ./gen -import-prefix github.com/foo/bar/gen
 //
 // -input — каталог проекта, содержащий подпапки сервисов вида
 // `<service>/src/openapi/openapi.yaml`. CLI обходит каталог, парсит каждую
