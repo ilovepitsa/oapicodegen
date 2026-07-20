@@ -131,8 +131,9 @@ func (g *Generator) writeSchemaFiles(fw codegen.FileWriter, sh *parser.Schema) e
 // _converters, _audit_data) при выполнении условий. Вынесено из writeSchemaFiles
 // для снижения cyclomatic complexity (каждый aux-файл — отдельная ветка).
 //
-// _json рендерится через composer + render/schema.JSONRenderer (Task 8);
-// остальные aux-файлы — через legacy schemaAuxRenderer.
+// _json и _url_form рендерятся через composer + render/schema.JSONRenderer /
+// URLFormRenderer (Tasks 6, 8); остальные aux-файлы — через legacy
+// schemaAuxRenderer.
 func (g *Generator) writeSchemaAuxFiles(fw codegen.FileWriter, sh *parser.Schema) error {
 	ops := g.operations()
 
@@ -142,13 +143,23 @@ func (g *Generator) writeSchemaAuxFiles(fw codegen.FileWriter, sh *parser.Schema
 		}
 	}
 
+	if schemeHasURLFormat(sh, ops) {
+		if err := g.writeURLFormAuxFile(fw, sh); err != nil {
+			return err
+		}
+	}
+
+	if g.shouldGenerateConverters(sh) {
+		if err := g.writeConvertersAuxFile(fw, sh); err != nil {
+			return err
+		}
+	}
+
 	legacyAux := []struct {
 		cond   bool
 		suffix string
 		render schemaAuxRenderer
 	}{
-		{schemeHasURLFormat(sh, ops), "url_form", g.urlFormMethodsFile},
-		{g.shouldGenerateConverters(sh), "converters", g.converterMethodsFile},
 		{schemaReferencedByOperation(sh, ops), "audit_data", g.auditModelFile},
 	}
 
@@ -161,17 +172,10 @@ func (g *Generator) writeSchemaAuxFiles(fw codegen.FileWriter, sh *parser.Schema
 	return nil
 }
 
-// needsJSONMethods сообщает, нужна ли схеме отдельная функция UnmarshalJSON.
-// True для oneOf/anyOf — union-схемы рендерятся как struct с вариантами, и
-// Marshal/Unmarshal нужен для диспетчеризации по вариантам.
-func needsJSONMethods(sh *parser.Schema) bool {
-	return len(sh.OneOf) > 0 || len(sh.AnyOf) > 0
-}
-
-// writeJSONMethodsAuxFile рендерит <name>_json.gen.go через composer +
-// render/schema.JSONRenderer. Использует собственный RenderContext с
-// Callbacks=nil — JSONRenderer не вызывает SetDefaults/ValidateOwn.
-func (g *Generator) writeJSONMethodsAuxFile(fw codegen.FileWriter, sh *parser.Schema) error {
+// newSchemaRenderContext строит RenderContext для schema-рендеринга через
+// composer. TypeMapper-adapter дренажит импорты в ctx.Imports, проставляемый
+// compose.FileComposer через Base.Init.
+func (g *Generator) newSchemaRenderContext() *render.RenderContext {
 	ctx := &render.RenderContext{
 		Project:      g.project,
 		SchemaIndex:  g.schemaIndex,
@@ -182,6 +186,21 @@ func (g *Generator) writeJSONMethodsAuxFile(fw codegen.FileWriter, sh *parser.Sc
 	}
 	ctx.TypeMapper = g.newRenderTypeMapper("model", "", ctx)
 
+	return ctx
+}
+
+// needsJSONMethods сообщает, нужна ли схеме отдельная функция UnmarshalJSON.
+// True для oneOf/anyOf — union-схемы рендерятся как struct с вариантами, и
+// Marshal/Unmarshal нужен для диспетчеризации по вариантам.
+func needsJSONMethods(sh *parser.Schema) bool {
+	return len(sh.OneOf) > 0 || len(sh.AnyOf) > 0
+}
+
+// writeJSONMethodsAuxFile рендерит <name>_json.gen.go через composer +
+// render/schema.JSONRenderer.
+func (g *Generator) writeJSONMethodsAuxFile(fw codegen.FileWriter, sh *parser.Schema) error {
+	ctx := g.newSchemaRenderContext()
+
 	renderers := []walk.SchemaRenderer{schemarender.NewJSONRenderer()}
 
 	cf, err := g.composer.ComposeSchemaFile(sh, renderers, ctx) //nolint:lll // renderer-list literal, splitting harms readability
@@ -190,6 +209,46 @@ func (g *Generator) writeJSONMethodsAuxFile(fw codegen.FileWriter, sh *parser.Sc
 	}
 
 	fname := "model/" + fileName(sh.Name) + "_json.gen.go"
+	if err := fw.WriteFile(fname, cf); err != nil {
+		return fmt.Errorf("write %s: %w", fname, err)
+	}
+
+	return nil
+}
+
+// writeURLFormAuxFile рендерит <name>_url_form.gen.go через composer +
+// render/schema.URLFormRenderer. URLForm pack состоит из одного renderer'а —
+// aux-файл не делит Buf с основным struct-файлом.
+func (g *Generator) writeURLFormAuxFile(fw codegen.FileWriter, sh *parser.Schema) error {
+	ctx := g.newSchemaRenderContext()
+	renderers := []walk.SchemaRenderer{schemarender.NewURLFormRenderer()}
+
+	cf, err := g.composer.ComposeSchemaFile(sh, renderers, ctx)
+	if err != nil {
+		return fmt.Errorf("compose url_form %q: %w", sh.Name, err)
+	}
+
+	fname := "model/" + fileName(sh.Name) + "_url_form.gen.go"
+	if err := fw.WriteFile(fname, cf); err != nil {
+		return fmt.Errorf("write %s: %w", fname, err)
+	}
+
+	return nil
+}
+
+// writeConvertersAuxFile рендерит <name>_converters.gen.go через composer +
+// render/schema.ConvertersRenderer. Pack из одного renderer'а — aux-файл не
+// делит Buf с основным struct-файлом.
+func (g *Generator) writeConvertersAuxFile(fw codegen.FileWriter, sh *parser.Schema) error {
+	ctx := g.newSchemaRenderContext()
+	renderers := []walk.SchemaRenderer{schemarender.NewConvertersRenderer()}
+
+	cf, err := g.composer.ComposeSchemaFile(sh, renderers, ctx)
+	if err != nil {
+		return fmt.Errorf("compose converters %q: %w", sh.Name, err)
+	}
+
+	fname := "model/" + fileName(sh.Name) + "_converters.gen.go"
 	if err := fw.WriteFile(fname, cf); err != nil {
 		return fmt.Errorf("write %s: %w", fname, err)
 	}
@@ -252,22 +311,11 @@ func isStructLike(sh *parser.Schema) bool {
 }
 
 // writeStructFileViaComposer собирает object-struct файл через FileComposer с
-// StructRenderer. RenderContext включает Callbacks — generatorCallbacks
-// bridg'ит SetDefaults/ValidateOwn/SchemaTreeHasDefaults к Generator-методам
-// (Tasks 10-11 переедут в render/). TypeMapper и Callbacks ссылаются на ctx —
-// compose.FileComposer проставит ctx.Imports через Base.Init, и адаптеры
-// дренажат импорты в общий трекер.
+// pack'ом renderer'ов: StructRenderer, SetDefaultsRenderer, ValidateOwnRenderer,
+// UpdateStructRenderer. TypeMapper-adapter дренажит импорты в ctx.Imports,
+// проставляемый compose.FileComposer через Base.Init.
 func (g *Generator) writeStructFileViaComposer(sh *parser.Schema) (codegen.File, error) {
-	ctx := &render.RenderContext{
-		Project:      g.project,
-		SchemaIndex:  g.schemaIndex,
-		Features:     g.project.Features,
-		Splittable:   g.splittable,
-		ModulePath:   g.project.ImportPrefix,
-		ImportPrefix: g.project.ImportPrefix,
-	}
-	ctx.TypeMapper = g.newRenderTypeMapper("model", "", ctx)
-	ctx.Callbacks = &generatorCallbacks{g: g, ctx: ctx}
+	ctx := g.newSchemaRenderContext()
 
 	renderers := []walk.SchemaRenderer{
 		schemarender.NewStructRenderer(),
@@ -317,21 +365,13 @@ func isEnumLike(sh *parser.Schema) bool {
 }
 
 // writeSchemaFilesViaComposer собирает schema-файл через FileComposer с
-// новым renderer'ом для alias/enum/map-alias. RenderContext строится с
-// TypeMapper-adapter'ом, который дренажит импорты typeMapper'а в общий
-// ImportTracker renderer'а. AliasRenderer и EnumRenderer оба передаются в
+// новым renderer'ом для alias/enum/map-alias. RenderContext строится через
+// newSchemaRenderContext: TypeMapper-adapter дренажит импорты typeMapper'а в
+// общий ImportTracker renderer'а. AliasRenderer и EnumRenderer оба передаются в
 // walker — для конкретной схемы сработает только один (OnAlias/OnMap или
 // OnEnum), второй останется noop'ом.
 func (g *Generator) writeSchemaFilesViaComposer(sh *parser.Schema) (codegen.File, error) {
-	ctx := &render.RenderContext{
-		Project:      g.project,
-		SchemaIndex:  g.schemaIndex,
-		Features:     g.project.Features,
-		Splittable:   g.splittable,
-		ModulePath:   g.project.ImportPrefix,
-		ImportPrefix: g.project.ImportPrefix,
-	}
-	ctx.TypeMapper = g.newRenderTypeMapper("model", "", ctx)
+	ctx := g.newSchemaRenderContext()
 
 	renderers := []walk.SchemaRenderer{schemarender.NewAliasRenderer(), schemarender.NewEnumRenderer()}
 

@@ -15,9 +15,8 @@ import (
 )
 
 // currentMode извлекает текущий режим typeMapper'а. Renderer'ы не хранят
-// режим отдельно — он выставляется через TypeMapper.SetMode, и callbacks
-// читают тот же режим из typeMapper'а (через generatorCallbacks.mode, который
-// копируется в свежий typeMapper).
+// режим отдельно — он выставляется через TypeMapper.SetMode и читается
+// обратно через modeGetter.
 //
 // Возвращает "", если typeMapper не реализует modeGetter (тестовые fakes
 // могут опускать).

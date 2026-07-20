@@ -1,8 +1,8 @@
 // Package schema: treeHasDefaults и сопутствующие утилиты для
 // SetDefaultsRenderer (Task 2). Портированы из Generator.schemaTreeHasDefaults
 // и Generator.resolveRefSchema (см. internal/generator/set_defaults.go и
-// internal/generator/impl_server.go) — старый путь остаётся активным до Task 8
-// (удаление Callbacks-моста).
+// internal/generator/impl_server.go) — старый путь остаётся активным
+// (filteredSchemaHasDefaults используется impl_server.go).
 //
 // Отличие от оригинала: resolveRefSchema теперь принимает *parser.Model
 // явно, так как из пакета render/schema нет доступа к Generator.project.

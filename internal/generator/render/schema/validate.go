@@ -8,8 +8,9 @@
 // Портирован из Generator.renderValidateOwn + renderPropertyValidations +
 // renderSimpleRule + fieldAccessor + inverseOperator + opSymbol +
 // formatValueLiteral + renderNamedValidatorCall(Indented)
-// (internal/generator/validate.go). Старый путь остаётся активным до Task 8
-// (удаление Callbacks-моста).
+// (internal/generator/validate.go). Оригинал удалён в Task 8
+// (мост Callbacks больше не используется); collectExpectedValidatorNames
+// перенесён в expected_validators.go.
 //
 // Renderer embed'ит render.Base (Buf/Imports/Ctx) и walk.NoopSchemaRenderer
 // (остальные хуки не нужны). Skip не реализуется — StructRenderer первым в

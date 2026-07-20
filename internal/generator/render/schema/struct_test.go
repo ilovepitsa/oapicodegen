@@ -12,47 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeCallbacks — тестовая реализация render.SchemaCallbacks. Записывает
-// вызовы в calls для последующих assert'ов и опционально пишет заглушку в w,
-// чтобы проверить порядок рендера (struct → SetDefaults → ValidateOwn).
-// hasDefaults управляет возвратом SchemaTreeHasDefaults — от него зависит,
-// вызовется ли RenderSetDefaults.
-type fakeCallbacks struct {
-	calls       []string
-	hasDefaults bool
-}
-
-func (f *fakeCallbacks) RenderSetDefaults(
-	w *codegen.BufferWriter,
-	_ *parser.Schema,
-	_, _ string,
-	_ func(*parser.Property) bool,
-) {
-	f.calls = append(f.calls, "SetDefaults")
-	w.Print("// SetDefaults placeholder\n")
-}
-
-func (f *fakeCallbacks) RenderValidateOwn(
-	w *codegen.BufferWriter,
-	_ *parser.Schema,
-	_, _ string,
-	_ bool,
-	_ func(*parser.Property) bool,
-) {
-	f.calls = append(f.calls, "ValidateOwn")
-	w.Print("// ValidateOwn placeholder\n")
-}
-
-func (f *fakeCallbacks) SchemaTreeHasDefaults(_ *parser.Schema, _ func(*parser.Property) bool) bool {
-	return f.hasDefaults
-}
-
 // newStructRenderer строит StructRenderer с shared Buf/Imports и фейковым
-// TypeMapper + Callbacks, привязанными к RenderContext.
-func newStructRenderer(t *testing.T, tm render.TypeMapper, cb render.SchemaCallbacks) *StructRenderer {
+// TypeMapper, привязанным к RenderContext.
+func newStructRenderer(t *testing.T, tm render.TypeMapper) *StructRenderer {
 	t.Helper()
 
-	ctx := &render.RenderContext{TypeMapper: tm, Callbacks: cb}
+	ctx := &render.RenderContext{TypeMapper: tm}
 	r := NewStructRenderer()
 	r.Init(codegen.NewBufferWriter(), render.NewImportTracker(), ctx)
 
@@ -63,7 +28,7 @@ func TestStructRenderer_SimpleStruct(t *testing.T) {
 	t.Parallel()
 
 	tm := &fakeTypeMapper{got: "string"}
-	r := newStructRenderer(t, tm, nil)
+	r := newStructRenderer(t, tm)
 
 	require.NoError(t, r.OnStruct(&parser.Schema{
 		Name: "Pet",
@@ -82,7 +47,7 @@ func TestStructRenderer_OptionalFieldUsesPointer(t *testing.T) {
 	t.Parallel()
 
 	tm := &fakeTypeMapper{got: "string"}
-	r := newStructRenderer(t, tm, nil)
+	r := newStructRenderer(t, tm)
 
 	require.NoError(t, r.OnStruct(&parser.Schema{
 		Name: "Pet",
@@ -96,35 +61,11 @@ func TestStructRenderer_OptionalFieldUsesPointer(t *testing.T) {
 	assert.True(t, containsCollapsed(got, "Tag *string `json:\"tag,omitempty\" yaml:\"tag,omitempty\"`"))
 }
 
-// TestStructRenderer_CallbacksFiredInOrder проверяет, что StructRenderer
-// после Task 4/5 не вызывает RenderValidateOwn ни для основной <Name>-структуры,
-// ни для Update<Name>-варианта (Update перенесён в UpdateStructRenderer).
-// Тестовая схема не выставляет IsUsedInUpdate, но даже если бы выставляла —
-// callbacks не срабатывают. hasDefaults остаётся в fakeCallbacks для
-// совместимости с тестами SetDefaultsRenderer'а.
-func TestStructRenderer_CallbacksFiredInOrder(t *testing.T) {
-	t.Parallel()
-
-	tm := &fakeTypeMapper{got: "string"}
-	cb := &fakeCallbacks{hasDefaults: true}
-	r := newStructRenderer(t, tm, cb)
-
-	require.NoError(t, r.OnStruct(&parser.Schema{
-		Name: "Pet",
-		Type: "object",
-		Properties: []*parser.Property{
-			{Name: "name", Schema: &parser.Schema{Type: "string"}},
-		},
-	}))
-
-	assert.Empty(t, cb.calls)
-}
-
 func TestStructRenderer_SplitStructEmitsRequestAndResponse(t *testing.T) {
 	t.Parallel()
 
 	tm := &fakeTypeMapper{got: "string"}
-	r := newStructRenderer(t, tm, nil)
+	r := newStructRenderer(t, tm)
 	r.Ctx.Features = parser.ProjectFeatures{SplitRequestResponse: parser.ProjectFeature{Value: true}}
 
 	require.NoError(t, r.OnSplitStruct(&parser.Schema{
@@ -158,7 +99,7 @@ func TestStructRenderer_DescriptionEmitsDocComment(t *testing.T) {
 	t.Parallel()
 
 	tm := &fakeTypeMapper{got: "string"}
-	r := newStructRenderer(t, tm, nil)
+	r := newStructRenderer(t, tm)
 
 	require.NoError(t, r.OnStruct(&parser.Schema{
 		Name:        "Pet",
@@ -177,7 +118,7 @@ func TestStructRenderer_DeprecatedFieldEmitsMarker(t *testing.T) {
 	t.Parallel()
 
 	tm := &fakeTypeMapper{got: "string"}
-	r := newStructRenderer(t, tm, nil)
+	r := newStructRenderer(t, tm)
 
 	require.NoError(t, r.OnStruct(&parser.Schema{
 		Name: "Pet",
@@ -195,7 +136,7 @@ func TestStructRenderer_OptionalFeatureEmitsOptionalWrapper(t *testing.T) {
 	t.Parallel()
 
 	tm := &fakeTypeMapper{got: "string"}
-	r := newStructRenderer(t, tm, nil)
+	r := newStructRenderer(t, tm)
 	r.Ctx.Features = parser.ProjectFeatures{UseOptional: parser.ProjectFeature{Value: true}}
 
 	require.NoError(t, r.OnStruct(&parser.Schema{

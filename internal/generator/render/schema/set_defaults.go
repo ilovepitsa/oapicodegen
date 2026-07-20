@@ -4,9 +4,8 @@
 // вызывает SetDefaults для вложенных object-полей с $ref.
 //
 // Портирован из Generator.renderSetDefaultsMethod + renderSetDefaultForField +
-// renderNestedSetDefaultsCall (internal/generator/set_defaults.go). Старый путь
-// остаётся активным до Task 8 (удаление Callbacks-моста). SetDefaultsRenderer
-// НЕ подключён к pack'у — wiring делает Task 3.
+// renderNestedSetDefaultsCall (internal/generator/set_defaults.go). Оригиналы
+// удалены в Task 8 (мост Callbacks больше не используется).
 //
 // Renderer embed'ит render.Base (Buf/Imports/Ctx) и walk.NoopSchemaRenderer
 // (остальные хуки не нужны). Skip не реализуется — walker и так не спускается

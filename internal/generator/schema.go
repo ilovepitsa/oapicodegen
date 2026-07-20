@@ -147,7 +147,7 @@ func fieldIsOptional(required bool, fieldType string) bool {
 // filteredSchemaHasDefaults сообщает, есть ли default хотя бы у одного
 // property, проходящего фильтр keep, или у вложенной object-схемы через
 // $ref. Используется impl_server.go для audit-server-response-фильтрации.
-// render/schema/StructRenderer использует SchemaCallbacks.SchemaTreeHasDefaults.
+// render/schema/ имеет собственную копию (SchemaTreeHasDefaults).
 func filteredSchemaHasDefaults(
 	g *Generator,
 	sh *parser.Schema,
@@ -160,12 +160,11 @@ func filteredSchemaHasDefaults(
 	return g.schemaTreeHasDefaults(sh, keep, map[string]bool{sh.Name: true})
 }
 
-// enumBaseType и enumStringValue используются set_defaults.go для
-// default-value-литералов enum-схем. enumValueName живёт в naming.go и
-// используется set_defaults.go. renderEnum, renderAlias, renderMapAlias,
-// enumLiteral, renderStruct, renderSplitStruct, renderFilteredStruct,
-// renderUpdateStruct и сопутствующие удалены в Tasks 7-8 — их функциональность
-// перенесена в render/schema/.
+// enumBaseType и enumStringValue используются render/schema/ для
+// default-value-литералов enum-схем. enumValueName живёт в naming.go.
+// renderEnum, renderAlias, renderMapAlias, enumLiteral, renderStruct,
+// renderSplitStruct, renderFilteredStruct, renderUpdateStruct и сопутствующие
+// удалены в Tasks 7-8 — их функциональность перенесена в render/schema/.
 
 func enumBaseType(sh *parser.Schema) string {
 	switch sh.Type {

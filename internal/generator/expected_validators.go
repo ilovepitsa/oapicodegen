@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"nschugorev/oapigenerator/internal/codegen"
 	"nschugorev/oapigenerator/internal/codegen/gogen"
+	"nschugorev/oapigenerator/internal/parser"
 	"strconv"
 )
 
@@ -59,4 +60,43 @@ func (g *Generator) expectedValidatorsFile() (codegen.File, bool) {
 		Package: "model",
 		Body:    w.Content(),
 	}), true
+}
+
+// collectExpectedValidatorNames собирает уникальные имена именованных
+// валидаторов со всех схем документа (property-level + schema-level).
+func collectExpectedValidatorNames(schemas []*parser.Schema) []string {
+	seen := make(map[string]bool)
+
+	for _, sh := range schemas {
+		for _, rule := range sh.Validations {
+			if nr, ok := rule.(parser.NamedRule); ok {
+				seen[nr.Name] = true
+			}
+		}
+
+		for _, p := range sh.Properties {
+			for _, rule := range p.Validations {
+				if nr, ok := rule.(parser.NamedRule); ok {
+					seen[nr.Name] = true
+				}
+			}
+		}
+	}
+
+	out := make([]string, 0, len(seen))
+	for name := range seen {
+		out = append(out, name)
+	}
+
+	return sortStrings(out)
+}
+
+func sortStrings(s []string) []string {
+	for i := 1; i < len(s); i++ {
+		for j := i; j > 0 && s[j-1] > s[j]; j-- {
+			s[j-1], s[j] = s[j], s[j-1]
+		}
+	}
+
+	return s
 }

@@ -1,9 +1,9 @@
 // Package schema: helpers для рендера default-value литералов. Портированы
 // из internal/generator/set_defaults.go (defaultValueLiteral, zeroValueLiteral,
 // isNonPrimitiveStringFormat, intLiteral, floatLiteral, boolLiteral, toInt64,
-// toFloat64). Оригиналы используются только старым путём
-// (Generator.renderSetDefaultForField) — удалены в Task 8 вместе с мостом
-// Callbacks. Дублирование временно (см. defaults.go).
+// toFloat64). Оригиналы в internal/generator/set_defaults.go удалены в Task 8
+// (мост Callbacks больше не используется). Дублирование разрешено для развязки
+// пакетов (см. defaults.go).
 package schema
 
 import (

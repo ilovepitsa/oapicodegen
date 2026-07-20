@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"nschugorev/oapigenerator/internal/codegen"
 	"nschugorev/oapigenerator/internal/codegen/gogen"
+	"nschugorev/oapigenerator/internal/generator/compose"
 	"nschugorev/oapigenerator/internal/golden"
 	"os"
 	"os/exec"
@@ -1985,10 +1986,13 @@ func testProject(t *testing.T, doc *oapiparser.Document, modulePath string) *oap
 func testGenerator(t *testing.T, doc *oapiparser.Document) *Generator {
 	t.Helper()
 
-	return &Generator{
+	g := &Generator{
 		project: testProject(t, doc, ""),
 		factory: gogen.NewFileFactory("oapigen"),
 	}
+	g.composer = compose.NewFileComposer(g.factory)
+
+	return g
 }
 
 // testGeneratorFromSchemas строит Generator с Project, содержащим только
@@ -2799,6 +2803,11 @@ components:
 // generatePetURLFormFile рендерит url-form файл для схемы Pet из doc.
 // Использует приватный Generator без Options — только для unit-тестов
 // рендерера (T25c.1, T25c.2). Wire-up через Generate проверяется в T25c.3.
+//
+// Начиная с Task 6 (T27 Phase 1), рендер идёт через compose.FileComposer +
+// render/schema.URLFormRenderer (см. Generator.writeURLFormAuxFile). Здесь
+// дублируем composer-вызов напрямую, чтобы тесты проверяли только url_form-
+// файл без запуска полного writeSchemaFiles.
 func generatePetURLFormFile(t *testing.T, doc *oapiparser.Document) []byte {
 	t.Helper()
 
@@ -2806,7 +2815,10 @@ func generatePetURLFormFile(t *testing.T, doc *oapiparser.Document) []byte {
 
 	for _, sh := range doc.Schemas {
 		if sh.Name == "Pet" {
-			return g.urlFormMethodsFile(sh).Content()
+			fw := &collectWriter{files: map[string][]byte{}}
+			require.NoError(t, g.writeURLFormAuxFile(fw, sh))
+
+			return fw.files["model/pet_url_form.gen.go"]
 		}
 	}
 
@@ -3541,7 +3553,11 @@ func generateConverterFile(t *testing.T, doc *oapiparser.Document, schemaName st
 
 	for _, sh := range doc.Schemas {
 		if sh.Name == schemaName {
-			return g.converterMethodsFile(sh).Content()
+			sh.IsSplit = true
+			fw := &collectWriter{files: map[string][]byte{}}
+			require.NoError(t, g.writeConvertersAuxFile(fw, sh))
+
+			return fw.files["model/"+fileName(sh.Name)+"_converters.gen.go"]
 		}
 	}
 
