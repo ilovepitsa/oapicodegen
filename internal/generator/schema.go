@@ -8,14 +8,18 @@ import (
 	"strings"
 )
 
-// schemaFile генерирует Go-файл с определением типа для схемы.
+// schemaFile генерирует Go-файл с определением типа для схемы, не
+// обрабатываемой composer-путём (array / union / allof). Object-struct и
+// split-схемы рендерятся через StructRenderer (Task 8) в renderSchemaFile.
+// alias/enum/mapAlias — через AliasRenderer/EnumRenderer (Task 7).
+//
+// Update<Name>-вариант не рендерится здесь: для object-схем его генерирует
+// StructRenderer.OnStruct при sh.IsUsedInUpdate. union/array/allof-схемы с
+// IsUsedInUpdate игнорируются (update-marker помечает только top-level
+// $ref-схемы, которые практически всегда object-struct — см. update_marker.go).
 func (g *Generator) schemaFile(sh *parser.Schema) codegen.File {
 	m := g.newTypeMapper("model")
 	body := g.renderSchema(sh, m)
-
-	if sh.IsUsedInUpdate {
-		body = append(body, g.renderUpdateStruct(sh, m, goName(sh.Name))...)
-	}
 
 	return g.factory.Create(&gogen.File{
 		Package: "model",
@@ -24,24 +28,16 @@ func (g *Generator) schemaFile(sh *parser.Schema) codegen.File {
 	})
 }
 
-// renderSchema рендерит body для не-alias/не-enum/не-mapAlias схем (struct,
-// array, union, allof). Alias/enum/mapAlias рендерятся через composer +
-// render/schema AliasRenderer/EnumRenderer (Task 7), см. writeSchemaFiles.
-// renderSchema вызывается только из schemaFile (legacy-путь).
-//
-//nolint:gocyclo,cyclop // dispatch switch, branching is inherent
+// renderSchema рендерит body для array/union/allof-схем. Object-struct и
+// split-схемы рендерятся через StructRenderer (Task 8) — см. renderSchemaFile;
+// alias/enum/mapAlias — через AliasRenderer/EnumRenderer (Task 7). Здесь
+// остаются только те типы, которые Task 9 мигрирует позже.
 func (g *Generator) renderSchema(sh *parser.Schema, m *typeMapper) []byte {
 	w := codegen.NewBufferWriter()
 	name := goName(sh.Name)
 
 	if sh.Description != "" {
 		writeDocComment(w, sh.Description)
-	}
-
-	if g.project.Features.SplitRequestResponse.Value && g.splittable[sh.Name] {
-		g.renderSplitStruct(w, sh, m, name)
-
-		return w.Content()
 	}
 
 	switch {
@@ -56,8 +52,6 @@ func (g *Generator) renderSchema(sh *parser.Schema, m *typeMapper) []byte {
 		g.renderAllOf(w, sh, m, name)
 	case sh.Type == oapiTypeArray:
 		g.renderArraySchema(w, sh, m, name)
-	case sh.Type == oapiTypeObject || len(sh.Properties) > 0:
-		g.renderStruct(w, sh, m, name)
 	}
 
 	return w.Content()
@@ -76,196 +70,10 @@ func (g *Generator) renderAllOfSingleInlineAlias(
 	w.Print("type ", name, " ", m.goType(sh.AllOf[0]), "\n")
 }
 
-// renderSplitStruct рендерит <Name>Request и <Name>Response вместо одного
-// <Name>, когда включён GOLANG_SPLIT_REQUEST_RESPONSE.
-// Request: свойства с ReadOnly=false (writeOnly + regular).
-// Response: свойства с WriteOnly=false (readOnly + regular).
-func (g *Generator) renderSplitStruct(
-	w *codegen.BufferWriter,
-	sh *parser.Schema,
-	m *typeMapper,
-	name string,
-) {
-	m.mode = modeRequest
-	g.renderFilteredStruct(w, sh, m, name+"Request", func(p *parser.Property) bool {
-		return p.Schema == nil || !p.Schema.ReadOnly
-	})
-
-	m.mode = modeResponse
-	g.renderFilteredStruct(w, sh, m, name+"Response", func(p *parser.Property) bool {
-		return p.Schema == nil || !p.Schema.WriteOnly
-	})
-}
-
-func (g *Generator) renderFilteredStruct(
-	w *codegen.BufferWriter,
-	sh *parser.Schema,
-	m *typeMapper,
-	name string,
-	keep func(*parser.Property) bool,
-) {
-	w.Print("type ", name, " struct {\n")
-
-	for _, p := range sh.Properties {
-		if !keep(p) {
-			continue
-		}
-
-		g.renderField(w, p, m)
-	}
-
-	w.Print("}\n\n")
-
-	if filteredSchemaHasDefaults(g, sh, keep) {
-		g.renderSetDefaultsMethod(w, sh, m, name, keep)
-	}
-
-	g.renderValidateOwn(w, sh, m, name, false, keep)
-}
-
-// renderUpdateStruct рендерит Update<Name> — вариант схемы для PUT/PATCH
-// request body. Содержит только свойства с IsUsedInUpdate=true (фильтр
-// update-marker'а). Каждое поле оборачивается в optional.Optional[T] —
-// это даёт PATCH-семантику: отличаем "поле не задано" от "поле = null" от
-// "поле = значение".
-//
-// mode typeMapper'а выставляется в Request при включённом split, чтобы
-// $ref на splittable-схемы разрешались в <Name>Request (update-тело —
-// это request-контекст). Без split mode="" — refs разрешаются в базовое
-// имя.
-//
-// Тип поля берётся через m.baseType (а не m.goType) — nullable-указатель
-// не добавляется, потому что Optional уже различает null через IsNil.
-//
-// v1-ограничение: marker не помечает nested $ref / array items, поэтому
-// Update-суффикс к ссылкам не применяется — refs указывают на исходные
-// схемы (или их Request-вариант при split).
-func (g *Generator) renderUpdateStruct(sh *parser.Schema, m *typeMapper, name string) []byte {
-	w := codegen.NewBufferWriter()
-
-	if sh.Description != "" {
-		writeDocComment(w, "Update"+name+" — PATCH/PUT variant of "+name+".")
-	}
-
-	if g.project.Features.SplitRequestResponse.Value {
-		m.mode = modeRequest
-	} else {
-		m.mode = ""
-	}
-
-	w.Print("type Update", name, " struct {\n")
-
-	for _, p := range sh.Properties {
-		if !p.IsUsedInUpdate {
-			continue
-		}
-
-		g.renderUpdateField(w, p, m)
-	}
-
-	w.Print("}\n\n")
-
-	g.renderUpdateGetters(w, sh, m, name)
-
-	g.renderValidateOwn(w, sh, m, "Update"+name, true, func(p *parser.Property) bool {
-		return p.IsUsedInUpdate
-	})
-
-	return w.Content()
-}
-
-// renderUpdateField рендерит поле Update<Name>-структуры. Все поля
-// оборачиваются в optional.Optional[T] безусловно — независимо от флага
-// GOLANG_USE_OPTIONAL и метки p.Optional. Теги json/yaml без omitempty:
-// presence определяется самой обёрткой Optional.
-func (g *Generator) renderUpdateField(w *codegen.BufferWriter, p *parser.Property, m *typeMapper) { //nolint:lll // struct tag line
-	if p.Schema != nil && p.Schema.Description != "" {
-		writeDocComment(w, p.Schema.Description)
-	}
-
-	if p.Schema != nil && p.Schema.Deprecated {
-		w.Print("// Deprecated: schema marks this field as deprecated\n")
-	}
-
-	fieldName := goName(p.Name)
-	fieldType := m.baseType(p.Schema)
-
-	m.addImport(optionalPkg, "optional")
-	w.Print(fieldName, " optional.Optional[", fieldType, "] `json:\"", p.Name, "\" yaml:\"", p.Name, "\"`\n") //nolint:lll // struct tag line
-}
-
-// renderUpdateGetters рендерит Get<Field>() (*T, bool) методы для каждого
-// поля Update<Name>. Семантика:
-//   - !IsSet() → (nil, false) — поле не в запросе, не меняем.
-//   - IsSet() && IsNil() → (nil, true) — пользователь прислал null, чистим.
-//   - IsSet() && !IsNil() → (&value, true) — новое значение.
-//
-// T берётся из baseType (без nullable-указателя) — поле уже Optional[T].
-func (g *Generator) renderUpdateGetters(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) { //nolint:lll // function signature
-	for _, p := range sh.Properties {
-		if !p.IsUsedInUpdate {
-			continue
-		}
-
-		g.renderUpdateGetter(w, p, m, name)
-	}
-}
-
-func (g *Generator) renderUpdateGetter(w *codegen.BufferWriter, p *parser.Property, m *typeMapper, name string) { //nolint:lll // function signature
-	fieldName := goName(p.Name)
-	fieldType := m.baseType(p.Schema)
-	getterName := "Get" + fieldName
-
-	w.Print("// ", getterName, " возвращает значение поля ", fieldName, " и флаг presence.\n")
-	w.Print("// Семантика: (nil, false) — поле не задано; (nil, true) — задано как null;\n")
-	w.Print("// (&value, true) — задано значением.\n")
-	w.Print("func (u *Update", name, ") ", getterName, "() (*", fieldType, ", bool) {\n")
-	w.Print("\tif !u.", fieldName, ".IsSet() {\n")
-	w.Print("\t\treturn nil, false\n")
-	w.Print("\t}\n")
-	w.Print("\tif u.", fieldName, ".IsNil() {\n")
-	w.Print("\t\treturn nil, true\n")
-	w.Print("\t}\n")
-	w.Print("\tv := u.", fieldName, ".Value()\n")
-	w.Print("\treturn &v, true\n")
-	w.Print("}\n\n")
-}
-
-// filteredSchemaHasDefaults сообщает, есть ли default хотя бы у одного
-// property, проходящего фильтр keep, или у вложенной object-схемы через
-// $ref. Используется для решения, генерировать ли SetDefaults для
-// конкретного <Name>Request/<Name>Response варианта.
-//
-// Рекурсивный обход через g.schemaTreeHasDefaults учитывает nested $ref
-// на object-схемы с defaults (M3). visited-set ограничивает циклические refs.
-func filteredSchemaHasDefaults(
-	g *Generator,
-	sh *parser.Schema,
-	keep func(*parser.Property) bool,
-) bool {
-	if sh == nil {
-		return false
-	}
-
-	return g.schemaTreeHasDefaults(sh, keep, map[string]bool{sh.Name: true})
-}
-
-func (g *Generator) renderStruct(w *codegen.BufferWriter, sh *parser.Schema, m *typeMapper, name string) { //nolint:lll // function signature with params
-	w.Print("type ", name, " struct {\n")
-
-	for _, p := range sh.Properties {
-		g.renderField(w, p, m)
-	}
-
-	w.Print("}\n\n")
-
-	if filteredSchemaHasDefaults(g, sh, nil) {
-		g.renderSetDefaultsMethod(w, sh, m, name, nil)
-	}
-
-	g.renderValidateOwn(w, sh, m, name, false, nil)
-}
-
+// renderField рендерит одно поле struct'ы. Используется renderAllOf для
+// inline object-членов allOf. Основной struct-рендер мигрировал в
+// render/schema/StructRenderer (Task 8), но renderAllOf останется в
+// generator до Task 9 — поэтому этот метод сохраняется здесь.
 func (g *Generator) renderField(w *codegen.BufferWriter, p *parser.Property, m *typeMapper) { //nolint:lll // function signature
 	if p.Schema != nil && p.Schema.Description != "" {
 		writeDocComment(w, p.Schema.Description)
@@ -299,16 +107,11 @@ func (g *Generator) renderField(w *codegen.BufferWriter, p *parser.Property, m *
 }
 
 // requiredForMode возвращает, является ли поле required в текущем режиме
-// генерации. Логика зависит от флага USE_REQUIRED_V2:
+// генерации. Логика зависит от флага USE_REQUIRED_V2.
 //
-// Если флаг выключен — возвращается стандартный OAS required (p.Required).
-//
-// Если флаг включён:
-//   - modeRequest → p.RequestRequired (из x-request-required);
-//   - modeResponse → p.ResponseRequired (из x-response-required);
-//   - моно-режим (mode=="") → если поле есть хотя бы в одном x-* списке,
-//     required = p.RequestRequired && p.ResponseRequired (required только
-//     если в обоих списках); иначе fallback на p.Required.
+// Используется audit_model.go, validate.go, set_defaults.go,
+// url_form_methods.go и этим файлом (renderField). render/schema/StructRenderer
+// имеет собственную копию (дублирование для развязки пакетов).
 func (g *Generator) requiredForMode(p *parser.Property, mode string) bool {
 	if !g.project.Features.UseRequiredV2.Value {
 		return p.Required
@@ -333,15 +136,36 @@ func (g *Generator) requiredForMode(p *parser.Property, mode string) bool {
 // fieldIsOptional сообщает, нужно ли оборачивать поле в pointer.
 // Поле optional, если оно не required и его Go-тип уже не nilable
 // (не slice/map/any и не pointer).
+//
+// Используется audit_model.go, validate.go, set_defaults.go,
+// url_form_methods.go и этим файлом (renderField). render/schema/StructRenderer
+// имеет собственную копию (дублирование для развязки пакетов).
 func fieldIsOptional(required bool, fieldType string) bool {
 	return !required && !strings.HasPrefix(fieldType, "*") && !isInherentlyNilable(fieldType)
 }
 
+// filteredSchemaHasDefaults сообщает, есть ли default хотя бы у одного
+// property, проходящего фильтр keep, или у вложенной object-схемы через
+// $ref. Используется impl_server.go для audit-server-response-фильтрации.
+// render/schema/StructRenderer использует SchemaCallbacks.SchemaTreeHasDefaults.
+func filteredSchemaHasDefaults(
+	g *Generator,
+	sh *parser.Schema,
+	keep func(*parser.Property) bool,
+) bool {
+	if sh == nil {
+		return false
+	}
+
+	return g.schemaTreeHasDefaults(sh, keep, map[string]bool{sh.Name: true})
+}
+
 // enumBaseType и enumStringValue используются set_defaults.go для
 // default-value-литералов enum-схем. enumValueName живёт в naming.go и
-// используется set_defaults.go. renderEnum, renderAlias, renderMapAlias и
-// enumLiteral удалены в Task 7 — их функциональность перенесена в
-// render/schema/enum.go и render/schema/alias.go (composer-путь).
+// используется set_defaults.go. renderEnum, renderAlias, renderMapAlias,
+// enumLiteral, renderStruct, renderSplitStruct, renderFilteredStruct,
+// renderUpdateStruct и сопутствующие удалены в Tasks 7-8 — их функциональность
+// перенесена в render/schema/.
 
 func enumBaseType(sh *parser.Schema) string {
 	switch sh.Type {

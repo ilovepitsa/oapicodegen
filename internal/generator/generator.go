@@ -130,23 +130,68 @@ func (g *Generator) writeSchemaFiles(fw codegen.FileWriter, sh *parser.Schema) e
 // writeSchemaAuxFiles пишет вспомогательные файлы схемы (_json, _url_form,
 // _converters, _audit_data) при выполнении условий. Вынесено из writeSchemaFiles
 // для снижения cyclomatic complexity (каждый aux-файл — отдельная ветка).
+//
+// _json рендерится через composer + render/schema.JSONRenderer (Task 8);
+// остальные aux-файлы — через legacy schemaAuxRenderer.
 func (g *Generator) writeSchemaAuxFiles(fw codegen.FileWriter, sh *parser.Schema) error {
 	ops := g.operations()
-	aux := []struct {
+
+	if needsJSONMethods(sh) {
+		if err := g.writeJSONMethodsAuxFile(fw, sh); err != nil {
+			return err
+		}
+	}
+
+	legacyAux := []struct {
 		cond   bool
 		suffix string
 		render schemaAuxRenderer
 	}{
-		{needsJSONMethods(sh), "json", g.jsonMethodsFile},
 		{schemeHasURLFormat(sh, ops), "url_form", g.urlFormMethodsFile},
 		{g.shouldGenerateConverters(sh), "converters", g.converterMethodsFile},
 		{schemaReferencedByOperation(sh, ops), "audit_data", g.auditModelFile},
 	}
 
-	for _, a := range aux {
+	for _, a := range legacyAux {
 		if err := g.writeSchemaAuxFile(fw, sh, a.cond, a.suffix, a.render); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// needsJSONMethods сообщает, нужна ли схеме отдельная функция UnmarshalJSON.
+// True для oneOf/anyOf — union-схемы рендерятся как struct с вариантами, и
+// Marshal/Unmarshal нужен для диспетчеризации по вариантам.
+func needsJSONMethods(sh *parser.Schema) bool {
+	return len(sh.OneOf) > 0 || len(sh.AnyOf) > 0
+}
+
+// writeJSONMethodsAuxFile рендерит <name>_json.gen.go через composer +
+// render/schema.JSONRenderer. Использует собственный RenderContext с
+// Callbacks=nil — JSONRenderer не вызывает SetDefaults/ValidateOwn.
+func (g *Generator) writeJSONMethodsAuxFile(fw codegen.FileWriter, sh *parser.Schema) error {
+	ctx := &render.RenderContext{
+		Project:      g.project,
+		SchemaIndex:  g.schemaIndex,
+		Features:     g.project.Features,
+		Splittable:   g.splittable,
+		ModulePath:   g.project.ImportPrefix,
+		ImportPrefix: g.project.ImportPrefix,
+	}
+	ctx.TypeMapper = g.newRenderTypeMapper("model", "", ctx)
+
+	renderers := []walk.SchemaRenderer{schemarender.NewJSONRenderer()}
+
+	cf, err := g.composer.ComposeSchemaFile(sh, renderers, ctx) //nolint:lll // renderer-list literal, splitting harms readability
+	if err != nil {
+		return fmt.Errorf("compose json methods %q: %w", sh.Name, err)
+	}
+
+	fname := "model/" + fileName(sh.Name) + "_json.gen.go"
+	if err := fw.WriteFile(fname, cf); err != nil {
+		return fmt.Errorf("write %s: %w", fname, err)
 	}
 
 	return nil
@@ -178,15 +223,60 @@ func (g *Generator) writeSchemaAuxFile(
 	return nil
 }
 
-// renderSchemaFile рендерит основной schema-файл. Alias/enum/map-alias схемы
-// идут через composer + render/schema (Task 7); прочие (struct/array/union/
-// allof) — через legacy schemaFile-путь с typeMapper напрямую.
+// renderSchemaFile рендерит основной schema-файл. Маршрутизация:
+//   - alias/enum/mapAlias → composer + AliasRenderer/EnumRenderer (Task 7);
+//   - object-struct и split → composer + StructRenderer (Task 8);
+//   - array/union/allof → legacy schemaFile-путь (Task 9 мигрирует позже).
 func (g *Generator) renderSchemaFile(sh *parser.Schema) (codegen.File, error) {
 	if isAliasLike(sh) || isEnumLike(sh) {
 		return g.writeSchemaFilesViaComposer(sh)
 	}
 
+	if isStructLike(sh) {
+		return g.writeStructFileViaComposer(sh)
+	}
+
 	return g.schemaFile(sh), nil
+}
+
+// isStructLike сообщает, рендерится ли схема как object-struct (включая
+// split-вариант). True для object-схем с properties и без composite-членов
+// (oneOf/anyOf/allOf). Такие схемы идут через StructRenderer (Task 8),
+// который пишет <Name> struct + SetDefaults + ValidateOwn + Update<Name>.
+func isStructLike(sh *parser.Schema) bool {
+	if len(sh.OneOf) > 0 || len(sh.AnyOf) > 0 || len(sh.AllOf) > 0 {
+		return false
+	}
+
+	return sh.Type == oapiTypeObject && len(sh.Properties) > 0
+}
+
+// writeStructFileViaComposer собирает object-struct файл через FileComposer с
+// StructRenderer. RenderContext включает Callbacks — generatorCallbacks
+// bridg'ит SetDefaults/ValidateOwn/SchemaTreeHasDefaults к Generator-методам
+// (Tasks 10-11 переедут в render/). TypeMapper и Callbacks ссылаются на ctx —
+// compose.FileComposer проставит ctx.Imports через Base.Init, и адаптеры
+// дренажат импорты в общий трекер.
+func (g *Generator) writeStructFileViaComposer(sh *parser.Schema) (codegen.File, error) {
+	ctx := &render.RenderContext{
+		Project:      g.project,
+		SchemaIndex:  g.schemaIndex,
+		Features:     g.project.Features,
+		Splittable:   g.splittable,
+		ModulePath:   g.project.ImportPrefix,
+		ImportPrefix: g.project.ImportPrefix,
+	}
+	ctx.TypeMapper = g.newRenderTypeMapper("model", "", ctx)
+	ctx.Callbacks = &generatorCallbacks{g: g, ctx: ctx}
+
+	renderers := []walk.SchemaRenderer{schemarender.NewStructRenderer()}
+
+	cf, err := g.composer.ComposeSchemaFile(sh, renderers, ctx) //nolint:lll // renderer-list literal, splitting harms readability
+	if err != nil {
+		return nil, fmt.Errorf("compose struct %q: %w", sh.Name, err)
+	}
+
+	return cf, nil
 }
 
 // isAliasLike сообщает, рендерится ли схема как alias (`type X string`) или
@@ -228,9 +318,6 @@ func isEnumLike(sh *parser.Schema) bool {
 // walker — для конкретной схемы сработает только один (OnAlias/OnMap или
 // OnEnum), второй останется noop'ом.
 func (g *Generator) writeSchemaFilesViaComposer(sh *parser.Schema) (codegen.File, error) {
-	imports := render.NewImportTracker()
-	tm := g.newRenderTypeMapper("model", "", imports)
-
 	ctx := &render.RenderContext{
 		Project:      g.project,
 		SchemaIndex:  g.schemaIndex,
@@ -238,8 +325,8 @@ func (g *Generator) writeSchemaFilesViaComposer(sh *parser.Schema) (codegen.File
 		Splittable:   g.splittable,
 		ModulePath:   g.project.ImportPrefix,
 		ImportPrefix: g.project.ImportPrefix,
-		TypeMapper:   tm,
 	}
+	ctx.TypeMapper = g.newRenderTypeMapper("model", "", ctx)
 
 	renderers := []walk.SchemaRenderer{schemarender.NewAliasRenderer(), schemarender.NewEnumRenderer()}
 

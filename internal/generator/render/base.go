@@ -17,6 +17,16 @@ type RenderContext struct {
 	ModulePath   string
 	ImportPrefix string
 	TypeMapper   TypeMapper
+	// Callbacks bridges renderer'ы к ещё не мигрированным Generator-методам
+	// (SetDefaults, ValidateOwn, schemaTreeHasDefaults). nil допустим для
+	// renderer'ов, которые эти методы не вызывают (AliasRenderer, EnumRenderer).
+	Callbacks SchemaCallbacks
+	// Imports — общий ImportTracker, устанавливаемый compose.FileComposer
+	// через Base.Init. TypeMapper-adapter и generatorCallbacks читают его
+	// для дренажа импортов после каждого вызова GoType/BaseType/callback'а.
+	// nil до Init (renderer'ы, вызываемые вне composer-пути, должны
+	// установить его вручную — см. alias_test.go newAliasTestRenderer).
+	Imports *ImportTracker
 }
 
 // ImportTracker оборачивает []gogen.Import и дедуплицирует по Path+Alias.
@@ -63,10 +73,13 @@ func NewBase(ctx *RenderContext) Base {
 
 // Init перезаписывает все три поля на ресивере. Используется compose-пакетом
 // (Task 6), чтобы влить shared Buf/Imports в каждый renderer через embed Base.
+// Также прокидывает Imports в ctx — typeMapperAdapter и generatorCallbacks
+// читают ctx.Imports для дренажа (см. writeStructFileViaComposer).
 func (b *Base) Init(buf *codegen.BufferWriter, imports *ImportTracker, ctx *RenderContext) {
 	b.Buf = buf
 	b.Imports = imports
 	b.Ctx = ctx
+	ctx.Imports = imports
 }
 
 // SingletonRenderer — renderer, производящий один файл. Возвращает тело,

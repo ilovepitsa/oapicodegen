@@ -13,9 +13,15 @@ import (
 // fakeTypeMapper — тестовая реализация render.TypeMapper, возвращающая
 // предзаготовленную строку. Используется в тестах, где не нужна полная
 // логика generator.typeMapper (resolution $ref, imports, nullable и т.п.).
-type fakeTypeMapper struct{ got string }
+type fakeTypeMapper struct {
+	got  string
+	mode string
+}
 
 func (f *fakeTypeMapper) GoType(_ *parser.Schema) string { return f.got }
+
+// SetMode записывает mode — StructRenderer использует его для split-рендера.
+func (f *fakeTypeMapper) SetMode(mode string) { f.mode = mode }
 
 // newAliasTestRenderer строит AliasRenderer с shared Buf/Imports и фейковым
 // TypeMapper, привязанным к RenderContext.

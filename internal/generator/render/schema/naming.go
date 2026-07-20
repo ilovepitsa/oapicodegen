@@ -1,7 +1,8 @@
 // Package schema содержит renderer'ы для schema-файлов: AliasRenderer
-// (примитивные alias'ы и map-alias'ы) и EnumRenderer. Renderer'ы embed'ят
-// walk.NoopSchemaRenderer и реализуют только нужные хуки (OnAlias/OnMap для
-// AliasRenderer, OnEnum для EnumRenderer).
+// (примитивные alias'ы и map-alias'ы), EnumRenderer (enum-схемы),
+// StructRenderer (object-схемы + split + Update-варианты) и JSONRenderer
+// (MarshalJSON/UnmarshalJSON для oneOf/anyOf). Renderer'ы embed'ят
+// walk.NoopSchemaRenderer и реализуют только нужные хуки.
 package schema
 
 import (
@@ -58,6 +59,47 @@ func enumValueName(prefix, value string, _ int) string {
 	}
 
 	return prefix + goName(value)
+}
+
+// inlineVariantName генерирует PascalCase-имя поля для inline-варианта union
+// (когда у варианта нет $ref). "map[string]any" → "MapStringAny",
+// "[]int" → "SliceInt", "string" → "String".
+//
+// Дублировано из пакета generator — JSONRenderer и StructRenderer
+// используют это для inline oneOf/anyOf вариантов.
+func inlineVariantName(typ string) string {
+	replacer := strings.NewReplacer(
+		"[]", "Slice_",
+		"map[", "Map_",
+		"]", "_",
+		"*", "",
+		"(", "",
+		")", "",
+	)
+
+	return goName(replacer.Replace(typ))
+}
+
+// refToName извлекает имя схемы из $ref-пути
+// "#/components/schemas/Pet" → "Pet". Возвращает ref как есть, если '/'
+// не найден (inline-схема без ref).
+//
+// Дублировано из пакета generator.
+func refToName(ref string) string {
+	if idx := strings.LastIndex(ref, "/"); idx >= 0 {
+		return ref[idx+1:]
+	}
+
+	return ref
+}
+
+// isInherentlyNilable сообщает, имеет ли Go-тип уже нулевое значение nil,
+// поэтому оборачивать в pointer не нужно. К ним относятся slices, maps и
+// `any` (interface).
+//
+// Дублировано из пакета generator.
+func isInherentlyNilable(t string) bool {
+	return strings.HasPrefix(t, "[]") || strings.HasPrefix(t, "map[") || t == goTypeAny
 }
 
 // writeDocComment пишет description как серию Go-комментариев "// <line>".
