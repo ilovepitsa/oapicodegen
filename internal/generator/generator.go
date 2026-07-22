@@ -399,15 +399,54 @@ func (g *Generator) shouldGenerateConverters(sh *parser.Schema) bool {
 }
 
 // writeUTCTimeFile пишет model/utc_time.gen.go, если включён флаг
-// USE_UTC_FOR_DATE_TIME. Вызывается один раз за генерацию.
+// USE_UTC_FOR_DATE_TIME. Рендер идёт через UTCTimeRenderer (SingletonRenderer)
+// + compose.FileComposer — замена устаревшему Generator.utcTimeFile.
 func (g *Generator) writeUTCTimeFile(fw codegen.FileWriter) error {
 	if !g.project.Features.UseUTCForDateTime.Value {
 		return nil
 	}
 
-	const fname = "model/utc_time.gen.go"
+	ctx := g.newSchemaRenderContext()
 
-	if err := fw.WriteFile(fname, g.utcTimeFile()); err != nil {
+	file, err := g.composer.ComposeSingletonFile(schemarender.NewUTCTimeRenderer(), ctx)
+	if err != nil {
+		return fmt.Errorf("compose utc_time: %w", err)
+	}
+
+	const fname = "model/utc_time.gen.go"
+	if err := fw.WriteFile(fname, file); err != nil {
+		return fmt.Errorf("write %s: %w", fname, err)
+	}
+
+	return nil
+}
+
+// writeExpectedValidatorsFile пишет model/expected_validators.gen.go, если
+// в документе есть хотя бы один named-валидатор. Рендер идёт через
+// ExpectedValidatorsRenderer (SingletonRenderer) — замена устаревшему
+// Generator.expectedValidatorsFile. Direct-Render (без ComposeSingletonFile)
+// позволяет пропустить запись файла, когда именованных валидаторов нет.
+func (g *Generator) writeExpectedValidatorsFile(fw codegen.FileWriter) error {
+	ctx := g.newSchemaRenderContext()
+	r := schemarender.NewExpectedValidatorsRenderer()
+
+	body, imps, err := r.Render(ctx)
+	if err != nil {
+		return fmt.Errorf("render expected_validators: %w", err)
+	}
+
+	if len(body) == 0 {
+		return nil
+	}
+
+	file := g.factory.Create(&gogen.File{
+		Package: "model",
+		Imports: imps.Imports(),
+		Body:    body,
+	})
+
+	const fname = "model/expected_validators.gen.go"
+	if err := fw.WriteFile(fname, file); err != nil {
 		return fmt.Errorf("write %s: %w", fname, err)
 	}
 

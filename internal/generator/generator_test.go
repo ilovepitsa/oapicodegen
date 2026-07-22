@@ -4510,3 +4510,101 @@ func TestCrossServiceRef_SplitModeAddsSuffix(t *testing.T) {
 	assert.Equal(t, "common.UserRequest", got,
 		"owner project has split enabled → suffix added by LookupForMode")
 }
+
+func TestGenerate_UTCTimeFile_WhenFeatureOn_EmitsFile(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	project := testProject(t, doc, "example.com/test")
+	project.Features.UseUTCForDateTime.Value = true
+
+	fw := &collectWriter{files: map[string][]byte{}}
+	require.NoError(t, Generate(fw, project, nil))
+
+	body := string(fw.files["model/utc_time.gen.go"])
+	assert.Contains(t, body, "type UTCTime time.Time")
+	assert.Contains(t, body, "func (u UTCTime) MarshalJSON() ([]byte, error) {")
+	assert.Contains(t, body, "func (u *UTCTime) UnmarshalJSON(data []byte) error {")
+}
+
+func TestGenerate_UTCTimeFile_WhenFeatureOff_SkipsFile(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	project := testProject(t, doc, "example.com/test")
+	// UseUTCForDateTime.Value остаётся false.
+
+	fw := &collectWriter{files: map[string][]byte{}}
+	require.NoError(t, Generate(fw, project, nil))
+
+	_, ok := fw.files["model/utc_time.gen.go"]
+	assert.False(t, ok, "utc_time.gen.go must not be emitted when USE_UTC_FOR_DATE_TIME is off")
+}
+
+func TestGenerate_ExpectedValidatorsFile_WithNamedValidators_EmitsFile(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Item:
+      type: object
+      x-validations: ["app.ItemConsistency"]
+      properties:
+        name: {type: string}
+`)
+	project := testProject(t, doc, "example.com/test")
+
+	fw := &collectWriter{files: map[string][]byte{}}
+	require.NoError(t, Generate(fw, project, nil))
+
+	body := string(fw.files["model/expected_validators.gen.go"])
+	assert.Contains(t, body, "func ExpectedValidatorNames() []string {")
+	assert.Contains(t, body, `"app.ItemConsistency"`)
+}
+
+func TestGenerate_ExpectedValidatorsFile_NoNamedValidators_SkipsFile(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths: {}
+components:
+  schemas:
+    Item:
+      type: object
+      properties:
+        name: {type: string}
+`)
+	project := testProject(t, doc, "example.com/test")
+
+	fw := &collectWriter{files: map[string][]byte{}}
+	require.NoError(t, Generate(fw, project, nil))
+
+	_, ok := fw.files["model/expected_validators.gen.go"]
+	assert.False(t, ok, "expected_validators.gen.go must not be emitted when no named validators exist")
+}
