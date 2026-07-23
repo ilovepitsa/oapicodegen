@@ -77,8 +77,9 @@ func (c *FileComposer) ComposeMethodFile(
 
 // ComposeSingletonFile вызывает singleton-renderer напрямую (без walker — у
 // singleton нет структуры для обхода), получает готовые body+imports и
-// собирает codegen.File. Пакет выводится из FilePath() как первый сегмент пути
-// до '/' (например, "model/utc_time.gen.go" → "model").
+// собирает codegen.File. Пакет выводится из FilePath() как последний компонент
+// директории (например, "model/utc_time.gen.go" → "model"). Если renderer
+// реализует render.PackageNamer, используется PackageName() вместо вывода.
 func (c *FileComposer) ComposeSingletonFile(
 	r render.SingletonRenderer,
 	ctx *render.RenderContext,
@@ -89,6 +90,9 @@ func (c *FileComposer) ComposeSingletonFile(
 	}
 
 	pkg := packageOf(r.FilePath())
+	if pn, ok := r.(render.PackageNamer); ok {
+		pkg = pn.PackageName()
+	}
 
 	return c.assembleBytes(pkg, body, imports), nil
 }

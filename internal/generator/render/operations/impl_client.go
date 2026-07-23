@@ -1,59 +1,69 @@
-package generator
+package operations
 
 import (
 	"nschugorev/oapigenerator/internal/codegen"
 	"nschugorev/oapigenerator/internal/codegen/gogen"
+	"nschugorev/oapigenerator/internal/generator/render"
 	"nschugorev/oapigenerator/internal/parser"
 )
 
-// implClientFile генерирует impl/httpclient/client.gen.go:
-// реализацию client.Client через pkg/httpclient.
-func (g *Generator) implClientFile() codegen.File {
-	m := g.newTypeMapper("implclient")
-	m.addImport("context", "")
-	m.addImport("fmt", "")
-	m.addImport("net/http", "")
-	m.addImport("strings", "")
+// ImplClientRenderer рендерит impl/httpclient/client.gen.go: HTTP-клиент.
+// Заменяет Generator.implClientFile (internal/generator/impl_client.go).
+type ImplClientRenderer struct{}
 
-	const httpclientPkg = "nschugorev/oapigenerator/pkg/httpclient"
+func NewImplClientRenderer() *ImplClientRenderer { return &ImplClientRenderer{} }
 
-	m.addImport(httpclientPkg, "httpclient")
+func (ImplClientRenderer) FilePath() string    { return "impl/httpclient/client.gen.go" }
+func (ImplClientRenderer) PackageName() string { return "client" }
 
-	if g.project != nil {
-		m.addImport(g.project.Paths.Imports.ClientInterfaces.Path, "apiclient")
+func (r *ImplClientRenderer) Render(ctx *render.RenderContext) ([]byte, *render.ImportTracker, error) {
+	ops := allOperations(ctx.Project)
+	if len(ops) == 0 {
+		return nil, nil, nil
 	}
 
-	needJSON, needBytes, needURL := g.implClientImports()
+	imps := render.NewImportTracker()
+	ctx.Imports = imps
+
+	// Always-needed imports.
+	imps.Add(gogen.Import{Path: "context"})
+	imps.Add(gogen.Import{Path: "fmt"})
+	imps.Add(gogen.Import{Path: "net/http"})
+	imps.Add(gogen.Import{Path: "strings"})
+	imps.Add(gogen.Import{Path: "nschugorev/oapigenerator/pkg/httpclient", Alias: "httpclient"})
+
+	if ctx.Project != nil && ctx.Project.Paths != nil {
+		imps.Add(gogen.Import{Path: ctx.Project.Paths.Imports.ClientInterfaces.Path, Alias: "apiclient"})
+	}
+
+	// Conditional imports.
+	needJSON, needBytes, needURL := implClientImports(ops)
 	if needJSON {
-		m.addImport("encoding/json", "")
+		imps.Add(gogen.Import{Path: "encoding/json"})
 	}
-
 	if needBytes {
-		m.addImport("bytes", "")
+		imps.Add(gogen.Import{Path: "bytes"})
 	}
-
 	if needURL {
-		m.addImport("net/url", "")
+		imps.Add(gogen.Import{Path: "net/url"})
+	}
+	if implNeedsStrconv(ops) {
+		imps.Add(gogen.Import{Path: "strconv"})
 	}
 
-	if g.implClientNeedsStrconv() {
-		m.addImport("strconv", "")
+	m := ctx.TypeMapper
+	w := codegen.NewBufferWriter()
+
+	renderImplClientStruct(w)
+	for _, op := range ops {
+		renderImplClientMethod(w, op, m)
 	}
 
-	body := g.renderImplClient(m)
-
-	return g.factory.Create(&gogen.File{
-		Package: "client",
-		Imports: m.imports,
-		Body:    body,
-	})
+	return w.Content(), imps, nil
 }
 
-//nolint:gocritic // unnamedResult conflicts with nonamedreturns
-func (g *Generator) implClientImports() (bool, bool, bool) {
-	var needJSON, needBytes, needURL bool
-
-	for _, op := range g.operations() {
+func implClientImports(ops []*parser.Method) (needJSON, needBytes, needURL bool) {
+	for _, op := range ops {
 		if op.RequestBody != nil {
 			if requestBodyIsURLForm(op.RequestBody) {
 				needBytes = true
@@ -62,48 +72,25 @@ func (g *Generator) implClientImports() (bool, bool, bool) {
 				needBytes = true
 			}
 		}
-
 		for _, r := range op.Responses {
 			if responseSchema(r) != nil {
 				needJSON = true
 			}
 		}
-
 		for _, p := range op.Parameters {
-			if p.In == oapiParamPath || p.In == oapiParamQuery {
+			if p.In == "path" || p.In == "query" {
 				needURL = true
 			}
 		}
 	}
-
-	return needJSON, needBytes, needURL
+	return
 }
 
-// implClientNeedsStrconv проверяет, есть ли хотя бы один header с не-string типом —
-// тогда декодер использует strconv и нужен импорт.
-func (g *Generator) implClientNeedsStrconv() bool {
-	for _, op := range g.operations() {
-		for _, r := range op.Responses {
-			for _, hdr := range r.Headers {
-				if headerGoBaseType(hdr.Schema) != goTypeString {
-					return true
-				}
-			}
-		}
-	}
-
-	return false
-}
-
-func (g *Generator) renderImplClient(m *typeMapper) []byte {
-	w := codegen.NewBufferWriter()
-
+func renderImplClientStruct(w *codegen.BufferWriter) {
 	w.Print("var _ apiclient.Client = (*Client)(nil)\n\n")
-
 	w.Print("type Client struct {\n")
 	w.Print("\thttp *httpclient.Client\n")
 	w.Print("}\n\n")
-
 	w.Print("func NewClient(baseURL string, opts ...httpclient.Option) (*Client, error) {\n")
 	w.Print("\tc, err := httpclient.NewClient(baseURL, opts...)\n")
 	w.Print("\tif err != nil {\n")
@@ -111,46 +98,35 @@ func (g *Generator) renderImplClient(m *typeMapper) []byte {
 	w.Print("\t}\n")
 	w.Print("\treturn &Client{http: c}, nil\n")
 	w.Print("}\n\n")
-
-	for _, op := range g.operations() {
-		g.renderImplClientMethod(w, op, m)
-	}
-
-	return w.Content()
 }
 
-//nolint:gocognit,gocyclo,cyclop,funlen,lll // template-style codegen, long signature
-func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.Method, m *typeMapper) {
+func renderImplClientMethod(w *codegen.BufferWriter, op *parser.Method, m render.TypeMapper) {
 	name := operationMethodName(op)
 
 	w.Print("func (c *Client) ", name, "(ctx context.Context, req *apiclient.", name, "Request) ")
 	w.Print("(*apiclient.", name, "Response, error) {\n")
 
+	// Path construction.
 	w.Print("\tpath := \"", op.Path, "\"\n")
-
 	for _, p := range op.Parameters {
-		if p.In != oapiParamPath {
+		if p.In != "path" {
 			continue
 		}
-
 		fieldName := goName(p.Name)
 		w.Print("\tpath = strings.Replace(path, \"{", p.Name, "}\", ")
 		w.Print("url.PathEscape(fmt.Sprint(req.", fieldName, ")), 1)\n")
 	}
 
+	// Query params.
 	hasQuery := false
-
 	for _, p := range op.Parameters {
-		if p.In != oapiParamQuery {
+		if p.In != "query" {
 			continue
 		}
-
 		if !hasQuery {
 			w.Print("\tq := url.Values{}\n")
-
 			hasQuery = true
 		}
-
 		fieldName := goName(p.Name)
 		if p.Required {
 			w.Print("\tq.Set(\"", p.Name, "\", fmt.Sprint(req.", fieldName, "))\n")
@@ -161,13 +137,14 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.M
 		}
 	}
 
+	// URL assembly.
 	w.Print("\tu := *c.http.ServerURL()\n")
 	w.Print("\tu.Path = strings.TrimSuffix(u.Path, \"/\") + path\n")
-
 	if hasQuery {
 		w.Print("\tu.RawQuery = q.Encode()\n")
 	}
 
+	// Body encoding.
 	hasBody := op.RequestBody != nil
 	if hasBody {
 		if requestBodyIsURLForm(op.RequestBody) {
@@ -184,24 +161,21 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.M
 		}
 	}
 
+	// HTTP request.
 	w.Print("\thttpReq, err := http.NewRequestWithContext(ctx, \"", op.Method, "\", u.String(), ")
-
 	if hasBody {
 		w.Print("bytes.NewReader(body)")
 	} else {
 		w.Print("nil")
 	}
-
 	w.Print(")\n")
-	w.Print("\tif err != nil {\n")
-	w.Print("\t\treturn nil, err\n")
-	w.Print("\t}\n")
+	w.Print("\tif err != nil {\n\t\treturn nil, err\n\t}\n")
 
+	// Headers.
 	for _, p := range op.Parameters {
-		if p.In != oapiParamHeader {
+		if p.In != "header" {
 			continue
 		}
-
 		fieldName := goName(p.Name)
 		if p.Required {
 			w.Print("\thttpReq.Header.Set(\"", p.Name, "\", fmt.Sprint(req.", fieldName, "))\n")
@@ -211,7 +185,6 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.M
 			w.Print("\t}\n")
 		}
 	}
-
 	if hasBody {
 		if requestBodyIsURLForm(op.RequestBody) {
 			w.Print("\thttpReq.Header.Set(\"Content-Type\", \"application/x-www-form-urlencoded\")\n")
@@ -220,30 +193,24 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.M
 		}
 	}
 
+	// Execute + decode.
 	w.Print("\tresp, err := c.http.Do(ctx, httpReq)\n")
-	w.Print("\tif err != nil {\n")
-	w.Print("\t\treturn nil, err\n")
-	w.Print("\t}\n")
+	w.Print("\tif err != nil {\n\t\treturn nil, err\n\t}\n")
 	w.Print("\tdefer resp.Body.Close()\n")
-
 	w.Print("\tresult := &apiclient.", name, "Response{Code: resp.StatusCode}\n")
 	w.Print("\tswitch resp.StatusCode {\n")
 
 	var defaultResp *parser.Response
-
 	for _, r := range op.Responses {
-		if r.StatusCode == oapiCodeDefault {
+		if r.StatusCode == "default" {
 			defaultResp = r
-
 			continue
 		}
-
-		g.renderImplResponseCase(w, op, r, m)
+		renderImplResponseCase(w, op, r, m)
 	}
-
 	if defaultResp != nil {
 		w.Print("\tdefault:\n")
-		g.renderImplResponseBody(w, op, oapiCodeDefault, defaultResp, "ResponseDefault", m)
+		renderImplResponseBody(w, op, "default", defaultResp, "ResponseDefault", m)
 	} else {
 		w.Print("\tdefault:\n")
 		w.WriteString("\t\treturn nil, fmt.Errorf(\"unexpected status code: %d\", resp.StatusCode)\n")
@@ -254,47 +221,36 @@ func (g *Generator) renderImplClientMethod(w *codegen.BufferWriter, op *parser.M
 	w.Print("}\n\n")
 }
 
-func (g *Generator) renderImplResponseCase(w *codegen.BufferWriter, op *parser.Method, r *parser.Response, m *typeMapper) { //nolint:lll // function signature
+func renderImplResponseCase(w *codegen.BufferWriter, op *parser.Method, r *parser.Response, m render.TypeMapper) {
 	w.Print("\tcase ", r.StatusCode, ":\n")
-	fieldName := responseFieldName(r.StatusCode)
-	g.renderImplResponseBody(w, op, r.StatusCode, r, fieldName, m)
+	renderImplResponseBody(w, op, r.StatusCode, r, responseFieldName(r.StatusCode), m)
 }
 
-func (g *Generator) renderImplResponseBody(w *codegen.BufferWriter, op *parser.Method, label string, r *parser.Response, fieldName string, m *typeMapper) { //nolint:lll // function signature
+func renderImplResponseBody(w *codegen.BufferWriter, op *parser.Method, label string, r *parser.Response, fieldName string, m render.TypeMapper) {
 	schema := responseSchema(r)
 
 	if !hasResponseHeaders(r) {
 		if schema == nil {
 			w.Print("\t\tresult.", fieldName, " = true\n")
-
 			return
 		}
-
-		prevMode := m.mode
-		m.mode = modeResponse
-		typ := m.goType(schema)
-
-		m.mode = prevMode
-
+		m.SetMode("Response")
+		typ := m.GoType(schema)
 		w.Print("\t\tvar v ", typ, "\n")
 		w.Print("\t\tif err := json.NewDecoder(resp.Body).Decode(&v); err != nil {\n")
 		w.Print("\t\t\treturn nil, fmt.Errorf(\"decode ", label, ": %w\", err)\n")
 		w.Print("\t\t}\n")
 		w.Print("\t\tresult.", fieldName, " = &v\n")
-
 		return
 	}
 
-	// Responses with headers: construct PayloadWithHeaders struct, then decode.
+	// Response with headers.
 	typeName := payloadWithHeadersTypeName(op, r.StatusCode)
 	w.Print("\t\tresult.", fieldName, " = &", typeName, "{}\n")
 
 	if schema != nil {
-		prevMode := m.mode
-		m.mode = modeResponse
-		typ := m.goType(schema)
-		m.mode = prevMode
-
+		m.SetMode("Response")
+		typ := m.GoType(schema)
 		w.Print("\t\tvar v ", typ, "\n")
 		w.Print("\t\tif err := json.NewDecoder(resp.Body).Decode(&v); err != nil {\n")
 		w.Print("\t\t\treturn nil, fmt.Errorf(\"decode ", label, ": %w\", err)\n")
@@ -322,3 +278,5 @@ func (g *Generator) renderImplResponseBody(w *codegen.BufferWriter, op *parser.M
 		}
 	}
 }
+
+var _ render.SingletonRenderer = (*ImplClientRenderer)(nil)

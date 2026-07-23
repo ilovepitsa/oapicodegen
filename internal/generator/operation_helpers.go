@@ -82,3 +82,18 @@ func responseByCode(responses []*parser.Response, code string) *parser.Response 
 
 	return nil
 }
+
+// resolveRefSchema возвращает схему из project.Model по $ref.
+// Если s — не $ref, cross-service $ref (ExternalRef), или имя не найдено — возвращает nil.
+func (g *Generator) resolveRefSchema(s *parser.Schema) *parser.Schema {
+	if s == nil || s.ExternalRef != "" || s.Ref == "" {
+		return nil
+	}
+
+	name := refToName(s.Ref)
+	if sh, ok := g.project.Model.Lookup(name); ok {
+		return sh
+	}
+
+	return nil
+}

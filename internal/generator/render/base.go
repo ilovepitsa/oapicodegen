@@ -84,3 +84,11 @@ type SingletonRenderer interface {
 	Render(ctx *RenderContext) (body []byte, imports *ImportTracker, err error)
 	FilePath() string
 }
+
+// PackageNamer — optional-интерфейс для renderer'ов, у которых Go-имя пакета
+// отличается от имени директории, выводимого из FilePath.
+// Если SingletonRenderer реализует PackageNamer, ComposeSingletonFile
+// использует PackageName() вместо вывода из FilePath.
+type PackageNamer interface {
+	PackageName() string
+}

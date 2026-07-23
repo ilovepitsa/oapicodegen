@@ -199,15 +199,87 @@ func headerGoBaseType(s *parser.Schema) string {
 		return "string"
 	}
 	switch s.Type {
+	case "string":
+		return "string"
 	case "integer":
-		return "int"
+		switch s.Format {
+		case "int32":
+			return "int32"
+		case "int64":
+			return "int64"
+		default:
+			return "int"
+		}
 	case "number":
-		return "float64"
+		switch s.Format {
+		case "float":
+			return "float32"
+		default:
+			return "float64"
+		}
 	case "boolean":
 		return "bool"
 	default:
 		return "string"
 	}
+}
+
+// headerDecodeExpr возвращает Go-выражение для декодирования header из string.
+func headerDecodeExpr(headerName, goType string) (string, bool) {
+	getCall := `resp.Header.Get("` + headerName + `")`
+	switch goType {
+	case "string":
+		return getCall, false
+	case "int":
+		return "strconv.Atoi(" + getCall + ")", true
+	case "int32":
+		return "strconv.ParseInt(" + getCall + ", 10, 32)", true
+	case "int64":
+		return "strconv.ParseInt(" + getCall + ", 10, 64)", true
+	case "float32":
+		return "strconv.ParseFloat(" + getCall + ", 32)", true
+	case "float64":
+		return "strconv.ParseFloat(" + getCall + ", 64)", true
+	case "bool":
+		return "strconv.ParseBool(" + getCall + ")", true
+	default:
+		return getCall, false
+	}
+}
+
+// headerDecodeConvert возвращает выражение конверсии для strconv-типов.
+func headerDecodeConvert(expr, goType string) string {
+	switch goType {
+	case "int32":
+		return "int32(" + expr + ")"
+	case "float32":
+		return "float32(" + expr + ")"
+	default:
+		return expr
+	}
+}
+
+// requestBodyIsURLForm проверяет, закодировано ли тело как form-urlencoded.
+func requestBodyIsURLForm(rb *parser.RequestBody) bool {
+	if rb == nil || rb.Content == nil {
+		return false
+	}
+	_, ok := rb.Content["application/x-www-form-urlencoded"]
+	return ok
+}
+
+// implNeedsStrconv проверяет, нужен ли импорт strconv для header-декодинга.
+func implNeedsStrconv(ops []*parser.Method) bool {
+	for _, op := range ops {
+		for _, r := range op.Responses {
+			for _, hdr := range r.Headers {
+				if headerGoBaseType(hdr.Schema) != "string" {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func firstSuccessResponse(responses []*parser.Response) (string, *parser.Schema) {

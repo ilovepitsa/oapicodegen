@@ -541,6 +541,11 @@ func (g *Generator) writeOperationFiles(fw codegen.FileWriter) error {
 		{"interfaces/client/client_sugar.gen.go", opsrender.NewClientSugarRenderer()},
 		{"interfaces/client/audit.gen.go", opsrender.NewAuditClientRenderer()},
 		{"interfaces/server/server.gen.go", opsrender.NewServerInterfaceRenderer()},
+		{"sdk/sdk.gen.go", opsrender.NewSDKRenderer()},
+		{"impl/mocks/client/mocks.gen.go", opsrender.NewMockClientRenderer()},
+		{"impl/mocks/server/mocks.gen.go", opsrender.NewMockServerRenderer()},
+		{"impl/httpclient/client.gen.go", opsrender.NewImplClientRenderer()},
+		{"impl/echoserver/server.gen.go", opsrender.NewImplServerRenderer()},
 	}
 
 	for _, sr := range singletonRenderers {
@@ -562,13 +567,7 @@ func (g *Generator) writeOperationFiles(fw codegen.FileWriter) error {
 	legacyFiles := []struct {
 		path string
 		gen  func() codegen.File
-	}{
-		{"impl/httpclient/client.gen.go", g.implClientFile},
-		{"impl/echoserver/server.gen.go", g.implServerFile},
-		{"impl/mocks/client/mocks.gen.go", g.mockClientFile},
-		{"impl/mocks/server/mocks.gen.go", g.mockServerFile},
-		{"sdk/sdk.gen.go", g.sdkFile},
-	}
+	}{}
 
 	for _, f := range legacyFiles {
 		if err := fw.WriteFile(f.path, f.gen()); err != nil {
