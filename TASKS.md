@@ -483,11 +483,17 @@ Stub. Полный дизайн — отдельный brainstorming после 
 и разделения рендера от обхода. Снизит дублирование между schema/client/server/
 impl/mocks/sdk-генераторами.
 
-### T28 (stub) — Subpackage splitting
+### T28 (stub) — Subpackage splitting — DONE
 
-Stub. Дробление `model/` по подпапкам на основе структуры FS spec-файла:
-`schemas/<subfolder>/...` → `model/<subfolder>/...`. Отдельный brainstorming
-позже.
+Реализовано:
+- `Schema.SubPackage` — вычисляется из `SourceFile` относительно `src/openapi/schemas/` (project_loader.go:computeSubPackages)
+- `modelFilePath(subPkg, file)` — путь с учётом подпапки (generator.go)
+- Все write-функции используют `modelFilePath` (основные + aux файлы)
+- Cross-subpackage imports: `typeMapper.qualifyModelType` добавляет import `<subPkg> "xxx/model/<subPkg>"` когда target-схема в другом subpackage
+- `newSchemaRenderContext(subPkg)` — прокидывает SubPackage в typeMapper
+- Парсер-тесты: `TestComputeSubPackages` (3 кейса)
+
+**Для однофайловых спек поведение не меняется** (SubPackage = "" для всех схем).
 
 ### Глубокий бэклог (без детализации)
 - `ServerAuditData` + `x-audit-data` + audit-data схемы — комплаенс-логирование: для каждой операции описывается audit-схема (что логировать при вызове — кто, что, с какими параметрами, результат), серверный интерфейс получает методы `ServerAuditData`. Не часть стандартного OpenAPI.

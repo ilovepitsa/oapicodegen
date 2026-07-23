@@ -275,3 +275,47 @@ func TestProjectLoader_Load_SourceMarkingFields(t *testing.T) {
 	expectedExtRef := commonSpec + "#/components/schemas/User"
 	assert.Equal(t, expectedExtRef, userProp.Schema.ExternalRef)
 }
+
+func TestComputeSubPackages(t *testing.T) {
+	t.Parallel()
+
+	t.Run("schemas in root spec file have empty SubPackage", func(t *testing.T) {
+		t.Parallel()
+		project := &Project{
+			SpecPath: "/proj/src/openapi/openapi.yaml",
+			Model:    &Model{},
+		}
+		project.Model.SetSchemas([]*Schema{
+			{Name: "Pet", SourceFile: "/proj/src/openapi/openapi.yaml"},
+			{Name: "User", SourceFile: "/proj/src/openapi/openapi.yaml"},
+		})
+		computeSubPackages(project)
+		for _, sh := range project.Model.Schemas() {
+			assert.Empty(t, sh.SubPackage, "schema %s should have empty SubPackage", sh.Name)
+		}
+	})
+
+	t.Run("schemas in schemas/<subdir>/ file get SubPackage", func(t *testing.T) {
+		t.Parallel()
+		project := &Project{
+			SpecPath: "/proj/src/openapi/openapi.yaml",
+			Model:    &Model{},
+		}
+		project.Model.SetSchemas([]*Schema{
+			{Name: "Pet", SourceFile: "/proj/src/openapi/schemas/pets/pet.yaml"},
+			{Name: "User", SourceFile: "/proj/src/openapi/schemas/users/user.yaml"},
+		})
+		computeSubPackages(project)
+		schemas := project.Model.Schemas()
+		assert.Equal(t, "pets", schemas[0].SubPackage)
+		assert.Equal(t, "users", schemas[1].SubPackage)
+	})
+
+	t.Run("nil project or model is safe", func(t *testing.T) {
+		t.Parallel()
+		assert.NotPanics(t, func() {
+			computeSubPackages(nil)
+			computeSubPackages(&Project{})
+		})
+	})
+}

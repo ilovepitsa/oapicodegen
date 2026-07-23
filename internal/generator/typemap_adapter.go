@@ -85,12 +85,14 @@ func (a *typeMapperAdapter) BaseType(s *parser.Schema) string {
 // локально — переиспользование между схемами привело бы к утечке импортов
 // одной схемы в файл другой. ctx.Imports проставляется compose.FileComposer
 // через Base.Init после конструирования adapter'а.
+// subPkg — SubPackage схемы для cross-subpackage import'ов.
 func (g *Generator) newRenderTypeMapper(
-	pkg, mode string,
+	pkg, mode, subPkg string,
 	ctx *render.RenderContext,
 ) *typeMapperAdapter {
 	m := g.newTypeMapper(pkg)
 	m.mode = mode
+	m.subPkg = subPkg
 
 	return &typeMapperAdapter{tm: m, ctx: ctx}
 }

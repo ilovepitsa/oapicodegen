@@ -176,6 +176,10 @@ type Schema struct {
 	// GOLANG_SPLIT_REQUEST_RESPONSE. Walker использует это для dispatch'а
 	// OnSplitStruct vs OnStruct.
 	IsSplit bool
+	// SubPackage — подпапка в model/, куда пишется схема. Вычисляется из
+	// SourceFile: путь относительно src/openapi/schemas/ → имя директории.
+	// Пустая строка = корень model/. Заполняется в computeSubPackages.
+	SubPackage string
 }
 
 // ValidationRule — абстрактное правило валидации из x-validations.

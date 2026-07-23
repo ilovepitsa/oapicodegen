@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 // serviceDescriptor описывает один обнаруженный сервис во входном каталоге.
@@ -170,6 +171,9 @@ func (pl *ProjectLoader) loadProject(
 	// Разметка source-marking полей (SourceFile, OwnerProject, ExternalRef)
 	markExternalRefs(project, desc.SpecPath)
 
+	// Вычисление SubPackage для каждой схемы.
+	computeSubPackages(project)
+
 	return project, nil
 }
 
@@ -184,4 +188,30 @@ func (pl *ProjectLoader) resolveFeatures(
 	}
 
 	return flagsLoader.GetProjectFeatures(flagsPath)
+}
+
+// computeSubPackages вычисляет Schema.SubPackage для всех top-level схем проекта.
+// SubPackage извлекается из SourceFile: путь относительно <specDir>/schemas/
+// → имя поддиректории. Для схем в корневом spec-файле SubPackage = "".
+func computeSubPackages(project *Project) {
+	if project == nil || project.Model == nil {
+		return
+	}
+
+	specDir := filepath.Dir(project.SpecPath)
+	schemasDir := filepath.Join(specDir, "schemas") + string(filepath.Separator)
+
+	for _, sh := range project.Model.Schemas() {
+		if sh == nil || sh.SourceFile == "" {
+			continue
+		}
+		if !strings.HasPrefix(sh.SourceFile, schemasDir) {
+			continue
+		}
+		rel := strings.TrimPrefix(sh.SourceFile, schemasDir)
+		parts := strings.SplitN(rel, string(filepath.Separator), 2)
+		if len(parts) > 1 {
+			sh.SubPackage = parts[0]
+		}
+	}
 }

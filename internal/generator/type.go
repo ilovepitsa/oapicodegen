@@ -21,6 +21,8 @@ type typeMapper struct {
 	splittable  map[string]bool
 	schemaIndex *parser.SchemaIndex
 	imports     []gogen.Import
+	project     *parser.Project // для cross-subpackage lookup
+	subPkg      string          // текущий SubPackage рендерящейся схемы
 }
 
 // newTypeMapper создаёт typeMapper с флагами из Generator.
@@ -36,6 +38,7 @@ func (g *Generator) newTypeMapper(pkg string) *typeMapper {
 		utcTime:     g.project.Features.UseUTCForDateTime.Value,
 		splittable:  g.splittable,
 		schemaIndex: g.schemaIndex,
+		project:     g.project,
 	}
 }
 
@@ -176,10 +179,21 @@ func (m *typeMapper) stringGoType(s *parser.Schema) string {
 // не "model". name — Go-имя схемы (до квалификации).
 // При включённом split и заданном mode добавляет суффикс "Request"/"Response"
 // для splittable схем.
+// Если target-схема в другом subpackage — добавляет cross-subpackage import.
 func (m *typeMapper) qualifyModelType(name string) string {
 	goName := goName(name)
 	if m.mode != "" && m.isSplittable(name) {
 		goName += m.mode
+	}
+
+	// Cross-subpackage: если target-схема лежит в другом subpackage,
+	// добавляем import <subPkg> "xxx/model/<subPkg>".
+	if m.subPkg != "" && m.project != nil && m.project.Model != nil {
+		if target, ok := m.project.Model.Lookup(name); ok && target.SubPackage != "" && target.SubPackage != m.subPkg {
+			importPath := m.modelImport.Path + "/" + target.SubPackage
+			m.addImport(importPath, target.SubPackage)
+			return target.SubPackage + "." + goName
+		}
 	}
 
 	if m.currentPkg == "model" || m.modelImport.Path == "" {
