@@ -538,9 +538,8 @@ func (g *Generator) writeOperationFiles(fw codegen.FileWriter) error {
 		r    render.SingletonRenderer
 	}{
 		{"interfaces/client/client.gen.go", opsrender.NewClientInterfaceRenderer()},
-		// TODO(Task 7): раскомментировать audit renderer после создания.
 		{"interfaces/client/client_sugar.gen.go", opsrender.NewClientSugarRenderer()},
-		// {"interfaces/client/audit.gen.go", opsrender.NewAuditClientRenderer()},
+		{"interfaces/client/audit.gen.go", opsrender.NewAuditClientRenderer()},
 		{"interfaces/server/server.gen.go", opsrender.NewServerInterfaceRenderer()},
 	}
 
@@ -564,7 +563,6 @@ func (g *Generator) writeOperationFiles(fw codegen.FileWriter) error {
 		path string
 		gen  func() codegen.File
 	}{
-		{"interfaces/client/audit.gen.go", g.auditClientFile},
 		{"impl/httpclient/client.gen.go", g.implClientFile},
 		{"impl/echoserver/server.gen.go", g.implServerFile},
 		{"impl/mocks/client/mocks.gen.go", g.mockClientFile},

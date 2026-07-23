@@ -6,6 +6,7 @@ import (
 	"nschugorev/oapigenerator/internal/codegen"
 	"nschugorev/oapigenerator/internal/codegen/gogen"
 	"nschugorev/oapigenerator/internal/generator/compose"
+	opsrender "nschugorev/oapigenerator/internal/generator/render/operations"
 	"nschugorev/oapigenerator/internal/golden"
 	"os"
 	"os/exec"
@@ -4042,8 +4043,13 @@ func generateAuditClientFile(t *testing.T, doc *oapiparser.Document) []byte {
 		project: testProject(t, doc, testModulePath),
 		factory: gogen.NewFileFactory("oapigen"),
 	}
+	g.composer = compose.NewFileComposer(g.factory)
 
-	return g.auditClientFile().Content()
+	ctx := g.newOperationsRenderContext("client")
+	file, err := g.composer.ComposeSingletonFile(opsrender.NewAuditClientRenderer(), ctx)
+	require.NoError(t, err)
+
+	return file.Content()
 }
 
 func TestAuditServer_RequestWithPathParamAndBody(t *testing.T) {
@@ -4695,4 +4701,49 @@ paths:
 	body := string(fw.files["interfaces/client/client_sugar.gen.go"])
 	assert.Contains(t, body, "type ClientSugared struct {")
 	assert.Contains(t, body, "func (x *ClientSugared) ListItems")
+}
+
+func TestGenerate_AuditClientFile_EmitsFile(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /items:
+    post:
+      operationId: createItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemCreate'
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+components:
+  schemas:
+    ItemCreate:
+      type: object
+      properties:
+        name: {type: string}
+    Item:
+      type: object
+      properties:
+        id: {type: string}
+        name: {type: string}
+`)
+	project := testProject(t, doc, "example.com/test")
+
+	fw := &collectWriter{files: map[string][]byte{}}
+	require.NoError(t, Generate(fw, project, nil))
+
+	body := string(fw.files["interfaces/client/audit.gen.go"])
+	assert.Contains(t, body, "type CreateItemRequestAuditData struct {")
+	assert.Contains(t, body, "func (req *CreateItemRequest) GetAuditData() any {")
 }
