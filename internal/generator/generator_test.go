@@ -4608,3 +4608,91 @@ components:
 	_, ok := fw.files["model/expected_validators.gen.go"]
 	assert.False(t, ok, "expected_validators.gen.go must not be emitted when no named validators exist")
 }
+
+func TestGenerate_ClientInterfaceFile_EmitsFile(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /items:
+    get:
+      operationId: listItems
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {type: string}
+`)
+	project := testProject(t, doc, "example.com/test")
+
+	fw := &collectWriter{files: map[string][]byte{}}
+	require.NoError(t, Generate(fw, project, nil))
+
+	body := string(fw.files["interfaces/client/client.gen.go"])
+	assert.Contains(t, body, "type Client interface {")
+	assert.Contains(t, body, "ListItems(ctx context.Context, req *ListItemsRequest) (*ListItemsResponse, error)")
+	assert.Contains(t, body, "type ListItemsResponse struct {")
+}
+
+func TestGenerate_ServerInterfaceFile_EmitsFile(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /items:
+    get:
+      operationId: listItems
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {type: string}
+`)
+	project := testProject(t, doc, "example.com/test")
+
+	fw := &collectWriter{files: map[string][]byte{}}
+	require.NoError(t, Generate(fw, project, nil))
+
+	body := string(fw.files["interfaces/server/server.gen.go"])
+	assert.Contains(t, body, "type Server interface {")
+	assert.Contains(t, body, "ListItems(ctx context.Context, req *client.ListItemsRequest) (*client.ListItemsResponse, error)")
+}
+
+func TestGenerate_ClientSugarFile_EmitsFile(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /items:
+    get:
+      operationId: listItems
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {type: string}
+`)
+	project := testProject(t, doc, "example.com/test")
+
+	fw := &collectWriter{files: map[string][]byte{}}
+	require.NoError(t, Generate(fw, project, nil))
+
+	body := string(fw.files["interfaces/client/client_sugar.gen.go"])
+	assert.Contains(t, body, "type ClientSugared struct {")
+	assert.Contains(t, body, "func (x *ClientSugared) ListItems")
+}

@@ -9,7 +9,7 @@ import (
 	"nschugorev/oapigenerator/internal/generator/render"
 	"nschugorev/oapigenerator/internal/generator/walk"
 	"nschugorev/oapigenerator/internal/parser"
-	"strings"
+	"path/filepath"
 )
 
 // FileComposer оркестрирует walker-прогоны и сборку codegen.File через
@@ -154,10 +154,14 @@ func methodInjectable(rs []walk.MethodRenderer) []injectableRenderer {
 	return out
 }
 
-// packageOf извлекает имя пакета из пути файла: берёт подстроку до первого '/'.
-// "model/utc_time.gen.go" → "model". Путь без '/' трактуется как имя пакета.
+// packageOf извлекает имя пакета из пути файла: берёт последний компонент
+// директории файла. "model/utc_time.gen.go" → "model",
+// "interfaces/client/client.gen.go" → "client".
 func packageOf(filePath string) string {
-	pkg, _, _ := strings.Cut(filePath, "/")
+	dir := filepath.Dir(filePath)
+	if dir == "." {
+		return filePath
+	}
 
-	return pkg
+	return filepath.Base(dir)
 }

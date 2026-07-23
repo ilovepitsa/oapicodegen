@@ -291,9 +291,11 @@ func TestPackageOf(t *testing.T) {
 		want string
 	}{
 		{"nested path", "model/utc_time.gen.go", "model"},
-		{"deep path", "client/v2/pets.gen.go", "client"},
+		{"deep path", "client/v2/pets.gen.go", "v2"},
 		{"no slash", "root.gen.go", "root.gen.go"},
 		{"empty string", "", ""},
+		{"interfaces under client", "interfaces/client/client.gen.go", "client"},
+		{"interfaces under server", "interfaces/server/server.gen.go", "server"},
 	}
 
 	for _, tc := range cases {

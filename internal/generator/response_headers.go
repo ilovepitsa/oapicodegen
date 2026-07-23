@@ -2,7 +2,6 @@ package generator
 
 import (
 	"fmt"
-	"nschugorev/oapigenerator/internal/codegen"
 	"nschugorev/oapigenerator/internal/parser"
 	"sort"
 )
@@ -13,64 +12,6 @@ const payloadWithHeadersSuffix = "PayloadWithHeaders"
 // Например: ListPetsResponse200PayloadWithHeaders.
 func payloadWithHeadersTypeName(op *parser.Method, code string) string {
 	return operationMethodName(op) + "Response" + goName(code) + payloadWithHeadersSuffix
-}
-
-// renderPayloadWithHeadersType генерирует тип <Name><Code>PayloadWithHeaders
-// с полями Payload (body) и типизированными полями для каждого header.
-// Также генерирует MarshalJSON (маршалит только Payload) и Headers() map[string]string
-// (для server-side установки заголовков в HTTP-ответ).
-func (g *Generator) renderPayloadWithHeadersType(
-	w *codegen.BufferWriter,
-	op *parser.Method,
-	code string,
-	resp *parser.Response,
-	m *typeMapper,
-) {
-	typeName := payloadWithHeadersTypeName(op, code)
-	schema := responseSchema(resp)
-
-	w.Print("type ", typeName, " struct {\n")
-
-	if schema != nil {
-		prevMode := m.mode
-		m.mode = modeResponse
-		w.Print("\tPayload *", m.goType(schema), "\n")
-		m.mode = prevMode
-	} else {
-		w.Print("\tPayload bool\n")
-	}
-
-	for _, hdr := range sortedHeaders(resp.Headers) {
-		fieldName := goName(hdr.Name)
-		hdrType := headerGoBaseType(hdr.Schema)
-
-		w.Print("\t", fieldName, " ", hdrType, "\n")
-	}
-
-	w.Print("}\n\n")
-
-	g.renderPayloadWithHeadersMarshalJSON(w, typeName)
-	g.renderPayloadWithHeadersHeadersMethod(w, typeName, resp.Headers)
-}
-
-func (g *Generator) renderPayloadWithHeadersMarshalJSON(w *codegen.BufferWriter, typeName string) {
-	w.Print("func (m ", typeName, ") MarshalJSON() ([]byte, error) {\n")
-	w.Print("\treturn json.Marshal(m.Payload)\n")
-	w.Print("}\n\n")
-}
-
-func (g *Generator) renderPayloadWithHeadersHeadersMethod(w *codegen.BufferWriter, typeName string, headers map[string]*parser.Parameter) { //nolint:lll // function signature
-	w.Print("func (m ", typeName, ") Headers() map[string]string {\n")
-	w.Print("\treturn map[string]string{\n")
-
-	for _, hdr := range sortedHeaders(headers) {
-		fieldName := goName(hdr.Name)
-		hdrType := headerGoBaseType(hdr.Schema)
-		w.Print("\t\t\"", hdr.Name, "\": ", headerEncodeExpr(fieldName, hdrType), ",\n")
-	}
-
-	w.Print("\t}\n")
-	w.Print("}\n\n")
 }
 
 // sortedHeaders возвращает headers, отсортированные по имени для детерминированного вывода.

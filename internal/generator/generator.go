@@ -22,6 +22,7 @@ import (
 	"nschugorev/oapigenerator/internal/generator/walk"
 	"nschugorev/oapigenerator/internal/parser"
 
+	opsrender "nschugorev/oapigenerator/internal/generator/render/operations"
 	schemarender "nschugorev/oapigenerator/internal/generator/render/schema"
 )
 
@@ -186,6 +187,21 @@ func (g *Generator) newSchemaRenderContext() *render.RenderContext {
 	}
 	ctx.TypeMapper = g.newRenderTypeMapper("model", "", ctx)
 
+	return ctx
+}
+
+// newOperationsRenderContext строит RenderContext для operations-рендеринга.
+// pkg — имя целевого пакета ("client" или "server").
+func (g *Generator) newOperationsRenderContext(pkg string) *render.RenderContext {
+	ctx := &render.RenderContext{
+		Project:      g.project,
+		SchemaIndex:  g.schemaIndex,
+		Features:     g.project.Features,
+		Splittable:   g.splittable,
+		ModulePath:   g.project.ImportPrefix,
+		ImportPrefix: g.project.ImportPrefix,
+	}
+	ctx.TypeMapper = g.newRenderTypeMapper(pkg, "", ctx)
 	return ctx
 }
 
@@ -516,14 +532,39 @@ func excludeReferencedByComposite(sh *parser.Schema, out map[string]bool) {
 }
 
 func (g *Generator) writeOperationFiles(fw codegen.FileWriter) error {
-	files := []struct {
+	// Singleton-renderer'ы для интерфейсных файлов (Phase 3).
+	singletonRenderers := []struct {
+		path string
+		r    render.SingletonRenderer
+	}{
+		{"interfaces/client/client.gen.go", opsrender.NewClientInterfaceRenderer()},
+		// TODO(Task 7): раскомментировать audit renderer после создания.
+		{"interfaces/client/client_sugar.gen.go", opsrender.NewClientSugarRenderer()},
+		// {"interfaces/client/audit.gen.go", opsrender.NewAuditClientRenderer()},
+		{"interfaces/server/server.gen.go", opsrender.NewServerInterfaceRenderer()},
+	}
+
+	for _, sr := range singletonRenderers {
+		pkg := "client"
+		if sr.path == "interfaces/server/server.gen.go" {
+			pkg = "server"
+		}
+		ctx := g.newOperationsRenderContext(pkg)
+		file, err := g.composer.ComposeSingletonFile(sr.r, ctx)
+		if err != nil {
+			return fmt.Errorf("compose %s: %w", sr.path, err)
+		}
+		if err := fw.WriteFile(sr.path, file); err != nil {
+			return fmt.Errorf("write %s: %w", sr.path, err)
+		}
+	}
+
+	// Legacy (impl, mocks, sdk + interfaces not yet migrated) — будут заменены в следующих фазах.
+	legacyFiles := []struct {
 		path string
 		gen  func() codegen.File
 	}{
-		{"interfaces/client/client.gen.go", g.clientFile},
-		{"interfaces/client/client_sugar.gen.go", g.clientSugarFile},
 		{"interfaces/client/audit.gen.go", g.auditClientFile},
-		{"interfaces/server/server.gen.go", g.serverFile},
 		{"impl/httpclient/client.gen.go", g.implClientFile},
 		{"impl/echoserver/server.gen.go", g.implServerFile},
 		{"impl/mocks/client/mocks.gen.go", g.mockClientFile},
@@ -531,7 +572,7 @@ func (g *Generator) writeOperationFiles(fw codegen.FileWriter) error {
 		{"sdk/sdk.gen.go", g.sdkFile},
 	}
 
-	for _, f := range files {
+	for _, f := range legacyFiles {
 		if err := fw.WriteFile(f.path, f.gen()); err != nil {
 			return fmt.Errorf("write %s: %w", f.path, err)
 		}
