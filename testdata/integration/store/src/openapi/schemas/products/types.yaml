@@ -1,0 +1,54 @@
+Product:
+  type: object
+  properties:
+    id: {type: string, readOnly: true}
+    name: {type: string}
+    description: {type: string}
+    price:
+      anyOf:
+        - $ref: '#/FixedPrice'
+        - $ref: '#/RangePrice'
+    category: {$ref: '#/Category'}
+    tags:
+      type: array
+      items: {type: string}
+    attributes:
+      type: object
+      additionalProperties:
+        type: string
+    isActive: {type: boolean, default: true}
+  required: [name, price, category]
+
+FixedPrice:
+  type: object
+  properties:
+    kind: {type: string, enum: [fixed]}
+    amount: {type: number}
+    currency: {type: string}
+  required: [kind, amount, currency]
+
+RangePrice:
+  type: object
+  properties:
+    kind: {type: string, enum: [range]}
+    min: {type: number}
+    max: {type: number}
+    currency: {type: string}
+  required: [kind, min, max, currency]
+
+Category:
+  type: object
+  properties:
+    id: {type: string}
+    name: {type: string}
+    parentId: {type: string, nullable: true}
+  required: [id, name]
+
+ProductResponse:
+  type: object
+  additionalProperties: false
+  properties:
+    product: {$ref: '#/Product'}
+    relatedProducts:
+      type: array
+      items: {$ref: '#/Product'}

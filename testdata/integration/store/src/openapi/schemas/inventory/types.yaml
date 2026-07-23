@@ -1,0 +1,18 @@
+InventoryItem:
+  type: object
+  properties:
+    productId: {type: string}
+    quantity: {type: integer, x-validations: [">=0"]}
+    warehouseId: {type: string}
+    lastRestocked: {type: string, format: date-time}
+  required: [productId, quantity, warehouseId]
+
+StockUpdate:
+  type: object
+  properties:
+    productId: {type: string}
+    delta:
+      type: integer
+      description: "Positive = restock, negative = sale"
+    warehouseId: {type: string}
+  required: [productId, delta]

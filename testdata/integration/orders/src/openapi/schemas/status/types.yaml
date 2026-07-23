@@ -1,0 +1,33 @@
+OrderStatus:
+  oneOf:
+    - $ref: '#/NewStatus'
+    - $ref: '#/ProcessingStatus'
+    - $ref: '#/CompletedStatus'
+    - $ref: '#/CancelledStatus'
+
+NewStatus:
+  type: object
+  properties:
+    kind: {type: string, enum: [new]}
+  required: [kind]
+
+ProcessingStatus:
+  type: object
+  properties:
+    kind: {type: string, enum: [processing]}
+    assignedTo: {type: string, nullable: true}
+  required: [kind]
+
+CompletedStatus:
+  type: object
+  properties:
+    kind: {type: string, enum: [completed]}
+    completedAt: {type: string, format: date-time}
+  required: [kind]
+
+CancelledStatus:
+  type: object
+  properties:
+    kind: {type: string, enum: [cancelled]}
+    reason: {type: string}
+  required: [kind, reason]

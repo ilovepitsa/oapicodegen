@@ -1,0 +1,53 @@
+Pet:
+  type: object
+  properties:
+    id: {type: string, readOnly: true}
+    name: {type: string}
+    species: {type: string}
+    breed: {type: string, x-optional: true}
+    age: {type: integer, x-validations: [">0", "<=50"]}
+    tags:
+      type: array
+      items: {type: string}
+    ownerId: {type: string}
+    attributes:
+      type: object
+      additionalProperties:
+        type: string
+  required: [name, species, ownerId]
+
+PetWithDetails:
+  allOf:
+    - $ref: '#/Pet'
+    - type: object
+      properties:
+        medicalHistory:
+          type: array
+          items: {$ref: '#/MedicalRecord'}
+        vaccinations:
+          type: array
+          items: {$ref: '#/Vaccination'}
+
+MedicalRecord:
+  type: object
+  properties:
+    date: {type: string, format: date}
+    description: {type: string}
+    veterinarian: {type: string}
+  required: [date, description]
+
+Vaccination:
+  type: object
+  properties:
+    name: {type: string}
+    date: {type: string, format: date}
+    nextDue: {type: string, format: date, x-optional: true}
+  required: [name, date]
+
+ErrorResponse:
+  type: object
+  additionalProperties: false
+  properties:
+    code: {type: integer}
+    message: {type: string}
+  required: [code, message]

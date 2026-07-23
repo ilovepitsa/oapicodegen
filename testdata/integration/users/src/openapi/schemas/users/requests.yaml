@@ -1,0 +1,15 @@
+CreateUserRequest:
+  type: object
+  properties:
+    email: {type: string}
+    name: {type: string, x-optional: true}
+    password: {type: string, writeOnly: true}
+    role: {$ref: './../users/models.yaml#/UserRole'}
+  required: [email, password]
+
+UpdateUserRequest:
+  type: object
+  properties:
+    name: {type: string}
+    role: {$ref: './../users/models.yaml#/UserRole'}
+    status: {$ref: './../users/models.yaml#/UserStatus'}

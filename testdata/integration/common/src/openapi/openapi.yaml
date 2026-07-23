@@ -1,0 +1,28 @@
+openapi: "3.0.3"
+info:
+  title: Common Models
+  version: "1.0.0"
+paths: {}
+components:
+  schemas:
+    Address:
+      $ref: './schemas/geo/address.yaml#/Address'
+    Coordinates:
+      $ref: './schemas/geo/address.yaml#/Coordinates'
+    Money:
+      $ref: './schemas/finance/money.yaml#/Money'
+    Price:
+      $ref: './schemas/finance/money.yaml#/Price'
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          default: 1
+        pageSize:
+          type: integer
+          default: 20
+        totalCount:
+          type: integer
+      required: [page, pageSize]

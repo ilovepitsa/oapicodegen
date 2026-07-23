@@ -1,0 +1,138 @@
+openapi: "3.0.3"
+info:
+  title: Users Service
+  version: "1.0.0"
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      parameters:
+        - name: page
+          in: query
+          schema: {type: integer}
+        - name: pageSize
+          in: query
+          schema: {type: integer}
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/UserStatus'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+          headers:
+            X-Total-Count:
+              schema: {type: integer}
+    post:
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: {type: string}
+  /users/{userId}:
+    get:
+      operationId: getUser
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: Not found
+    patch:
+      operationId: updateUser
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+    delete:
+      operationId: deleteUser
+      deprecated: true
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '204':
+          description: Deleted
+  /auth/login:
+    post:
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+          headers:
+            X-Expires-At:
+              schema:
+                type: string
+                format: date-time
+components:
+  schemas:
+    User: {$ref: './schemas/users/models.yaml#/User'}
+    UserRole: {$ref: './schemas/users/models.yaml#/UserRole'}
+    UserStatus: {$ref: './schemas/users/models.yaml#/UserStatus'}
+    Pagination: {$ref: './schemas/users/models.yaml#/Pagination'}
+    CreateUserRequest: {$ref: './schemas/users/requests.yaml#/CreateUserRequest'}
+    UpdateUserRequest: {$ref: './schemas/users/requests.yaml#/UpdateUserRequest'}
+    LoginRequest: {$ref: './schemas/auth/login.yaml#/LoginRequest'}
+    TokenResponse: {$ref: './schemas/auth/login.yaml#/TokenResponse'}

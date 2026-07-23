@@ -1,0 +1,29 @@
+User:
+  type: object
+  properties:
+    id: {type: string, readOnly: true}
+    email: {type: string, x-validations: [">0", "pkg.EmailValidator"]}
+    name: {type: string}
+    role: {$ref: '#/UserRole'}
+    status: {$ref: '#/UserStatus'}
+    address: {$ref: './../auth/address.yaml#/Address'}
+    createdAt: {type: string, format: date-time, readOnly: true}
+    updatedAt: {type: string, format: date-time}
+  required: [email, name]
+
+UserRole:
+  type: string
+  enum: [admin, user, moderator]
+  default: user
+
+UserStatus:
+  type: string
+  enum: [active, inactive, banned]
+
+Pagination:
+  type: object
+  properties:
+    page: {type: integer}
+    pageSize: {type: integer}
+    totalCount: {type: integer}
+  required: [page, pageSize]

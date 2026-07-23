@@ -1,0 +1,96 @@
+openapi: "3.0.3"
+info:
+  title: Orders Service
+  version: "1.0.0"
+paths:
+  /orders:
+    get:
+      operationId: listOrders
+      parameters:
+        - name: userId
+          in: query
+          schema: {type: string}
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+        - name: X-Request-Id
+          in: header
+          schema: {type: string}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+          headers:
+            X-Total-Count:
+              schema: {type: integer, format: int32}
+    post:
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          headers:
+            Location:
+              schema: {type: string}
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          description: Not found
+    post:
+      operationId: cancelOrder
+      deprecated: true
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: {type: string}
+        - name: reason
+          in: query
+          schema: {type: string}
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+components:
+  schemas:
+    Order: {$ref: './schemas/orders/models.yaml#/Order'}
+    OrderItem: {$ref: './schemas/orders/models.yaml#/OrderItem'}
+    OrderTotal: {$ref: './schemas/orders/models.yaml#/OrderTotal'}
+    ShippingAddress: {$ref: './schemas/orders/models.yaml#/ShippingAddress'}
+    CreateOrderRequest: {$ref: './schemas/orders/requests.yaml#/CreateOrderRequest'}
+    OrderStatus: {$ref: './schemas/status/types.yaml#/OrderStatus'}
+    NewStatus: {$ref: './schemas/status/types.yaml#/NewStatus'}
+    ProcessingStatus: {$ref: './schemas/status/types.yaml#/ProcessingStatus'}
+    CompletedStatus: {$ref: './schemas/status/types.yaml#/CompletedStatus'}
+    CancelledStatus: {$ref: './schemas/status/types.yaml#/CancelledStatus'}

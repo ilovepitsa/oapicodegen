@@ -1,0 +1,9 @@
+CreateOrderRequest:
+  type: object
+  properties:
+    userId: {type: string}
+    items:
+      type: array
+      items: {$ref: './../orders/models.yaml#/OrderItem'}
+    shippingAddress: {$ref: './../orders/models.yaml#/ShippingAddress'}
+  required: [userId, items]

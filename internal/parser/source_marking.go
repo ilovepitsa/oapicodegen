@@ -65,13 +65,26 @@ func markExternalRefs(project *Project, specPath string) {
 }
 
 // markTopLevel выставляет SourceFile и OwnerProject на top-level схеме.
+// Если схема загружена из внешнего файла через $ref, SourceFile берётся из Ref
+// (резолвится относительно specPath). Для inline-схем используется specPath.
 func markTopLevel(s *Schema, project *Project, specPath string) {
 	if s == nil {
 		return
 	}
 
-	s.SourceFile = specPath
 	s.OwnerProject = project
+
+	// Схема загружена из внешнего файла через $ref — резолвим SourceFile.
+	if s.Ref != "" && !strings.HasPrefix(s.Ref, "#/") {
+		s.SourceFile = resolveExternalRef(s.Ref, specPath)
+		// Убираем фрагмент (#/Address) — SourceFile только путь к файлу.
+		if idx := strings.Index(s.SourceFile, "#"); idx >= 0 {
+			s.SourceFile = s.SourceFile[:idx]
+		}
+		return
+	}
+
+	s.SourceFile = specPath
 }
 
 // markNestedRefs обходит вложенные схемы и выставляет ExternalRef на

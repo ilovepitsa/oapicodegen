@@ -1,0 +1,25 @@
+- name: GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS
+  default_value: false
+  description: "Disable SetDefaults() on request body"
+  affects: [golang]
+  enabled: true
+- name: GOLANG_SPLIT_REQUEST_RESPONSE
+  default_value: false
+  description: "Split schemas into Request/Response"
+  affects: [golang]
+  enabled: true
+- name: USE_REQUIRED_V2
+  default_value: false
+  description: "Use x-request-required/x-response-required extensions"
+  affects: [golang]
+  enabled: true
+- name: USE_UTC_FOR_DATE_TIME
+  default_value: false
+  description: "Force UTC for date-time serialization"
+  affects: [golang]
+  enabled: true
+- name: GOLANG_USE_OPTIONAL
+  default_value: false
+  description: "Use optional.Optional[T] for x-optional fields"
+  affects: [golang]
+  enabled: true

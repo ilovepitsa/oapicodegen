@@ -1,0 +1,114 @@
+openapi: "3.0.3"
+info:
+  title: Store Service
+  version: "1.0.0"
+paths:
+  /products:
+    get:
+      operationId: listProducts
+      parameters:
+        - name: categoryId
+          in: query
+          schema: {type: string}
+        - name: isActive
+          in: query
+          schema: {type: boolean}
+        - name: tags
+          in: query
+          schema: {type: string}
+          description: "Comma-separated tag filter"
+        - name: X-Session-Id
+          in: header
+          schema: {type: string}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+    post:
+      operationId: createProduct
+      parameters:
+        - name: session_token
+          in: cookie
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+  /products/{productId}:
+    get:
+      operationId: getProduct
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '404':
+          description: Not found
+  /inventory:
+    post:
+      operationId: updateStock
+      parameters:
+        - name: session_token
+          in: cookie
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockUpdate'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryItem'
+  /inventory/{productId}:
+    get:
+      operationId: getStock
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryItem'
+components:
+  schemas:
+    Product: {$ref: './schemas/products/types.yaml#/Product'}
+    FixedPrice: {$ref: './schemas/products/types.yaml#/FixedPrice'}
+    RangePrice: {$ref: './schemas/products/types.yaml#/RangePrice'}
+    Category: {$ref: './schemas/products/types.yaml#/Category'}
+    ProductResponse: {$ref: './schemas/products/types.yaml#/ProductResponse'}
+    InventoryItem: {$ref: './schemas/inventory/types.yaml#/InventoryItem'}
+    StockUpdate: {$ref: './schemas/inventory/types.yaml#/StockUpdate'}
+    CreateProductRequest: {$ref: './schemas/products/types.yaml#/Product'}

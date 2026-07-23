@@ -1,0 +1,26 @@
+Address:
+  type: object
+  properties:
+    street:
+      type: string
+      x-validations: [">0"]
+    city:
+      type: string
+    zip:
+      type: string
+      nullable: true
+    country:
+      type: string
+      default: "RU"
+  required: [street, city]
+
+Coordinates:
+  type: object
+  properties:
+    lat:
+      type: number
+      format: float
+    lng:
+      type: number
+      format: float
+  required: [lat, lng]

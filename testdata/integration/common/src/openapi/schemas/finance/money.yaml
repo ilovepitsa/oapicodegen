@@ -1,0 +1,22 @@
+Money:
+  type: object
+  properties:
+    amount:
+      type: number
+      format: float
+      x-validations: [">0"]
+    currency:
+      type: string
+      default: "RUB"
+      x-validations: ["Size =3"]
+  required: [amount, currency]
+
+Price:
+  type: object
+  properties:
+    value:
+      $ref: '#/Money'
+    discount:
+      $ref: '#/Money'
+      x-optional: true
+  required: [value]

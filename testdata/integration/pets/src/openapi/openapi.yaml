@@ -1,0 +1,101 @@
+openapi: "3.0.3"
+info:
+  title: Pets Service
+  version: "1.0.0"
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      parameters:
+        - name: species
+          in: query
+          schema: {type: string}
+        - name: ownerId
+          in: query
+          schema: {type: string}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Pet'
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePetRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /pets/{petId}:
+    get:
+      operationId: getPet
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PetWithDetails'
+        '404':
+          description: Not found
+    patch:
+      operationId: updatePet
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePetRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+    delete:
+      operationId: deletePet
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '204':
+          description: Deleted
+components:
+  schemas:
+    Pet: {$ref: './schemas/models/types.yaml#/Pet'}
+    PetWithDetails: {$ref: './schemas/models/types.yaml#/PetWithDetails'}
+    MedicalRecord: {$ref: './schemas/models/types.yaml#/MedicalRecord'}
+    Vaccination: {$ref: './schemas/models/types.yaml#/Vaccination'}
+    ErrorResponse: {$ref: './schemas/models/types.yaml#/ErrorResponse'}
+    CreatePetRequest: {$ref: './schemas/requests/pet_requests.yaml#/CreatePetRequest'}
+    UpdatePetRequest: {$ref: './schemas/requests/pet_requests.yaml#/UpdatePetRequest'}

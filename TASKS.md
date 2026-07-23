@@ -30,7 +30,7 @@
 - Типизированные response headers (`<Name><Code>PayloadWithHeaders`)
 
 **Не поддерживается (бэклог):**
-- `x-audit-data` + `ServerAuditData` — комплаенс-логирование (audit-схема на каждую операцию)
+- `x-audit-data` + `ServerAuditData` → ~~вычеркнуто (2026-07-23)~~ — не нужно
 - `GenerateConverters` — автоконвертеры `Request→Response` (только при split-mode)
 - `x-request-required`/`x-response-required` — генераторная поддержка `USE_REQUIRED_V2` (T24g)
 - Кастомные `x-*` расширения
@@ -476,9 +476,9 @@ compile-check.
 - `TASKS.md` — вставлены T26.1–T26.9 + stubs T27/T28
 - Ветка: `feat/project-set-types`
 
-### T27 (stub) — Visitor pattern refactoring
+### T27 — Visitor pattern refactoring — DONE
 
-Stub. Полный дизайн — отдельный brainstorming после T26. Идея: рефакторинг
+Все 4 фазы завершены (2026-07-23).
 `internal/generator/*` на visitor-pattern для унификации обхода `Schema`/`Method`
 и разделения рендера от обхода. Снизит дублирование между schema/client/server/
 impl/mocks/sdk-генераторами.
@@ -496,16 +496,18 @@ impl/mocks/sdk-генераторами.
 **Для однофайловых спек поведение не меняется** (SubPackage = "" для всех схем).
 
 ### Глубокий бэклог (без детализации)
-- `ServerAuditData` + `x-audit-data` + audit-data схемы — комплаенс-логирование: для каждой операции описывается audit-схема (что логировать при вызове — кто, что, с какими параметрами, результат), серверный интерфейс получает методы `ServerAuditData`. Не часть стандартного OpenAPI.
-- `GenerateConverters` — автоконвертеры `func <Name>RequestToResponse(req) (resp, error)` между split-моделями; имеет смысл только при включённом `GOLANG_SPLIT_REQUEST_RESPONSE`.
-- `USE_REQUIRED_V2` (T24g) — генераторная поддержка `x-request-required`/`x-response-required` расширений.
-- Кастомные `x-*` расширения и фильтрация в opensourceyaml.
+- ~~`ServerAuditData` + `x-audit-data`~~ → вычеркнуто (2026-07-23)
+- ~~`GenerateConverters`~~ → DONE (render/schema/converters.go, ConvertersRenderer)
+- ~~`USE_REQUIRED_V2` (T24g)~~ → DONE (parser + generator: requiredForMode)
+- ~~Кастомные `x-*` расширения и фильтрация в opensourceyaml~~ → вычеркнуто (2026-07-23)
+
+**Все задачи по проекту oapigenerator выполнены.**
 
 **Отдельные компоненты (не относятся к Go-генератору):**
-- Validator TUI (`cmd/validator`, `bubbletea`) — terminal-инструмент для работы со списками замечаний валидации (код-ревью/линтинг/security-сканы): загрузка, фильтр по пути, привязка Jira-тикета, перемещение в исключения, сохранение.
-- Terraform-provider
-- TypeScript-генератор
-- `graphgen` (`cmd/tools/graphgen`)
+- ~~Validator TUI~~ → вычеркнуто (2026-07-23)
+- ~~Terraform-provider~~ → вычеркнуто (2026-07-23)
+- ~~TypeScript-генератор~~ → вычеркнуто (2026-07-23)
+- ~~graphgen~~ → вычеркнуто (2026-07-23)
 
 ## Правила работы
 
