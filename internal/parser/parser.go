@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
-	"path/filepath"
 
 	"github.com/pb33f/libopenapi"
 	"github.com/pb33f/libopenapi/datamodel"
@@ -57,9 +56,8 @@ func parseBytes(data []byte, location string, fsys fs.FS) (*Document, error) {
 // Для mock FS: DirFS = fsys, BaseDirectory = BasePath.
 func configureLocalFS(cfg *datamodel.DocumentConfiguration, fsys fs.FS) error {
 	if _, isReal := fsys.(*nfs.RealFS); isReal {
-		projectRoot := filepath.Dir(filepath.Dir(filepath.Dir(cfg.BasePath)))
 		localFS, err := index.NewLocalFSWithConfig(&index.LocalFSConfig{
-			BaseDirectory: projectRoot,
+			BaseDirectory: cfg.BasePath,
 		})
 		if err != nil {
 			return fmt.Errorf("parser: wrap real fs: %w", err)
