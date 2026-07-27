@@ -56,13 +56,6 @@ func parseBytes(data []byte, location string, fsys fs.FS) (*Document, error) {
 // Для mock FS: DirFS = fsys, BaseDirectory = BasePath.
 func configureLocalFS(cfg *datamodel.DocumentConfiguration, fsys fs.FS) error {
 	if _, isReal := fsys.(*nfs.RealFS); isReal {
-		localFS, err := index.NewLocalFSWithConfig(&index.LocalFSConfig{
-			BaseDirectory: cfg.BasePath,
-		})
-		if err != nil {
-			return fmt.Errorf("parser: wrap real fs: %w", err)
-		}
-		cfg.LocalFS = localFS
 		return nil
 	}
 
