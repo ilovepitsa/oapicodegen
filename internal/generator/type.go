@@ -188,7 +188,9 @@ func (m *typeMapper) qualifyModelType(name string) string {
 
 	// Cross-subpackage: если target-схема лежит в другом subpackage,
 	// добавляем import <subPkg> "xxx/model/<subPkg>".
-	if m.subPkg != "" && m.project != nil && m.project.Model != nil {
+	// Работает как из model-контекста (schema rendering), так и из
+	// operations-контекста (client/server — subPkg == "").
+	if m.project != nil && m.project.Model != nil {
 		if target, ok := m.project.Model.Lookup(name); ok && target.SubPackage != "" && target.SubPackage != m.subPkg {
 			importPath := m.modelImport.Path + "/" + target.SubPackage
 			m.addImport(importPath, target.SubPackage)
