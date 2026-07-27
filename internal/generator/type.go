@@ -207,23 +207,11 @@ func (m *typeMapper) qualifyModelType(name string) string {
 	return "model." + goName
 }
 
-// isSplittable проверяет, есть ли схема в splittable-наборе Generator
-// или в SchemaIndex (для cross-project схем с GOLANG_SPLIT_REQUEST_RESPONSE).
+// isSplittable проверяет, есть ли схема в splittable-наборе Generator.
+// typeMapper не имеет прямой ссылки на Generator, поэтому поле splittable
+// прокидывается через typeMapper.
 func (m *typeMapper) isSplittable(name string) bool {
-	if m.splittable != nil && m.splittable[name] {
-		return true
-	}
-	// Cross-project: проверить SchemaIndex — схема из другого сервиса
-	// может быть splittable, даже если отсутствует в локальной карте.
-	if m.schemaIndex != nil {
-		for _, entry := range m.schemaIndex.Schemas {
-			if entry.SchemaName == name && entry.Project != nil &&
-				entry.Project.Features.SplitRequestResponse.Value {
-				return true
-			}
-		}
-	}
-	return false
+	return m.splittable != nil && m.splittable[name]
 }
 
 // qualifyUTCTime возвращает имя UTCTime-типа для текущего пакета.

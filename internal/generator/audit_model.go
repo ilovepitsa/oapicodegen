@@ -19,12 +19,13 @@ func (g *Generator) auditModelFile(sh *parser.Schema) codegen.File {
 	m := g.newTypeMapper("model")
 	w := codegen.NewBufferWriter()
 
-	// Split mode: audit captures request data, so use Request variant for types.
+	name := goName(sh.Name)
+	// Split mode: audit captures request data, so use Request variant.
 	if g.splittable != nil && g.splittable[sh.Name] {
 		m.mode = modeRequest
+		name += modeRequest
 	}
 
-	name := goName(sh.Name)
 	g.renderAuditStruct(w, sh, m, name)
 	g.renderGetAuditData(w, sh, m, name)
 
