@@ -15,15 +15,15 @@ package generator
 
 import (
 	"fmt"
-	"nschugorev/oapigenerator/internal/codegen"
-	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/generator/compose"
-	"nschugorev/oapigenerator/internal/generator/render"
-	"nschugorev/oapigenerator/internal/generator/walk"
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/compose"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/walk"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 
-	opsrender "nschugorev/oapigenerator/internal/generator/render/operations"
-	schemarender "nschugorev/oapigenerator/internal/generator/render/schema"
+	opsrender "github.com/ilovepitsa/oapicodegen/internal/generator/render/operations"
+	schemarender "github.com/ilovepitsa/oapicodegen/internal/generator/render/schema"
 )
 
 // Generator конфигурируется через Option-ы и хранит общее состояние генерации.

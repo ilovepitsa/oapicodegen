@@ -1,8 +1,8 @@
 package main
 
 import (
-	"nschugorev/oapigenerator/internal/codegen"
-	"nschugorev/oapigenerator/internal/golden"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen"
+	"github.com/ilovepitsa/oapicodegen/internal/golden"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,7 +14,7 @@ import (
 const (
 	e2eInputDir   = "../../testdata/project"
 	e2eGoldenPath = "../../testdata/project/golden"
-	e2eImportPfx  = "nschugorev/oapigenerator/testdata/project/golden"
+	e2eImportPfx  = "github.com/ilovepitsa/oapicodegen/testdata/project/golden"
 )
 
 // TestE2E_Minimal проверяет полный пайплайн cmd/oapigen на проекте из одного

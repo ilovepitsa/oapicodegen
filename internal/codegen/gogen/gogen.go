@@ -10,7 +10,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
-	"nschugorev/oapigenerator/internal/codegen"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen"
 	"sort"
 	"strings"
 )

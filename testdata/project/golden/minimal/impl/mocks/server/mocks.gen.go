@@ -4,9 +4,9 @@ package mock_server
 
 import (
 	"context"
+	apiclient "github.com/ilovepitsa/oapicodegen/testdata/project/golden/minimal/interfaces/client"
+	apiserver "github.com/ilovepitsa/oapicodegen/testdata/project/golden/minimal/interfaces/server"
 	"go.uber.org/mock/gomock"
-	apiclient "nschugorev/oapigenerator/testdata/project/golden/minimal/interfaces/client"
-	apiserver "nschugorev/oapigenerator/testdata/project/golden/minimal/interfaces/server"
 	"reflect"
 )
 

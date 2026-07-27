@@ -29,7 +29,7 @@ func TestResolveExternalRef_EmptyRef(t *testing.T) {
 }
 
 func TestMarkExternalRefs_TopLevelFields(t *testing.T) {
-	project := &Project{Folder: "userBackend", ImportPrefix: "nschugorev/oapigenerator/go/userBackend"}
+	project := &Project{Folder: "userBackend", ImportPrefix: "github.com/ilovepitsa/oapicodegen/go/userBackend"}
 	schemas := []*Schema{
 		{Name: "UserList", Type: "array"},
 		{Name: "CreateUserRequest", Type: "object"},
@@ -46,7 +46,7 @@ func TestMarkExternalRefs_TopLevelFields(t *testing.T) {
 }
 
 func TestMarkExternalRefs_NestedExternalRef(t *testing.T) {
-	project := &Project{Folder: "userBackend", ImportPrefix: "nschugorev/oapigenerator/go/userBackend"}
+	project := &Project{Folder: "userBackend", ImportPrefix: "github.com/ilovepitsa/oapicodegen/go/userBackend"}
 	externalSchema := &Schema{
 		Ref:  "../../../common/src/openapi/openapi.yaml#/components/schemas/User",
 		Name: "User",
@@ -96,14 +96,14 @@ func TestMarkExternalRefs_NilProject(t *testing.T) {
 }
 
 func TestBuildSchemaIndex_PopulatesFromProjectSet(t *testing.T) {
-	common := &Project{Folder: "common", ImportPrefix: "nschugorev/oapigenerator/go/common"}
+	common := &Project{Folder: "common", ImportPrefix: "github.com/ilovepitsa/oapicodegen/go/common"}
 	const commonSpec = "/input/common/src/openapi/openapi.yaml"
 	common.Model = &Model{project: common, schemas: []*Schema{
 		{Name: "User", SourceFile: commonSpec, OwnerProject: common},
 		{Name: "Profile", SourceFile: commonSpec, OwnerProject: common},
 	}}
 
-	userBackend := &Project{Folder: "userBackend", ImportPrefix: "nschugorev/oapigenerator/go/userBackend"}
+	userBackend := &Project{Folder: "userBackend", ImportPrefix: "github.com/ilovepitsa/oapicodegen/go/userBackend"}
 	const userSpec = "/input/userBackend/src/openapi/openapi.yaml"
 	userBackend.Model = &Model{project: userBackend, schemas: []*Schema{
 		{Name: "UserList", SourceFile: userSpec, OwnerProject: userBackend},
@@ -121,13 +121,13 @@ func TestBuildSchemaIndex_PopulatesFromProjectSet(t *testing.T) {
 	entry, ok := si.Lookup(commonSpec, "User")
 	require.True(t, ok)
 	assert.Equal(t, "User", entry.GoType)
-	assert.Equal(t, "nschugorev/oapigenerator/go/common", entry.GoImport)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/common", entry.GoImport)
 	assert.Equal(t, common, entry.Project)
 
 	entry, ok = si.Lookup(userSpec, "UserList")
 	require.True(t, ok)
 	assert.Equal(t, "UserList", entry.GoType)
-	assert.Equal(t, "nschugorev/oapigenerator/go/userBackend", entry.GoImport)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/userBackend", entry.GoImport)
 
 	_, ok = si.Lookup(commonSpec, "Profile")
 	assert.True(t, ok)

@@ -1,6 +1,6 @@
 package walk
 
-import "nschugorev/oapigenerator/internal/parser"
+import "github.com/ilovepitsa/oapicodegen/internal/parser"
 
 // Compile-time conformance checks: гарантируют, что noop-реализации
 // удовлетворяют интерфейсам renderer'ов. Без этих строк линтер unused

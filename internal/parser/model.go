@@ -1,6 +1,6 @@
 package parser
 
-import "nschugorev/oapigenerator/internal/codegen/gogen"
+import "github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
 
 // Model — доменная модель схем сервиса. Содержит schemas, Import (Go-импорт
 // model-пакета), Prefix (alias для common-проекта), и schemasIndex для

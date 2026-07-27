@@ -1,6 +1,6 @@
 package generator
 
-import "nschugorev/oapigenerator/internal/parser"
+import "github.com/ilovepitsa/oapicodegen/internal/parser"
 
 const (
 	oapiTypeObject  = "object"
@@ -41,5 +41,5 @@ const (
 	// optionalPkg — import-path runtime-пакета optional.Optional[T],
 	// который сгенерированный код использует для x-optional полей при
 	// включённом GOLANG_USE_OPTIONAL.
-	optionalPkg = "nschugorev/oapigenerator/pkg/optional"
+	optionalPkg = "github.com/ilovepitsa/oapicodegen/pkg/optional"
 )

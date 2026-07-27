@@ -11,7 +11,7 @@ import (
 	highv3 "github.com/pb33f/libopenapi/datamodel/high/v3"
 	"github.com/pb33f/libopenapi/index"
 
-	nfs "nschugorev/oapigenerator/internal/fs"
+	nfs "github.com/ilovepitsa/oapicodegen/internal/fs"
 )
 
 // parseBytes парсит OpenAPI 3.x документ из байтов. location — путь для

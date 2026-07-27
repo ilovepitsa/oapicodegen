@@ -4,7 +4,7 @@
 package walk
 
 import (
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 )
 
 // UnionKind различает oneOf и anyOf.

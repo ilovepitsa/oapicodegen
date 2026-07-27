@@ -2,10 +2,10 @@ package compose
 
 import (
 	"errors"
-	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/generator/render"
-	"nschugorev/oapigenerator/internal/generator/walk"
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/walk"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

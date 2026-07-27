@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"nschugorev/oapigenerator/internal/generator/render"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
 )
 
 func TestUTCTimeRenderer_FilePath(t *testing.T) {

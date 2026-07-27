@@ -1,6 +1,6 @@
 package parser
 
-import "nschugorev/oapigenerator/internal/codegen/gogen"
+import "github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
 
 // Project — один сервис в составе project layout'а. Содержит Folder,
 // абсолютные пути к спеке и флагам, резолвнутые generation flags, и пути
@@ -44,7 +44,7 @@ func (p *Project) CreateModel(imp gogen.Import) *Model {
 
 // CreatePaths создаёт Paths с типизированными PathImports для всех артефактов
 // и привязывает к Project. basePath — Go import path корня сервиса
-// (например "nschugorev/oapigenerator/go/userBackend").
+// (например "github.com/ilovepitsa/oapicodegen/go/userBackend").
 func (p *Project) CreatePaths(basePath string) *Paths {
 	imp := func(sub, pkg, alias string) gogen.Import {
 		return gogen.Import{

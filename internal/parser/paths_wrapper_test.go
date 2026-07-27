@@ -13,9 +13,9 @@ func TestPaths_ImportsZeroValue(t *testing.T) {
 
 func TestPaths_ImportsAssigned(t *testing.T) {
 	pi := PathImports{}
-	pi.ClientHTTP.Path = "nschugorev/oapigenerator/go/svc/impl/httpclient"
+	pi.ClientHTTP.Path = "github.com/ilovepitsa/oapicodegen/go/svc/impl/httpclient"
 	p := &Paths{Imports: pi}
-	assert.Equal(t, "nschugorev/oapigenerator/go/svc/impl/httpclient", p.Imports.ClientHTTP.Path)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/svc/impl/httpclient", p.Imports.ClientHTTP.Path)
 }
 
 func TestPaths_AddMethod_NewService(t *testing.T) {

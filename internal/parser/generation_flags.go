@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"nschugorev/oapigenerator/internal/genflags"
+	"github.com/ilovepitsa/oapicodegen/internal/genflags"
 )
 
 // Имена generation flags, поддерживаемых генератором. Совпадают с ключами

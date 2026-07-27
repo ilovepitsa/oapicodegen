@@ -1,6 +1,6 @@
 package render
 
-import "nschugorev/oapigenerator/internal/parser"
+import "github.com/ilovepitsa/oapicodegen/internal/parser"
 
 // TypeMapper абстрагирует преобразование parser.Schema в Go-тип. Реализация
 // живёт в пакете generator (typeMapper) и подключается через adapter, чтобы

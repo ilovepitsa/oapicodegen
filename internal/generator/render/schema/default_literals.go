@@ -8,7 +8,7 @@ package schema
 
 import (
 	"fmt"
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 	"strconv"
 )
 

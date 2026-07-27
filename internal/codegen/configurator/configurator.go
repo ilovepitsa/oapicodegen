@@ -12,11 +12,11 @@ package configurator
 import (
 	"flag"
 	"fmt"
-	"nschugorev/oapigenerator/internal/codegen"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen"
 	"os"
 	"path"
 
-	realfs "nschugorev/oapigenerator/internal/fs"
+	realfs "github.com/ilovepitsa/oapicodegen/internal/fs"
 )
 
 // Configurator хранит настройки FileWriter, зарегистрированные на FlagSet.

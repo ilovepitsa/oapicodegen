@@ -1,10 +1,10 @@
 package operations
 
 import (
-	"nschugorev/oapigenerator/internal/codegen"
-	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/generator/render"
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 )
 
 // ImplClientRenderer рендерит impl/httpclient/client.gen.go: HTTP-клиент.
@@ -30,7 +30,7 @@ func (r *ImplClientRenderer) Render(ctx *render.RenderContext) ([]byte, *render.
 	imps.Add(gogen.Import{Path: "fmt"})
 	imps.Add(gogen.Import{Path: "net/http"})
 	imps.Add(gogen.Import{Path: "strings"})
-	imps.Add(gogen.Import{Path: "nschugorev/oapigenerator/pkg/httpclient", Alias: "httpclient"})
+	imps.Add(gogen.Import{Path: "github.com/ilovepitsa/oapicodegen/pkg/httpclient", Alias: "httpclient"})
 
 	if ctx.Project != nil && ctx.Project.Paths != nil {
 		imps.Add(gogen.Import{Path: ctx.Project.Paths.Imports.ClientInterfaces.Path, Alias: "apiclient"})

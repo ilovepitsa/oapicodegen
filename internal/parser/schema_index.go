@@ -32,7 +32,7 @@ type SchemaIndex struct {
 type SchemaEntry struct {
 	Project    *Project
 	SchemaName string // имя схемы во владельце (для диагностики)
-	GoImport   string // например "nschugorev/oapigenerator/go/common"
+	GoImport   string // например "github.com/ilovepitsa/oapicodegen/go/common"
 	GoType     string // например "User"; с учётом split-mode: "UserRequest"/"UserResponse"
 }
 

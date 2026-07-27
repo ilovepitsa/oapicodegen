@@ -1,8 +1,8 @@
 package parser_test
 
 import (
-	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,7 +32,7 @@ func TestProject_Folder(t *testing.T) {
 		SpecPath:     "/input/userBackend/src/openapi/openapi.yaml",
 		FlagsPath:    "/input/userBackend/generation_flags.yaml",
 		OutputDir:    "/go/userBackend",
-		ImportPrefix: "nschugorev/oapigenerator/go/userBackend",
+		ImportPrefix: "github.com/ilovepitsa/oapicodegen/go/userBackend",
 	}
 	assert.Equal(t, "userBackend", p.Folder)
 	assert.Equal(t, "/go/userBackend", p.OutputDir)
@@ -40,30 +40,30 @@ func TestProject_Folder(t *testing.T) {
 
 func TestProject_CreateModel(t *testing.T) {
 	p := &parser.Project{Folder: "svc"}
-	imp := gogen.Import{Path: "nschugorev/oapigenerator/go/svc/model", Package: "model"}
+	imp := gogen.Import{Path: "github.com/ilovepitsa/oapicodegen/go/svc/model", Package: "model"}
 	m := p.CreateModel(imp)
 
 	assert.NotNil(t, p.Model)
 	assert.Same(t, m, p.Model)
-	assert.Equal(t, "nschugorev/oapigenerator/go/svc/model", p.Model.Import.Path)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/svc/model", p.Model.Import.Path)
 	assert.Equal(t, gogen.LocalImport, p.Model.Import.Type, "CreateModel must set Type to LocalImport")
 }
 
 func TestProject_CreatePaths(t *testing.T) {
 	p := &parser.Project{Folder: "svc"}
-	pi := p.CreatePaths("nschugorev/oapigenerator/go/svc")
+	pi := p.CreatePaths("github.com/ilovepitsa/oapicodegen/go/svc")
 
 	assert.NotNil(t, p.Paths)
 	assert.Same(t, pi, p.Paths)
 
-	assert.Equal(t, "nschugorev/oapigenerator/go/svc/interfaces/client", pi.Imports.ClientInterfaces.Path)
-	assert.Equal(t, "nschugorev/oapigenerator/go/svc/interfaces/server", pi.Imports.ServerInterfaces.Path)
-	assert.Equal(t, "nschugorev/oapigenerator/go/svc/impl/httpclient", pi.Imports.ClientHTTP.Path)
-	assert.Equal(t, "nschugorev/oapigenerator/go/svc/impl/echoserver", pi.Imports.ServerHTTP.Path)
-	assert.Equal(t, "nschugorev/oapigenerator/go/svc/impl/mocks/client", pi.Imports.ClientMocks.Path)
-	assert.Equal(t, "nschugorev/oapigenerator/go/svc/impl/mocks/server", pi.Imports.ServerMocks.Path)
-	assert.Equal(t, "nschugorev/oapigenerator/go/svc/model", pi.Imports.Model.Path)
-	assert.Equal(t, "nschugorev/oapigenerator/go/svc/sdk", pi.Imports.SDK.Path)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/svc/interfaces/client", pi.Imports.ClientInterfaces.Path)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/svc/interfaces/server", pi.Imports.ServerInterfaces.Path)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/svc/impl/httpclient", pi.Imports.ClientHTTP.Path)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/svc/impl/echoserver", pi.Imports.ServerHTTP.Path)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/svc/impl/mocks/client", pi.Imports.ClientMocks.Path)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/svc/impl/mocks/server", pi.Imports.ServerMocks.Path)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/svc/model", pi.Imports.Model.Path)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/svc/sdk", pi.Imports.SDK.Path)
 
 	assert.Equal(t, "http", pi.Imports.ClientHTTP.Alias)
 	assert.Equal(t, "http", pi.Imports.ServerHTTP.Alias)

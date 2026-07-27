@@ -12,7 +12,7 @@
 package schema
 
 import (
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 )
 
 // treeHasDefaults рекурсивно (через $ref на object-схемы) проверяет, есть ли в

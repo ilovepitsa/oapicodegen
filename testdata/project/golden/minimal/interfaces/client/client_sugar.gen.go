@@ -5,7 +5,7 @@ package client
 import (
 	"context"
 	"fmt"
-	model "nschugorev/oapigenerator/testdata/project/golden/minimal/model"
+	model "github.com/ilovepitsa/oapicodegen/testdata/project/golden/minimal/model"
 )
 
 type ClientSugared struct {

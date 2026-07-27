@@ -19,17 +19,17 @@ package schema
 
 import (
 	"fmt"
-	"nschugorev/oapigenerator/internal/codegen"
-	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/generator/render"
-	"nschugorev/oapigenerator/internal/generator/walk"
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/walk"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 	"strconv"
 	"strings"
 )
 
 // validatorPkg — import-path runtime-пакета validator.Registry.
-const validatorPkg = "nschugorev/oapigenerator/pkg/validator"
+const validatorPkg = "github.com/ilovepitsa/oapicodegen/pkg/validator"
 
 // ValidateOwnRenderer рендерит ValidateOwn-метод для object-схем с
 // x-validations. Срабатывает на OnStruct (моно-режим, <Name>) и OnSplitStruct

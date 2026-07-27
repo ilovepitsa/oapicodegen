@@ -3,7 +3,7 @@ package golden
 import (
 	"flag"
 	"fmt"
-	"nschugorev/oapigenerator/internal/codegen"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen"
 	"os"
 	"path/filepath"
 	"testing"

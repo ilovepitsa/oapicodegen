@@ -1,7 +1,7 @@
 package generator
 
 import (
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 	"strings"
 )
 

@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"log"
 
-	"nschugorev/oapigenerator/pkg/validator"
+	"github.com/ilovepitsa/oapicodegen/pkg/validator"
 )
 
 // Pet — пример сгенерированной модели. ValidateOwn содержит:

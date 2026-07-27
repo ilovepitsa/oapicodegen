@@ -3,7 +3,7 @@
 package model
 
 import (
-	sensitive "nschugorev/oapigenerator/pkg/sensitive"
+	sensitive "github.com/ilovepitsa/oapicodegen/pkg/sensitive"
 )
 
 type ItemAuditData struct {

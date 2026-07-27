@@ -1,6 +1,6 @@
 package generator
 
-import "nschugorev/oapigenerator/internal/parser"
+import "github.com/ilovepitsa/oapicodegen/internal/parser"
 
 // schemaTreeHasDefaults рекурсивно (через $ref на object-схемы) проверяет,
 // есть ли в дереве схемы хотя бы одно property с Default != nil, проходящее

@@ -3,11 +3,11 @@ package generator
 import (
 	"go/parser"
 	"go/token"
-	"nschugorev/oapigenerator/internal/codegen"
-	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/generator/compose"
-	opsrender "nschugorev/oapigenerator/internal/generator/render/operations"
-	"nschugorev/oapigenerator/internal/golden"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/compose"
+	opsrender "github.com/ilovepitsa/oapicodegen/internal/generator/render/operations"
+	"github.com/ilovepitsa/oapicodegen/internal/golden"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	oapiparser "nschugorev/oapigenerator/internal/parser"
+	oapiparser "github.com/ilovepitsa/oapicodegen/internal/parser"
 )
 
 var wsRe = regexp.MustCompile(`\s+`)
@@ -33,7 +33,7 @@ func containsCollapsed(got, want string) bool {
 	return strings.Contains(collapseWS(got), collapseWS(want))
 }
 
-const testModulePath = "nschugorev/oapigenerator/internal/generator/testdata/golden/petstore"
+const testModulePath = "github.com/ilovepitsa/oapicodegen/internal/generator/testdata/golden/petstore"
 
 func TestGenerate_PetstoreGolden(t *testing.T) {
 	data := mustReadFile(t, "testdata/petstore.yaml")
@@ -269,7 +269,7 @@ components:
 	// required поле не оборачивается в Optional.
 	assert.True(t, containsCollapsed(got, "ID int64"))
 	// import optional-пакета добавлен.
-	assert.Contains(t, got, `optional "nschugorev/oapigenerator/pkg/optional"`)
+	assert.Contains(t, got, `optional "github.com/ilovepitsa/oapicodegen/pkg/optional"`)
 	// x-optional поля без omitempty (struct value — omitempty no-op).
 	assert.True(t, containsCollapsed(got, `json:"name"`))
 	assert.True(t, containsCollapsed(got, `json:"tag"`))
@@ -298,7 +298,7 @@ components:
 	got := string(files["model/pet.gen.go"])
 
 	assert.NotContains(t, got, "optional.Optional")
-	assert.NotContains(t, got, "nschugorev/oapigenerator/pkg/optional")
+	assert.NotContains(t, got, "github.com/ilovepitsa/oapicodegen/pkg/optional")
 	assert.True(t, containsCollapsed(got, "Name *string"))
 }
 
@@ -1740,7 +1740,7 @@ components:
 	files := generateFiles(t, doc)
 	got := string(files["impl/httpclient/client.gen.go"])
 	assert.Contains(t, got, "package client")
-	assert.Contains(t, got, "nschugorev/oapigenerator/pkg/httpclient")
+	assert.Contains(t, got, "github.com/ilovepitsa/oapicodegen/pkg/httpclient")
 	assert.Contains(t, got, "var _ apiclient.Client = (*Client)(nil)")
 	assert.Contains(t, got, "type Client struct {")
 	assert.Contains(t, got, "func NewClient(baseURL string, opts ...httpclient.Option) (*Client, error) {")
@@ -2096,7 +2096,7 @@ components:
 	assert.NotContains(t, updateBlock, "Tag")
 
 	// import optional-пакета добавлен.
-	assert.Contains(t, got, `optional "nschugorev/oapigenerator/pkg/optional"`)
+	assert.Contains(t, got, `optional "github.com/ilovepitsa/oapicodegen/pkg/optional"`)
 
 	// Сгенерированный файл валиден как Go.
 	fset := token.NewFileSet()
@@ -2225,7 +2225,7 @@ components:
 
 	got := string(files["model/pet.gen.go"])
 	assert.True(t, containsCollapsed(got, "Name optional.Optional[string]"))
-	assert.Contains(t, got, `optional "nschugorev/oapigenerator/pkg/optional"`)
+	assert.Contains(t, got, `optional "github.com/ilovepitsa/oapicodegen/pkg/optional"`)
 }
 
 // TestGenerate_UpdateStruct_RefToOtherSchema проверяет, что $ref на
@@ -2476,7 +2476,7 @@ components:
 	assert.Contains(t, got, "func (x Pet) ValidateOwn(reg *validator.Registry) error {")
 	assert.Contains(t, got, `if x.Age <= 0 {`)
 	assert.Contains(t, got, `return fmt.Errorf("field Age: must be > 0")`)
-	assert.Contains(t, got, `validator "nschugorev/oapigenerator/pkg/validator"`)
+	assert.Contains(t, got, `validator "github.com/ilovepitsa/oapicodegen/pkg/validator"`)
 
 	// Generated file parses as valid Go.
 	fset := token.NewFileSet()
@@ -4334,11 +4334,11 @@ components:
 	require.NoError(t, os.MkdirAll(sensitiveDir, 0o755))
 	require.NoError(t, os.MkdirAll(optionalDir, 0o755))
 
-	// Generated audit-data code imports nschugorev/oapigenerator/pkg/sensitive
+	// Generated audit-data code imports github.com/ilovepitsa/oapicodegen/pkg/sensitive
 	// (hardcoded sensitivePkg in audit_model.go). Update<Name> structs use
 	// pkg/optional. Temp module must match the real module path.
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"),
-		[]byte("module nschugorev/oapigenerator\n\ngo 1.26\n"), 0o644))
+		[]byte("module github.com/ilovepitsa/oapicodegen\n\ngo 1.26\n"), 0o644))
 
 	sensitiveSrc, err := os.ReadFile("../../pkg/sensitive/sensitive.go")
 	require.NoError(t, err)

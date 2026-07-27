@@ -137,7 +137,7 @@ func NewUser(name string, age int) *User {
 
 func TestImport_PackageAndType(t *testing.T) {
 	imp := Import{
-		Path:    "nschugorev/oapigenerator/go/common/model",
+		Path:    "github.com/ilovepitsa/oapicodegen/go/common/model",
 		Alias:   "common",
 		Package: "model",
 		Type:    LocalImport,

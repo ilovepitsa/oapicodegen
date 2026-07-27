@@ -10,8 +10,8 @@
 package schema
 
 import (
-	"nschugorev/oapigenerator/internal/generator/render"
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 )
 
 // currentMode извлекает текущий режим typeMapper'а. Renderer'ы не хранят

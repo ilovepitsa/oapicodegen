@@ -86,11 +86,20 @@ func inlineVariantName(typ string) string {
 //
 // Дублировано из пакета generator.
 func refToName(ref string) string {
-	if idx := strings.LastIndex(ref, "/"); idx >= 0 {
-		return ref[idx+1:]
+	if idx := strings.LastIndex(ref, "#/"); idx > 0 {
+		return ref[idx+2:]
 	}
-
-	return ref
+	name := ref
+	if idx := strings.LastIndex(name, "#/"); idx >= 0 {
+		name = name[idx+2:]
+	}
+	if idx := strings.LastIndex(name, "/"); idx >= 0 {
+		name = name[idx+1:]
+	}
+	if idx := strings.LastIndex(name, "."); idx >= 0 {
+		name = name[:idx]
+	}
+	return name
 }
 
 // isInherentlyNilable сообщает, имеет ли Go-тип уже нулевое значение nil,

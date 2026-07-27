@@ -5,9 +5,9 @@ import (
 	"strings"
 	"unicode"
 
-	"nschugorev/oapigenerator/internal/codegen"
-	"nschugorev/oapigenerator/internal/generator/render"
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 )
 
 // allOperations возвращает плоский срез всех методов проекта.
@@ -378,10 +378,20 @@ func resolveBodySchema(rb *parser.RequestBody, project *parser.Project) *parser.
 }
 
 // refToName извлекает имя схемы из $ref-пути.
-// "#/components/schemas/Pet" → "Pet".
+// "#/components/schemas/Pet" → "Pet", "UUIDv7.yaml" → "UUIDv7".
 func refToName(ref string) string {
-	if idx := strings.LastIndex(ref, "/"); idx >= 0 {
-		return ref[idx+1:]
+	if idx := strings.LastIndex(ref, "#/"); idx > 0 {
+		return ref[idx+2:]
 	}
-	return ref
+	name := ref
+	if idx := strings.LastIndex(name, "#/"); idx >= 0 {
+		name = name[idx+2:]
+	}
+	if idx := strings.LastIndex(name, "/"); idx >= 0 {
+		name = name[idx+1:]
+	}
+	if idx := strings.LastIndex(name, "."); idx >= 0 {
+		name = name[:idx]
+	}
+	return name
 }

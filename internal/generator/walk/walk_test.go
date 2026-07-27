@@ -2,7 +2,7 @@ package walk
 
 import (
 	"errors"
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 	"strconv"
 	"testing"
 

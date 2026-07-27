@@ -5,11 +5,11 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	apiclient "github.com/ilovepitsa/oapicodegen/testdata/project/golden/minimal/interfaces/client"
+	apiserver "github.com/ilovepitsa/oapicodegen/testdata/project/golden/minimal/interfaces/server"
 	"github.com/labstack/echo/v4"
 	"io"
 	"net/http"
-	apiclient "nschugorev/oapigenerator/testdata/project/golden/minimal/interfaces/client"
-	apiserver "nschugorev/oapigenerator/testdata/project/golden/minimal/interfaces/server"
 )
 
 type ServerHTTP struct {

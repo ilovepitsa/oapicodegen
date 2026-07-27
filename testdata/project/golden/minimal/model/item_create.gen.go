@@ -4,8 +4,8 @@ package model
 
 import (
 	"fmt"
-	optional "nschugorev/oapigenerator/pkg/optional"
-	validator "nschugorev/oapigenerator/pkg/validator"
+	optional "github.com/ilovepitsa/oapicodegen/pkg/optional"
+	validator "github.com/ilovepitsa/oapicodegen/pkg/validator"
 )
 
 type ItemCreate struct {
