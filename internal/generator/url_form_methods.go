@@ -1,7 +1,7 @@
 package generator
 
 import (
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 )
 
 // formURLContentType — media-type для URL-form encoded request body.

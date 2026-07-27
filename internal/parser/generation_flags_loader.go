@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"nschugorev/oapigenerator/internal/genflags"
+	"github.com/ilovepitsa/oapicodegen/internal/genflags"
 
-	realfs "nschugorev/oapigenerator/internal/fs"
+	realfs "github.com/ilovepitsa/oapicodegen/internal/fs"
 
 	"gopkg.in/yaml.v3"
 )

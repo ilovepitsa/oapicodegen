@@ -4,7 +4,7 @@ package client
 
 import (
 	"context"
-	model "nschugorev/oapigenerator/internal/generator/testdata/golden/petstore/model"
+	model "github.com/ilovepitsa/oapicodegen/internal/generator/testdata/golden/petstore/model"
 )
 
 type Client interface {

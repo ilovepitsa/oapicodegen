@@ -4,7 +4,7 @@ package model
 
 import (
 	"fmt"
-	validator "nschugorev/oapigenerator/pkg/validator"
+	validator "github.com/ilovepitsa/oapicodegen/pkg/validator"
 )
 
 type Item struct {

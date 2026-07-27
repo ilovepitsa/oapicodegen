@@ -1,8 +1,8 @@
 package parser
 
 import (
-	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/fs"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
+	"github.com/ilovepitsa/oapicodegen/internal/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,7 +56,7 @@ func TestProjectLoader_Load_SingleService(t *testing.T) {
 	ps, si, err := pl.Load(
 		"testdata/multiservice",
 		nil,
-		"nschugorev/oapigenerator/go",
+		"github.com/ilovepitsa/oapicodegen/go",
 		"/output",
 	)
 	require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestProjectLoader_Load_SingleService(t *testing.T) {
 func TestProjectLoader_Load_ModelSchemasTransferred(t *testing.T) {
 	pl := NewProjectLoader()
 	ps, _, err := pl.Load("testdata/multiservice", nil,
-		"nschugorev/oapigenerator/go", "/output")
+		"github.com/ilovepitsa/oapicodegen/go", "/output")
 	require.NoError(t, err)
 
 	common := ps.Common
@@ -96,7 +96,7 @@ func TestProjectLoader_Load_ModelSchemasTransferred(t *testing.T) {
 func TestProjectLoader_Load_PathsServicesGroupedByTag(t *testing.T) {
 	pl := NewProjectLoader()
 	ps, _, err := pl.Load("testdata/multiservice", nil,
-		"nschugorev/oapigenerator/go", "/output")
+		"github.com/ilovepitsa/oapicodegen/go", "/output")
 	require.NoError(t, err)
 
 	userBackend := ps.ByName["userBackend"]
@@ -114,7 +114,7 @@ func TestProjectLoader_Load_PathsServicesGroupedByTag(t *testing.T) {
 func TestProjectLoader_Load_CommonHasNoServices(t *testing.T) {
 	pl := NewProjectLoader()
 	ps, _, err := pl.Load("testdata/multiservice", nil,
-		"nschugorev/oapigenerator/go", "/output")
+		"github.com/ilovepitsa/oapicodegen/go", "/output")
 	require.NoError(t, err)
 
 	// common/spec имеет paths: {} — нет операций → нет сервисов
@@ -124,25 +124,25 @@ func TestProjectLoader_Load_CommonHasNoServices(t *testing.T) {
 func TestProjectLoader_Load_PathImportsPopulated(t *testing.T) {
 	pl := NewProjectLoader()
 	ps, _, err := pl.Load("testdata/multiservice", nil,
-		"nschugorev/oapigenerator/go", "/output")
+		"github.com/ilovepitsa/oapicodegen/go", "/output")
 	require.NoError(t, err)
 
 	userBackend := ps.ByName["userBackend"]
 	pi := userBackend.Paths.Imports
-	assert.Equal(t, "nschugorev/oapigenerator/go/userBackend/interfaces/client", pi.ClientInterfaces.Path)
-	assert.Equal(t, "nschugorev/oapigenerator/go/userBackend/impl/httpclient", pi.ClientHTTP.Path)
-	assert.Equal(t, "nschugorev/oapigenerator/go/userBackend/model", pi.Model.Path)
-	assert.Equal(t, "nschugorev/oapigenerator/go/userBackend/sdk", pi.SDK.Path)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/userBackend/interfaces/client", pi.ClientInterfaces.Path)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/userBackend/impl/httpclient", pi.ClientHTTP.Path)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/userBackend/model", pi.Model.Path)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/userBackend/sdk", pi.SDK.Path)
 
 	// Model.Import
-	assert.Equal(t, "nschugorev/oapigenerator/go/userBackend/model", userBackend.Model.Import.Path)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/userBackend/model", userBackend.Model.Import.Path)
 	assert.Equal(t, gogen.LocalImport, userBackend.Model.Import.Type)
 }
 
 func TestProjectLoader_Load_CommonPrefixSet(t *testing.T) {
 	pl := NewProjectLoader()
 	ps, _, err := pl.Load("testdata/multiservice", nil,
-		"nschugorev/oapigenerator/go", "/output")
+		"github.com/ilovepitsa/oapicodegen/go", "/output")
 	require.NoError(t, err)
 
 	assert.Equal(t, "common", ps.Common.Model.Prefix,
@@ -152,7 +152,7 @@ func TestProjectLoader_Load_CommonPrefixSet(t *testing.T) {
 func TestProjectLoader_Load_InputNotFound(t *testing.T) {
 	pl := NewProjectLoader()
 	_, _, err := pl.Load("testdata/does-not-exist", nil,
-		"nschugorev/oapigenerator/go", "/output")
+		"github.com/ilovepitsa/oapicodegen/go", "/output")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "walk services")
 }
@@ -165,7 +165,7 @@ func TestProjectLoader_Load_MalformedSpec(t *testing.T) {
 
 	pl := NewProjectLoader()
 	_, _, err := pl.Load(tmp, nil,
-		"nschugorev/oapigenerator/go", "/output")
+		"github.com/ilovepitsa/oapicodegen/go", "/output")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "load project")
 }
@@ -191,7 +191,7 @@ paths:
 
 	pl := NewProjectLoader()
 	_, _, err := pl.Load(tmp, nil,
-		"nschugorev/oapigenerator/go", "/output")
+		"github.com/ilovepitsa/oapicodegen/go", "/output")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "must be exactly one tag")
 }
@@ -203,7 +203,7 @@ func TestProjectLoader_Load_WithFlagsLoader(t *testing.T) {
 
 	pl := NewProjectLoader()
 	ps, _, err := pl.Load("testdata/multiservice", flagsLoader,
-		"nschugorev/oapigenerator/go", "/output")
+		"github.com/ilovepitsa/oapicodegen/go", "/output")
 	require.NoError(t, err)
 
 	for _, p := range ps.Projects {
@@ -215,7 +215,7 @@ func TestProjectLoader_Load_WithFlagsLoader(t *testing.T) {
 func TestProjectLoader_Load_SchemaIndexPopulated(t *testing.T) {
 	pl := NewProjectLoader()
 	_, si, err := pl.Load("testdata/multiservice", nil,
-		"nschugorev/oapigenerator/go", "/output")
+		"github.com/ilovepitsa/oapicodegen/go", "/output")
 	require.NoError(t, err)
 	require.NotNil(t, si)
 	require.NotEmpty(t, si.Schemas, "SchemaIndex must be populated after Load")
@@ -225,7 +225,7 @@ func TestProjectLoader_Load_SchemaIndexPopulated(t *testing.T) {
 	entry, ok := si.Lookup(commonSpec, "User")
 	require.True(t, ok, "common.User must be in SchemaIndex")
 	assert.Equal(t, "User", entry.GoType)
-	assert.Equal(t, "nschugorev/oapigenerator/go/common", entry.GoImport)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/common", entry.GoImport)
 	assert.NotNil(t, entry.Project)
 
 	_, ok = si.Lookup(commonSpec, "Profile")
@@ -234,13 +234,13 @@ func TestProjectLoader_Load_SchemaIndexPopulated(t *testing.T) {
 	const userSpec = "testdata/multiservice/userBackend/src/openapi/openapi.yaml"
 	entry, ok = si.Lookup(userSpec, "UserList")
 	require.True(t, ok, "userBackend.UserList must be in SchemaIndex")
-	assert.Equal(t, "nschugorev/oapigenerator/go/userBackend", entry.GoImport)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/userBackend", entry.GoImport)
 }
 
 func TestProjectLoader_Load_SourceMarkingFields(t *testing.T) {
 	pl := NewProjectLoader()
 	ps, _, err := pl.Load("testdata/multiservice", nil,
-		"nschugorev/oapigenerator/go", "/output")
+		"github.com/ilovepitsa/oapicodegen/go", "/output")
 	require.NoError(t, err)
 
 	const commonSpec = "testdata/multiservice/common/src/openapi/openapi.yaml"

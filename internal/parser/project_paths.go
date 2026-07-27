@@ -1,6 +1,6 @@
 package parser
 
-import "nschugorev/oapigenerator/internal/codegen/gogen"
+import "github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
 
 // PathImports — типизированные Go-импорты артефактов одного сервиса.
 // Создаётся один раз при Project.CreatePaths(basePath) и переиспользуется

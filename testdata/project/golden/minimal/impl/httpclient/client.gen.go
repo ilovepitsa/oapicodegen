@@ -7,11 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	httpclient "github.com/ilovepitsa/oapicodegen/pkg/httpclient"
+	apiclient "github.com/ilovepitsa/oapicodegen/testdata/project/golden/minimal/interfaces/client"
+	model "github.com/ilovepitsa/oapicodegen/testdata/project/golden/minimal/model"
 	"net/http"
 	"net/url"
-	httpclient "nschugorev/oapigenerator/pkg/httpclient"
-	apiclient "nschugorev/oapigenerator/testdata/project/golden/minimal/interfaces/client"
-	model "nschugorev/oapigenerator/testdata/project/golden/minimal/model"
 	"strings"
 )
 

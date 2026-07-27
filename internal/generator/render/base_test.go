@@ -1,8 +1,8 @@
 package render
 
 import (
-	"nschugorev/oapigenerator/internal/codegen"
-	"nschugorev/oapigenerator/internal/codegen/gogen"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

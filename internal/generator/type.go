@@ -1,8 +1,8 @@
 package generator
 
 import (
-	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 	"strings"
 )
 
@@ -225,11 +225,20 @@ func (m *typeMapper) qualifyUTCTime() string {
 }
 
 func refToName(ref string) string {
-	if idx := strings.LastIndex(ref, "/"); idx >= 0 {
-		return ref[idx+1:]
+	if idx := strings.LastIndex(ref, "#/"); idx > 0 {
+		return ref[idx+2:]
 	}
-
-	return ref
+	name := ref
+	if idx := strings.LastIndex(name, "#/"); idx >= 0 {
+		name = name[idx+2:]
+	}
+	if idx := strings.LastIndex(name, "/"); idx >= 0 {
+		name = name[idx+1:]
+	}
+	if idx := strings.LastIndex(name, "."); idx >= 0 {
+		name = name[:idx]
+	}
+	return name
 }
 
 // externalRefSeparator — разделитель между abs-путём файла и именем схемы

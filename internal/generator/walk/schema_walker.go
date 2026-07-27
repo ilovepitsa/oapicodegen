@@ -2,7 +2,7 @@ package walk
 
 import (
 	"fmt"
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 )
 
 // OpenAPI type-строки, используемые walker'ом для диспатча. Вынесены в

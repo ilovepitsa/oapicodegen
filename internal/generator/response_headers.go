@@ -2,7 +2,7 @@ package generator
 
 import (
 	"fmt"
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 	"sort"
 )
 

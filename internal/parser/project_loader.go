@@ -2,8 +2,8 @@ package parser
 
 import (
 	"fmt"
-	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/fs"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
+	"github.com/ilovepitsa/oapicodegen/internal/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -78,7 +78,7 @@ func NewProjectLoader() *ProjectLoader {
 // подпапки сервисов: common/, userBackend/, ...).
 // flagsLoader — загрузчик generation flags (может быть nil — используются
 // дефолтные значения для всех проектов).
-// importPrefix — Go import path корня (например "nschugorev/oapigenerator/go").
+// importPrefix — Go import path корня (например "github.com/ilovepitsa/oapicodegen/go").
 // output — абсолютный путь к output-каталогу.
 //
 // Возвращает ProjectSet (с заполненными Projects, Common, ByName) и

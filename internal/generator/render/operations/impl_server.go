@@ -3,10 +3,10 @@ package operations
 import (
 	"strings"
 
-	"nschugorev/oapigenerator/internal/codegen"
-	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/generator/render"
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 )
 
 // ImplServerRenderer рендерит impl/echoserver/server.gen.go: Echo-сервер.

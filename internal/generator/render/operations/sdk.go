@@ -1,9 +1,9 @@
 package operations
 
 import (
-	"nschugorev/oapigenerator/internal/codegen"
-	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/generator/render"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
 )
 
 // SDKRenderer рендерит sdk/sdk.gen.go: consumer-facing facade over apiclient.Client.
@@ -25,7 +25,7 @@ func (r *SDKRenderer) Render(ctx *render.RenderContext) ([]byte, *render.ImportT
 
 	imps.Add(gogen.Import{Path: "fmt"})
 
-	const httpclientPkg = "nschugorev/oapigenerator/pkg/httpclient"
+	const httpclientPkg = "github.com/ilovepitsa/oapicodegen/pkg/httpclient"
 	imps.Add(gogen.Import{Path: httpclientPkg, Alias: "httpclient"})
 
 	if ctx.Project != nil && ctx.Project.Paths != nil {

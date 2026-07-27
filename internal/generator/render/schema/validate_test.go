@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"nschugorev/oapigenerator/internal/codegen"
-	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/generator/render"
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 )
 
 // newValidateOwnTestRenderer строит ValidateOwnRenderer с shared Buf/Imports

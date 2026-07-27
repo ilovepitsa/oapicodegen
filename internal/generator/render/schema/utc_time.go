@@ -7,8 +7,8 @@
 package schema
 
 import (
-	"nschugorev/oapigenerator/internal/codegen/gogen"
-	"nschugorev/oapigenerator/internal/generator/render"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
 )
 
 // utcTimeBody — дословное тело файла model/utc_time.gen.go. Хранится как

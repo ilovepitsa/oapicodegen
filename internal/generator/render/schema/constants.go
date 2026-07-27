@@ -1,6 +1,6 @@
 package schema
 
-import "nschugorev/oapigenerator/internal/parser"
+import "github.com/ilovepitsa/oapicodegen/internal/parser"
 
 // OpenAPI type/format-константы и Go-типы, используемые alias/enum/struct/json
 // renderer'ами. Дублированы из generator.constants, чтобы render/schema
@@ -40,5 +40,5 @@ const (
 	// optionalPkg — import-path runtime-пакета optional.Optional[T].
 	// Сгенерированный код использует его для x-optional полей при включённом
 	// GOLANG_USE_OPTIONAL и безусловно для Update<Name> PATCH-вариантов.
-	optionalPkg = "nschugorev/oapigenerator/pkg/optional"
+	optionalPkg = "github.com/ilovepitsa/oapicodegen/pkg/optional"
 )

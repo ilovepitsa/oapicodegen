@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"nschugorev/oapigenerator/internal/codegen/gogen"
+	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,8 +21,8 @@ func TestModel_Schemas_ReturnsAssigned(t *testing.T) {
 }
 
 func TestModel_Import(t *testing.T) {
-	m := &Model{Import: gogen.Import{Path: "nschugorev/oapigenerator/go/svc/model", Package: "model"}}
-	assert.Equal(t, "nschugorev/oapigenerator/go/svc/model", m.Import.Path)
+	m := &Model{Import: gogen.Import{Path: "github.com/ilovepitsa/oapicodegen/go/svc/model", Package: "model"}}
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/svc/model", m.Import.Path)
 }
 
 func TestModel_Lookup_BeforeIndex(t *testing.T) {

@@ -7,11 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	apiclient "github.com/ilovepitsa/oapicodegen/internal/generator/testdata/golden/petstore/interfaces/client"
+	model "github.com/ilovepitsa/oapicodegen/internal/generator/testdata/golden/petstore/model"
+	httpclient "github.com/ilovepitsa/oapicodegen/pkg/httpclient"
 	"net/http"
 	"net/url"
-	apiclient "nschugorev/oapigenerator/internal/generator/testdata/golden/petstore/interfaces/client"
-	model "nschugorev/oapigenerator/internal/generator/testdata/golden/petstore/model"
-	httpclient "nschugorev/oapigenerator/pkg/httpclient"
 	"strings"
 )
 

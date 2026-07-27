@@ -2,9 +2,9 @@ package schema
 
 import (
 	"fmt"
-	"nschugorev/oapigenerator/internal/generator/render"
-	"nschugorev/oapigenerator/internal/generator/walk"
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/walk"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 )
 
 // EnumRenderer рендерит type-declaration для enum-схемы и const-блок с

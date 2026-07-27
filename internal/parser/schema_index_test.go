@@ -1,21 +1,21 @@
 package parser_test
 
 import (
-	"nschugorev/oapigenerator/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/parser"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestSchemaIndex_Lookup(t *testing.T) {
-	common := &parser.Project{Folder: "common", ImportPrefix: "nschugorev/oapigenerator/go/common"}
+	common := &parser.Project{Folder: "common", ImportPrefix: "github.com/ilovepitsa/oapicodegen/go/common"}
 	const absPath = "/input/common/src/openapi/openapi.yaml"
 	si := &parser.SchemaIndex{
 		Schemas: map[string]*parser.SchemaEntry{
 			absPath + "#/components/schemas/User": {
 				Project:    common,
 				SchemaName: "User",
-				GoImport:   "nschugorev/oapigenerator/go/common",
+				GoImport:   "github.com/ilovepitsa/oapicodegen/go/common",
 				GoType:     "User",
 			},
 		},
@@ -24,7 +24,7 @@ func TestSchemaIndex_Lookup(t *testing.T) {
 	got, ok := si.Lookup(absPath, "User")
 	assert.True(t, ok)
 	assert.Equal(t, "User", got.GoType)
-	assert.Equal(t, "nschugorev/oapigenerator/go/common", got.GoImport)
+	assert.Equal(t, "github.com/ilovepitsa/oapicodegen/go/common", got.GoImport)
 
 	_, ok = si.Lookup("/nonexistent.yaml", "User")
 	assert.False(t, ok)
@@ -34,14 +34,14 @@ func TestSchemaIndex_Lookup(t *testing.T) {
 }
 
 func TestSchemaIndex_LookupForMode_NoSplit(t *testing.T) {
-	common := &parser.Project{Folder: "common", ImportPrefix: "nschugorev/oapigenerator/go/common"}
+	common := &parser.Project{Folder: "common", ImportPrefix: "github.com/ilovepitsa/oapicodegen/go/common"}
 	const absPath = "/input/common/src/openapi/openapi.yaml"
 	si := &parser.SchemaIndex{
 		Schemas: map[string]*parser.SchemaEntry{
 			absPath + "#/components/schemas/User": {
 				Project:    common,
 				SchemaName: "User",
-				GoImport:   "nschugorev/oapigenerator/go/common",
+				GoImport:   "github.com/ilovepitsa/oapicodegen/go/common",
 				GoType:     "User",
 			},
 		},
@@ -59,7 +59,7 @@ func TestSchemaIndex_LookupForMode_NoSplit(t *testing.T) {
 func TestSchemaIndex_LookupForMode_SplitEnabled(t *testing.T) {
 	common := &parser.Project{
 		Folder:       "common",
-		ImportPrefix: "nschugorev/oapigenerator/go/common",
+		ImportPrefix: "github.com/ilovepitsa/oapicodegen/go/common",
 		Features: parser.ProjectFeatures{
 			SplitRequestResponse: parser.ProjectFeature{Value: true},
 		},
@@ -72,7 +72,7 @@ func TestSchemaIndex_LookupForMode_SplitEnabled(t *testing.T) {
 			key: {
 				Project:    common,
 				SchemaName: "User",
-				GoImport:   "nschugorev/oapigenerator/go/common",
+				GoImport:   "github.com/ilovepitsa/oapicodegen/go/common",
 				GoType:     "User",
 			},
 		},
