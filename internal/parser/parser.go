@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"path/filepath"
 
 	"github.com/pb33f/libopenapi"
 	"github.com/pb33f/libopenapi/datamodel"
@@ -50,12 +51,20 @@ func parseBytes(data []byte, location string, fsys fs.FS) (*Document, error) {
 	return convertDocument(&model.Model), nil
 }
 
-// configureLocalFS настраивает cfg.LocalFS для mock-filesystem (тесты).
-// Для real OS filesystem (nfs.RealFS) пропускается — libopenapi использует
-// default rolodex, что позволяет cross-service $ref выходить за каталог
-// текущей спеки.
+// configureLocalFS настраивает cfg.LocalFS для резолвинга внешних $ref.
+// Для RealFS: DirFS = os.DirFS(projectRoot) где projectRoot = BasePath/../../.. —
+// это позволяет cross-service $ref через относительные пути.
+// Для mock FS: DirFS = fsys, BaseDirectory = BasePath.
 func configureLocalFS(cfg *datamodel.DocumentConfiguration, fsys fs.FS) error {
 	if _, isReal := fsys.(*nfs.RealFS); isReal {
+		projectRoot := filepath.Dir(filepath.Dir(filepath.Dir(cfg.BasePath)))
+		localFS, err := index.NewLocalFSWithConfig(&index.LocalFSConfig{
+			BaseDirectory: projectRoot,
+		})
+		if err != nil {
+			return fmt.Errorf("parser: wrap real fs: %w", err)
+		}
+		cfg.LocalFS = localFS
 		return nil
 	}
 
