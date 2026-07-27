@@ -1,4 +1,4 @@
-module nschugorev/oapigenerator
+module github.com/ilovepitsa/oapicodegen
 
 go 1.26
 
