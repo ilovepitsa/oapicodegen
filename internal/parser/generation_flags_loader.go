@@ -117,7 +117,14 @@ func (l *GenerationFlagsLoader) resolveFlag(
 		return ProjectFeature{}, fmt.Errorf("resolve flag %q: %w", name, err)
 	}
 
-	return ProjectFeature{Value: value}, nil
+	boolValue, ok := value.(bool)
+	if !ok {
+		// Enum-флаги обрабатываются отдельным setter'ом в последующих задачах;
+		// здесь — только bool-флаги.
+		return ProjectFeature{}, fmt.Errorf("resolve flag %q: expected bool, got %T", name, value)
+	}
+
+	return ProjectFeature{Value: boolValue}, nil
 }
 
 func (l *GenerationFlagsLoader) loadProjectFlags(path string) (map[string]bool, error) {

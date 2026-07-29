@@ -140,7 +140,7 @@ func TestBoolFlag_ValidateOverride_Disabled(t *testing.T) {
 
 		v, err := flag.ValidateOverride(false, map[string]bool{}, cfg)
 		require.NoError(t, err)
-		assert.False(t, v)
+		assert.Equal(t, false, v)
 	})
 
 	t.Run("non_default_rejected", func(t *testing.T) {
@@ -165,7 +165,7 @@ func TestBoolFlag_ValidateOverride_DefaultEqualsTarget(t *testing.T) {
 	// value == defaultValue → принимается как no-op, хотя и совпадает с target.
 	v, err := flag.ValidateOverride(true, map[string]bool{}, cfg)
 	require.NoError(t, err)
-	assert.True(t, v)
+	assert.Equal(t, true, v)
 }
 
 func TestBoolFlag_ValidateOverride_DependsOn(t *testing.T) {
@@ -184,7 +184,7 @@ func TestBoolFlag_ValidateOverride_DependsOn(t *testing.T) {
 		resolved := map[string]bool{"FLAG_PARENT": true}
 		v, err := flag.ValidateOverride(true, resolved, cfg)
 		require.NoError(t, err)
-		assert.True(t, v)
+		assert.Equal(t, true, v)
 	})
 
 	t.Run("missing_dependency", func(t *testing.T) {
@@ -212,7 +212,7 @@ func TestBoolFlag_ValidateOverride_DependsOn(t *testing.T) {
 		// Override равен default → зависимости не вычисляются.
 		v, err := flag.ValidateOverride(false, map[string]bool{}, cfg)
 		require.NoError(t, err)
-		assert.False(t, v)
+		assert.Equal(t, false, v)
 	})
 }
 
@@ -239,7 +239,7 @@ func TestRegistry_Resolve_Default(t *testing.T) {
 
 	value, err := r.Resolve("FLAG_DEFAULTED", nil, map[string]bool{}, cfg)
 	require.NoError(t, err)
-	assert.False(t, value)
+	assert.Equal(t, false, value)
 }
 
 func TestRegistry_Resolve_DefaultWhenEnabledTargetDifferent(t *testing.T) {
@@ -256,7 +256,7 @@ func TestRegistry_Resolve_DefaultWhenEnabledTargetDifferent(t *testing.T) {
 	// Override равен default → defaultValue, НЕ targetValue.
 	value, err := r.Resolve("FLAG_TARGETED", nil, map[string]bool{}, cfg)
 	require.NoError(t, err)
-	assert.False(t, value)
+	assert.Equal(t, false, value)
 }
 
 func TestRegistry_Resolve_Override(t *testing.T) {
@@ -268,7 +268,7 @@ func TestRegistry_Resolve_Override(t *testing.T) {
 
 	value, err := r.Resolve("FLAG_OVR", true, map[string]bool{}, cfg)
 	require.NoError(t, err)
-	assert.True(t, value)
+	assert.Equal(t, true, value)
 }
 
 func TestRegistry_Resolve_OverrideInvalid(t *testing.T) {
@@ -397,6 +397,20 @@ func TestRegistry_Resolve_NonBoolOverride(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "must be bool")
 	assert.Contains(t, err.Error(), "string")
+}
+
+// Resolve возвращает any-typed значение (holds bool для BoolFlag), что позволяет
+// в будущем добавить EnumFlag, возвращающий string. Контракт обобщён в Task 1.
+func TestRegistry_ResolveReturnsAny(t *testing.T) {
+	t.Parallel()
+
+	r := NewRegistry()
+	r.Register(BoolFlag{FlagName: "FLAG_A", FlagDefault: false})
+
+	cfg := flagCfg("FLAG_A")
+	val, err := r.Resolve("FLAG_A", nil, map[string]bool{}, cfg)
+	require.NoError(t, err)
+	assert.Equal(t, false, val) // any-typed, holds bool
 }
 
 // ValidateConfig обязан проходить для disabled-флага, у которого default
