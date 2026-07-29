@@ -47,8 +47,10 @@ func (r *ImplServerRenderer) Render(ctx *render.RenderContext) ([]byte, *render.
 	if needBody {
 		imps.Add(gogen.Import{Path: "bytes"})
 		imps.Add(gogen.Import{Path: "encoding/json"})
+		imps.Add(gogen.Import{Path: "fmt"})
 		imps.Add(gogen.Import{Path: "io"})
 		imps.Add(gogen.Import{Path: "net/http"})
+		imps.Add(gogen.Import{Path: "strings"})
 	}
 	if needURLForm {
 		imps.Add(gogen.Import{Path: "net/url"})
@@ -89,6 +91,7 @@ func renderImplServerStruct(w *codegen.BufferWriter, needBody, needURLForm bool)
 
 	if needBody {
 		renderBindBody(w, needURLForm)
+		renderExtractUnknownField(w)
 	}
 }
 
@@ -115,10 +118,34 @@ func renderBindBody(w *codegen.BufferWriter, needURLForm bool) {
 	w.Print("\tif err != nil {\n\t\treturn err\n\t}\n")
 	w.Print("\tc.Request().Body = io.NopCloser(bytes.NewReader(body))\n")
 	w.Print("\tif len(body) == 0 {\n\t\treturn nil\n\t}\n")
-	w.Print("\tif err := json.Unmarshal(body, dst); err != nil {\n")
+	w.Print("\tdec := json.NewDecoder(bytes.NewReader(body))\n")
+	w.Print("\tdec.DisallowUnknownFields()\n")
+	w.Print("\tif err := dec.Decode(dst); err != nil {\n")
+	w.Print("\t\tfield := extractUnknownField(err)\n")
+	w.Print("\t\tif field != \"\" {\n")
+	w.WriteString("\t\t\treturn echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf(\"unknown field %q\", field))\n")
+	w.Print("\t\t}\n")
 	w.Print("\t\treturn echo.NewHTTPError(http.StatusBadRequest, err.Error())\n")
 	w.Print("\t}\n")
 	w.Print("\treturn nil\n")
+	w.Print("}\n\n")
+}
+
+// renderExtractUnknownField рендерит helper, извлекающий имя неизвестного поля
+// из ошибки json.Decoder'а вида `json: unknown field "foo"`.
+func renderExtractUnknownField(w *codegen.BufferWriter) {
+	w.WriteString("// extractUnknownField парсит ошибку json.Decoder'а вида\n")
+	w.WriteString("// `json: unknown field \"foo\"` и возвращает имя поля.\n")
+	w.WriteString("// Если ошибка другого типа — возвращает \"\".\n")
+	w.Print("func extractUnknownField(err error) string {\n")
+	w.Print("\tconst prefix = `json: unknown field \"`\n")
+	w.Print("\tmsg := err.Error()\n")
+	w.Print("\ti := strings.Index(msg, prefix)\n")
+	w.Print("\tif i < 0 {\n\t\treturn \"\"\n\t}\n")
+	w.Print("\trest := msg[i+len(prefix):]\n")
+	w.Print("\tj := strings.Index(rest, `\"`)\n")
+	w.Print("\tif j < 0 {\n\t\treturn \"\"\n\t}\n")
+	w.Print("\treturn rest[:j]\n")
 	w.Print("}\n\n")
 }
 
