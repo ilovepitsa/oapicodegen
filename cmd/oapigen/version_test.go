@@ -23,18 +23,19 @@ func TestMain(m *testing.M) {
 // в stdout и завершается без ошибки. Вывод направляется в stdout (не stderr),
 // как принято для --version у CLI-инструментов.
 func TestRun_VersionFlag(t *testing.T) {
-	t.Parallel()
-
-	// Перехватываем stdout: run пишет версию через fmt.Fprintf(os.Stdout, ...).
+	// Не t.Parallel(): тест мутирует процесс-глобальный os.Stdout, что
+	// гоняется с параллельными тестами. Восстановление через defer —
+	// корректно даже при панике внутри run.
 	orig := os.Stdout
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
+	defer func() { os.Stdout = orig }()
+
 	os.Stdout = w
 
 	err = run([]string{"--version"}, nullFile(t))
 
 	_ = w.Close()
-	os.Stdout = orig
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
