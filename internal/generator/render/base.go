@@ -23,6 +23,11 @@ type RenderContext struct {
 	// вызываемые вне composer-пути, должны установить его вручную —
 	// см. alias_test.go newAliasTestRenderer).
 	Imports *ImportTracker
+	// Diagnostics — коллектор аудита генерации (Task C: GOLANG_SCHEMA_ANY).
+	// Инициализируется Generator'ом в обоих render-context builder'ах.
+	// nil допустим — renderer'ы обязаны проверять перед Append (см.
+	// schema_any_audit.go reportIfAny в последующих задачах).
+	Diagnostics *Collector
 }
 
 // ImportTracker оборачивает []gogen.Import и дедуплицирует по Path+Alias.
