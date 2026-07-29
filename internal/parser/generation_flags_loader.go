@@ -3,10 +3,10 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"github.com/ilovepitsa/oapicodegen/internal/genflags"
 	"io/fs"
 
 	realfs "github.com/ilovepitsa/oapicodegen/internal/fs"
+	"github.com/ilovepitsa/oapicodegen/internal/genflags"
 
 	"gopkg.in/yaml.v3"
 )
