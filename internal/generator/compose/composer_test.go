@@ -104,7 +104,7 @@ func (f *fakeSingleton) Render(*render.RenderContext) ([]byte, *render.ImportTra
 func (f *fakeSingleton) FilePath() string { return f.path }
 
 func TestComposeSchemaFile_RecordsToBuf(t *testing.T) {
-	ff := gogen.NewFileFactory("oapigen-test")
+	ff := gogen.NewFileFactory("oapigen-test", "v2.0.0")
 	c := NewFileComposer(ff)
 
 	s := &parser.Schema{Name: "Pet", Type: "object"}
@@ -124,7 +124,7 @@ func TestComposeSchemaFile_RecordsToBuf(t *testing.T) {
 }
 
 func TestComposeSchemaFile_WalkerErrorWrapped(t *testing.T) {
-	ff := gogen.NewFileFactory("oapigen-test")
+	ff := gogen.NewFileFactory("oapigen-test", "v2.0.0")
 	c := NewFileComposer(ff)
 
 	s := &parser.Schema{Name: "Boom", Type: "object"}
@@ -176,7 +176,7 @@ func (f *failingSchemaRenderer) OnAllOfMember(*parser.Schema, int, *parser.Schem
 }
 
 func TestComposeMethodFile_RecordsEachMethod(t *testing.T) {
-	ff := gogen.NewFileFactory("oapigen-test")
+	ff := gogen.NewFileFactory("oapigen-test", "v2.0.0")
 	c := NewFileComposer(ff)
 
 	methods := []*parser.Method{
@@ -197,7 +197,7 @@ func TestComposeMethodFile_RecordsEachMethod(t *testing.T) {
 }
 
 func TestComposeMethodFile_WalkerErrorWrapped(t *testing.T) {
-	ff := gogen.NewFileFactory("oapigen-test")
+	ff := gogen.NewFileFactory("oapigen-test", "v2.0.0")
 	c := NewFileComposer(ff)
 
 	methods := []*parser.Method{
@@ -244,7 +244,7 @@ func (f *failingMethodRenderer) OnResponseHeader(*parser.Method, string, string,
 }
 
 func TestComposeSingletonFile_AssemblesBodyAndImports(t *testing.T) {
-	ff := gogen.NewFileFactory("oapigen-test")
+	ff := gogen.NewFileFactory("oapigen-test", "v2.0.0")
 	c := NewFileComposer(ff)
 
 	r := &fakeSingleton{
@@ -269,7 +269,7 @@ func TestComposeSingletonFile_AssemblesBodyAndImports(t *testing.T) {
 }
 
 func TestComposeSingletonFile_RenderErrorWrapped(t *testing.T) {
-	ff := gogen.NewFileFactory("oapigen-test")
+	ff := gogen.NewFileFactory("oapigen-test", "v2.0.0")
 	c := NewFileComposer(ff)
 
 	r := &fakeSingleton{

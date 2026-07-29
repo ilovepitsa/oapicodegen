@@ -6,8 +6,15 @@ BIN := oapigen
 COVER_OUT := coverage.txt
 COVER_HTML := coverage.html
 
+# VERSION — версия генератора, инжектируется в бинарник через ldflags.
+# По умолчанию берётся из ближайшего git-тега (git describe --tags --abbrev=0);
+# если тега нет или мы вне git-репозитория, fallback на "dev".
+# Можно переопределить: make build VERSION=v9.9.9.
+VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo dev)
+LDFLAGS := -X github.com/ilovepitsa/oapicodegen/internal/version.Version=$(VERSION)
+
 build:
-	$(GO) build $(PKG)
+	$(GO) build -ldflags "$(LDFLAGS)" $(PKG)
 
 test:
 	$(GO) test $(PKG)
