@@ -432,3 +432,64 @@ func TestRegistry_ValidateConfig_DisabledFlagSuccess(t *testing.T) {
 	err := r.ValidateConfig("FLAG_DISABLED_OK", cfg)
 	require.NoError(t, err)
 }
+
+// ValidateConfig для EnumFlag обязан отвергать DefaultEnum, не входящий в
+// Allowed: опечатка в generation_flags.yaml иначе молчаливо становится
+// резолвнутым дефолтом для всех проектов без override.
+func TestRegistry_ValidateConfig_EnumDefaultNotInAllowed(t *testing.T) {
+	t.Parallel()
+
+	r := NewRegistry()
+	r.Register(EnumFlag{
+		FlagName:    "FLAG_ENUM_BAD",
+		Allowed:     []string{"silent", "warn", "error"},
+		FlagDefault: "warn",
+	})
+
+	cfg := flagCfg("FLAG_ENUM_BAD", func(c *FlagConfig) {
+		c.DefaultEnum = "verbose" // опечатка — нет в Allowed
+	})
+
+	err := r.ValidateConfig("FLAG_ENUM_BAD", cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "defaultEnum")
+	assert.Contains(t, err.Error(), "must be one of")
+}
+
+// Пустой DefaultEnum для EnumFlag, у которого Allowed не содержит "", также
+// недопустим — это реальная мисконфигурация.
+func TestRegistry_ValidateConfig_EnumEmptyDefaultNotInAllowed(t *testing.T) {
+	t.Parallel()
+
+	r := NewRegistry()
+	r.Register(EnumFlag{
+		FlagName:    "FLAG_ENUM_EMPTY",
+		Allowed:     []string{"silent", "warn", "error"},
+		FlagDefault: "warn",
+	})
+
+	cfg := flagCfg("FLAG_ENUM_EMPTY") // DefaultEnum == "" по умолчанию
+
+	err := r.ValidateConfig("FLAG_ENUM_EMPTY", cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "defaultEnum")
+}
+
+// Валидный DefaultEnum, входящий в Allowed, принимается.
+func TestRegistry_ValidateConfig_EnumDefaultInAllowed(t *testing.T) {
+	t.Parallel()
+
+	r := NewRegistry()
+	r.Register(EnumFlag{
+		FlagName:    "FLAG_ENUM_OK",
+		Allowed:     []string{"silent", "warn", "error"},
+		FlagDefault: "warn",
+	})
+
+	cfg := flagCfg("FLAG_ENUM_OK", func(c *FlagConfig) {
+		c.DefaultEnum = "warn"
+	})
+
+	err := r.ValidateConfig("FLAG_ENUM_OK", cfg)
+	require.NoError(t, err)
+}
