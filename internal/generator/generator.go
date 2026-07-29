@@ -37,6 +37,11 @@ type Generator struct {
 	// GOLANG_SPLIT_REQUEST_RESPONSE рендерятся как <Name>Request + <Name>Response.
 	// nil, если флаг выключен.
 	splittable map[string]bool
+
+	// diagnostics — коллектор аудита генерации (GOLANG_SCHEMA_ANY).
+	// Инициализируется в Generate после применения opts. Будущий
+	// WithDiagnostics Option сможет подменить его внешним коллектором.
+	diagnostics *render.Collector
 }
 
 // Option настраивает Generator.
@@ -58,6 +63,10 @@ func Generate(
 
 	for _, opt := range opts {
 		opt(g)
+	}
+
+	if g.diagnostics == nil {
+		g.diagnostics = render.NewCollector()
 	}
 
 	schemas := project.Model.Schemas()
@@ -195,6 +204,7 @@ func (g *Generator) newSchemaRenderContext(subPkg string) *render.RenderContext 
 		Splittable:   g.splittable,
 		ModulePath:   g.project.ImportPrefix,
 		ImportPrefix: g.project.ImportPrefix,
+		Diagnostics:  g.diagnostics,
 	}
 	ctx.TypeMapper = g.newRenderTypeMapper("model", "", subPkg, ctx)
 
@@ -211,6 +221,7 @@ func (g *Generator) newOperationsRenderContext(pkg string) *render.RenderContext
 		Splittable:   g.splittable,
 		ModulePath:   g.project.ImportPrefix,
 		ImportPrefix: g.project.ImportPrefix,
+		Diagnostics:  g.diagnostics,
 	}
 	ctx.TypeMapper = g.newRenderTypeMapper(pkg, "", "", ctx)
 	return ctx
