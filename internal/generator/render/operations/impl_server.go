@@ -38,6 +38,12 @@ func (r *ImplServerRenderer) Render(ctx *render.RenderContext) ([]byte, *render.
 	// validator.Validate(req, s.reg) после bind (Task 7).
 	imps.Add(gogen.Import{Path: "github.com/ilovepitsa/oapicodegen/pkg/validator", Alias: "validator"})
 
+	// net/http + strings нужны helper'ам валидации (writeValidationError,
+	// splitValidationErr), которые рендерятся безусловно при наличии
+	// хендлеров (Task 7).
+	imps.Add(gogen.Import{Path: "net/http"})
+	imps.Add(gogen.Import{Path: "strings"})
+
 	needBody, needURLForm := false, false
 	for _, op := range ops {
 		if op.RequestBody != nil {
@@ -94,10 +100,45 @@ func renderImplServerStruct(w *codegen.BufferWriter, needBody, needURLForm bool)
 	w.Print("\treturn &ServerHTTP{impl: impl, reg: reg}\n")
 	w.Print("}\n\n")
 
+	// Helper'ы валидации рендерятся безусловно: каждый хендлер вызывает
+	// writeValidationError при ошибке validator.Validate (Task 7).
+	renderWriteValidationError(w)
+	renderSplitValidationErr(w)
+
 	if needBody {
 		renderBindBody(w, needURLForm)
 		renderExtractUnknownField(w)
 	}
+}
+
+// renderWriteValidationError рендерит helper, возвращающий HTTP 400 со
+// структурированным JSON-телом ошибки валидации. err.Error() от walker'а
+// имеет вид "Owner.Pets[2].Name: ...".
+func renderWriteValidationError(w *codegen.BufferWriter) {
+	w.WriteString("// writeValidationError возвращает 400 со структурированным\n")
+	w.WriteString("// JSON-телом ошибки валидации. err.Error() от walker'а\n")
+	w.WriteString("// имеет вид \"Owner.Pets[2].Name: ...\".\n")
+	w.Print("func writeValidationError(c echo.Context, err error) error {\n")
+	w.Print("\tfield, msg := splitValidationErr(err.Error())\n")
+	w.Print("\treturn c.JSON(http.StatusBadRequest, map[string]any{\n")
+	w.Print("\t\t\"error\":   \"validation_error\",\n")
+	w.Print("\t\t\"field\":   field,\n")
+	w.Print("\t\t\"message\": msg,\n")
+	w.Print("\t})\n")
+	w.Print("}\n\n")
+}
+
+// renderSplitValidationErr рендерит helper, режущий строку ошибки walker'а
+// по первому ": ": левая часть — путь к полю, правая — сообщение.
+// Без разделителя field="".
+func renderSplitValidationErr(w *codegen.BufferWriter) {
+	w.WriteString("// splitValidationErr режет строку ошибки walker'а по первому \": \":\n")
+	w.WriteString("// левая часть — путь к полю, правая — сообщение. Без разделителя field=\"\".\n")
+	w.Print("func splitValidationErr(s string) (field, msg string) {\n")
+	w.Print("\ti := strings.Index(s, \": \")\n")
+	w.Print("\tif i < 0 {\n\t\treturn \"\", s\n\t}\n")
+	w.Print("\treturn s[:i], s[i+2:]\n")
+	w.Print("}\n\n")
 }
 
 func renderBindBody(w *codegen.BufferWriter, needURLForm bool) {
@@ -173,6 +214,12 @@ func renderImplServerMethod(w *codegen.BufferWriter, op *parser.Method, noAutoDe
 	if !noAutoDefaults && shouldCallSetDefaults(op, project) {
 		w.Print("\treq.Body.SetDefaults()\n")
 	}
+
+	// Validate whole req (body+path+query) against registry. No-op для
+	// структур без ValidateOwn — платим только reflection walk (Task 7).
+	w.Print("\tif err := validator.Validate(req, s.reg); err != nil {\n")
+	w.Print("\t\treturn writeValidationError(c, err)\n")
+	w.Print("\t}\n")
 
 	w.Print("\tresp, err := s.impl.", name, "(c.Request().Context(), req)\n")
 	w.Print("\tif err != nil {\n\t\treturn err\n\t}\n")
