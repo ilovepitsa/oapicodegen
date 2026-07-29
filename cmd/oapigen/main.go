@@ -20,6 +20,7 @@ import (
 	"github.com/ilovepitsa/oapicodegen/internal/generator"
 	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
 	"github.com/ilovepitsa/oapicodegen/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/version"
 	"os"
 
 	"go.uber.org/zap"
@@ -47,6 +48,7 @@ func run(args []string, stderr *os.File) error {
 		dryRun                bool
 		skipCompileCheck      bool
 		generationFlagsConfig string
+		showVersion           bool
 	)
 
 	flagSet.StringVar(&input, "input", "", "path to project root (directory with service subfolders)")
@@ -60,12 +62,21 @@ func run(args []string, stderr *os.File) error {
 		&generationFlagsConfig, "generation-flags-config-path", "",
 		"path to global generation_flags.yaml",
 	)
+	flagSet.BoolVar(&showVersion, "version", false, "print oapigen version and exit")
 
 	logCfg := logging.NewLoggerConfiguratorFromFlags(flagSet)
 	fwCfg := configurator.NewFileWriterConfiguratorFromFlags(flagSet)
 
 	if err := flagSet.Parse(args); err != nil {
 		return fmt.Errorf("parse flags: %w", err)
+	}
+
+	// --version обрабатывается до тяжёлой логики (загрузка проекта, генерация):
+	// печатаем версию в stdout и выходим с кодом 0.
+	if showVersion {
+		fmt.Fprintf(os.Stdout, "oapigen (%s)\n", version.Get())
+
+		return nil
 	}
 
 	if input == "" {
@@ -138,7 +149,7 @@ func run(args []string, stderr *os.File) error {
 		}
 	}
 
-	sugar.Infof("generation complete: output=%s import-prefix=%s", output, importPrefix)
+	sugar.Infof("generation complete: version=%s output=%s import-prefix=%s", version.Get(), output, importPrefix)
 
 	return nil
 }

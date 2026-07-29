@@ -21,6 +21,7 @@ import (
 	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
 	"github.com/ilovepitsa/oapicodegen/internal/generator/walk"
 	"github.com/ilovepitsa/oapicodegen/internal/parser"
+	"github.com/ilovepitsa/oapicodegen/internal/version"
 
 	opsrender "github.com/ilovepitsa/oapicodegen/internal/generator/render/operations"
 	schemarender "github.com/ilovepitsa/oapicodegen/internal/generator/render/schema"
@@ -69,7 +70,7 @@ func Generate(
 	g := &Generator{
 		project:     project,
 		schemaIndex: si,
-		factory:     gogen.NewFileFactory("oapigen"),
+		factory:     gogen.NewFileFactory("oapigen", version.Version),
 	}
 	g.composer = compose.NewFileComposer(g.factory)
 
