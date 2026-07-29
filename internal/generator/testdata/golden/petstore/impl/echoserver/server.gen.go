@@ -5,19 +5,45 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	apiclient "github.com/ilovepitsa/oapicodegen/internal/generator/testdata/golden/petstore/interfaces/client"
 	apiserver "github.com/ilovepitsa/oapicodegen/internal/generator/testdata/golden/petstore/interfaces/server"
+	validator "github.com/ilovepitsa/oapicodegen/pkg/validator"
 	"github.com/labstack/echo/v4"
 	"io"
 	"net/http"
+	"strings"
 )
 
 type ServerHTTP struct {
 	impl apiserver.Server
+	reg  *validator.Registry
 }
 
-func NewServerHTTP(impl apiserver.Server) *ServerHTTP {
-	return &ServerHTTP{impl: impl}
+func NewServerHTTP(impl apiserver.Server, reg *validator.Registry) *ServerHTTP {
+	return &ServerHTTP{impl: impl, reg: reg}
+}
+
+// writeValidationError возвращает 400 со структурированным
+// JSON-телом ошибки валидации. err.Error() от walker'а
+// имеет вид "Owner.Pets[2].Name: ...".
+func writeValidationError(c echo.Context, err error) error {
+	field, msg := splitValidationErr(err.Error())
+	return c.JSON(http.StatusBadRequest, map[string]any{
+		"error":   "validation_error",
+		"field":   field,
+		"message": msg,
+	})
+}
+
+// splitValidationErr режет строку ошибки walker'а по первому ": ":
+// левая часть — путь к полю, правая — сообщение. Без разделителя field="".
+func splitValidationErr(s string) (field, msg string) {
+	i := strings.Index(s, ": ")
+	if i < 0 {
+		return "", s
+	}
+	return s[:i], s[i+2:]
 }
 
 // bindBody читает тело запроса, сбрасывает его для c.Bind() и
@@ -32,10 +58,34 @@ func bindBody(c echo.Context, dst any) error {
 	if len(body) == 0 {
 		return nil
 	}
-	if err := json.Unmarshal(body, dst); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		field := extractUnknownField(err)
+		if field != "" {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("unknown field %q", field))
+		}
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 	return nil
+}
+
+// extractUnknownField парсит ошибку json.Decoder'а вида
+// `json: unknown field "foo"` и возвращает имя поля.
+// Если ошибка другого типа — возвращает "".
+func extractUnknownField(err error) string {
+	const prefix = `json: unknown field "`
+	msg := err.Error()
+	i := strings.Index(msg, prefix)
+	if i < 0 {
+		return ""
+	}
+	rest := msg[i+len(prefix):]
+	j := strings.Index(rest, `"`)
+	if j < 0 {
+		return ""
+	}
+	return rest[:j]
 }
 
 func (s *ServerHTTP) Register(e *echo.Echo) {
@@ -48,6 +98,9 @@ func (s *ServerHTTP) listPets(c echo.Context) error {
 	req := &apiclient.ListPetsRequest{}
 	if err := c.Bind(req); err != nil {
 		return err
+	}
+	if err := validator.Validate(req, s.reg); err != nil {
+		return writeValidationError(c, err)
 	}
 	resp, err := s.impl.ListPets(c.Request().Context(), req)
 	if err != nil {
@@ -70,6 +123,9 @@ func (s *ServerHTTP) createPet(c echo.Context) error {
 	if err := c.Bind(req); err != nil {
 		return err
 	}
+	if err := validator.Validate(req, s.reg); err != nil {
+		return writeValidationError(c, err)
+	}
 	resp, err := s.impl.CreatePet(c.Request().Context(), req)
 	if err != nil {
 		return err
@@ -84,6 +140,9 @@ func (s *ServerHTTP) getPet(c echo.Context) error {
 	req := &apiclient.GetPetRequest{}
 	if err := c.Bind(req); err != nil {
 		return err
+	}
+	if err := validator.Validate(req, s.reg); err != nil {
+		return writeValidationError(c, err)
 	}
 	resp, err := s.impl.GetPet(c.Request().Context(), req)
 	if err != nil {

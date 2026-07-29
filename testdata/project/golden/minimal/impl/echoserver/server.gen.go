@@ -5,19 +5,45 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	validator "github.com/ilovepitsa/oapicodegen/pkg/validator"
 	apiclient "github.com/ilovepitsa/oapicodegen/testdata/project/golden/minimal/interfaces/client"
 	apiserver "github.com/ilovepitsa/oapicodegen/testdata/project/golden/minimal/interfaces/server"
 	"github.com/labstack/echo/v4"
 	"io"
 	"net/http"
+	"strings"
 )
 
 type ServerHTTP struct {
 	impl apiserver.Server
+	reg  *validator.Registry
 }
 
-func NewServerHTTP(impl apiserver.Server) *ServerHTTP {
-	return &ServerHTTP{impl: impl}
+func NewServerHTTP(impl apiserver.Server, reg *validator.Registry) *ServerHTTP {
+	return &ServerHTTP{impl: impl, reg: reg}
+}
+
+// writeValidationError возвращает 400 со структурированным
+// JSON-телом ошибки валидации. err.Error() от walker'а
+// имеет вид "Owner.Pets[2].Name: ...".
+func writeValidationError(c echo.Context, err error) error {
+	field, msg := splitValidationErr(err.Error())
+	return c.JSON(http.StatusBadRequest, map[string]any{
+		"error":   "validation_error",
+		"field":   field,
+		"message": msg,
+	})
+}
+
+// splitValidationErr режет строку ошибки walker'а по первому ": ":
+// левая часть — путь к полю, правая — сообщение. Без разделителя field="".
+func splitValidationErr(s string) (field, msg string) {
+	i := strings.Index(s, ": ")
+	if i < 0 {
+		return "", s
+	}
+	return s[:i], s[i+2:]
 }
 
 // bindBody читает тело запроса, сбрасывает его для c.Bind() и
@@ -32,10 +58,34 @@ func bindBody(c echo.Context, dst any) error {
 	if len(body) == 0 {
 		return nil
 	}
-	if err := json.Unmarshal(body, dst); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		field := extractUnknownField(err)
+		if field != "" {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("unknown field %q", field))
+		}
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 	return nil
+}
+
+// extractUnknownField парсит ошибку json.Decoder'а вида
+// `json: unknown field "foo"` и возвращает имя поля.
+// Если ошибка другого типа — возвращает "".
+func extractUnknownField(err error) string {
+	const prefix = `json: unknown field "`
+	msg := err.Error()
+	i := strings.Index(msg, prefix)
+	if i < 0 {
+		return ""
+	}
+	rest := msg[i+len(prefix):]
+	j := strings.Index(rest, `"`)
+	if j < 0 {
+		return ""
+	}
+	return rest[:j]
 }
 
 func (s *ServerHTTP) Register(e *echo.Echo) {
@@ -50,6 +100,9 @@ func (s *ServerHTTP) listItems(c echo.Context) error {
 	req := &apiclient.ListItemsRequest{}
 	if err := c.Bind(req); err != nil {
 		return err
+	}
+	if err := validator.Validate(req, s.reg); err != nil {
+		return writeValidationError(c, err)
 	}
 	resp, err := s.impl.ListItems(c.Request().Context(), req)
 	if err != nil {
@@ -72,6 +125,9 @@ func (s *ServerHTTP) createItem(c echo.Context) error {
 	if err := c.Bind(req); err != nil {
 		return err
 	}
+	if err := validator.Validate(req, s.reg); err != nil {
+		return writeValidationError(c, err)
+	}
 	resp, err := s.impl.CreateItem(c.Request().Context(), req)
 	if err != nil {
 		return err
@@ -89,6 +145,9 @@ func (s *ServerHTTP) getItem(c echo.Context) error {
 	req := &apiclient.GetItemRequest{}
 	if err := c.Bind(req); err != nil {
 		return err
+	}
+	if err := validator.Validate(req, s.reg); err != nil {
+		return writeValidationError(c, err)
 	}
 	resp, err := s.impl.GetItem(c.Request().Context(), req)
 	if err != nil {
@@ -111,6 +170,9 @@ func (s *ServerHTTP) updateItem(c echo.Context) error {
 	if err := c.Bind(req); err != nil {
 		return err
 	}
+	if err := validator.Validate(req, s.reg); err != nil {
+		return writeValidationError(c, err)
+	}
 	resp, err := s.impl.UpdateItem(c.Request().Context(), req)
 	if err != nil {
 		return err
@@ -128,6 +190,9 @@ func (s *ServerHTTP) deleteItem(c echo.Context) error {
 	req := &apiclient.DeleteItemRequest{}
 	if err := c.Bind(req); err != nil {
 		return err
+	}
+	if err := validator.Validate(req, s.reg); err != nil {
+		return writeValidationError(c, err)
 	}
 	resp, err := s.impl.DeleteItem(c.Request().Context(), req)
 	if err != nil {
