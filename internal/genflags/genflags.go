@@ -236,7 +236,8 @@ func (r *Registry) ValidateConfig(name string, cfg FlagConfig) error {
 }
 
 // Resolve вычисляет финальное значение флага для проекта, стёртое до any.
-// Nil-override даёт cfg.DefaultValue (bool для BoolFlag); любое другое значение
+// Nil-override даёт дефолт по типу флага: EnumFlag возвращает cfg.DefaultEnum,
+// остальные — cfg.DefaultValue (bool для BoolFlag); любое другое значение
 // проходит валидацию через ValidateOverride флага (которая отвергает non-bool и
 // нарушения DependsOn), после чего возвращается.
 //

@@ -24,7 +24,7 @@
   affects: [golang]
   enabled: true
 - name: GOLANG_SCHEMA_ANY
-  default_enum: warn
+  defaultEnum: warn
   description: "Control generation of Go `any` types (silent|warn|error)"
   affects: [golang]
   enabled: true
