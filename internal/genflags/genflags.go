@@ -258,7 +258,15 @@ func (r *Registry) Resolve(
 	}
 
 	if override == nil {
-		return cfg.DefaultValue, nil
+		// Bool-флаги возвращают cfg.DefaultValue (bool), enum-флаги —
+		// cfg.DefaultEnum (string). Различаем по типу флага, чтобы не
+		// возвращать bool-zero для enum-флага.
+		switch f.(type) {
+		case EnumFlag:
+			return cfg.DefaultEnum, nil
+		default:
+			return cfg.DefaultValue, nil
+		}
 	}
 
 	value, err := f.ValidateOverride(override, resolved, cfg)

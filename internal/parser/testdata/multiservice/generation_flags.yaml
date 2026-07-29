@@ -34,3 +34,9 @@
   defaultValue: false
   targetValue: true
   affects: [golang]
+
+- name: GOLANG_SCHEMA_ANY
+  description: "Control generation of Go `any` types (silent|warn|error)"
+  enabled: true
+  defaultEnum: warn
+  affects: [golang]

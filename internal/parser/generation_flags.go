@@ -31,6 +31,11 @@ const (
 	// Используется для PATCH/update-семантики, где нужно отличать "поле не
 	// задано" от "поле явно null".
 	FlagUseOptional = "GOLANG_USE_OPTIONAL"
+
+	// FlagSchemaAny — tri-state (silent/warn/error) контроль над генерацией
+	// Go-типа `any`. silent — выключено (поведение как сегодня); warn — логировать
+	// каждое `any`-место и продолжить; error — прервать генерацию. Default: warn.
+	FlagSchemaAny = "GOLANG_SCHEMA_ANY"
 )
 
 // GenerationFlagConfig — alias для genflags.FlagConfig, YAML-совместимая запись
@@ -43,6 +48,11 @@ type ProjectFeature struct {
 	Value bool
 }
 
+// SchemaAnyFeature — финальное значение enum-флага (mode: silent|warn|error).
+type SchemaAnyFeature struct {
+	Mode string
+}
+
 // ProjectFeatures — резолюнутый набор флагов для проекта. Каждое поле
 // соответствует одному зарегистрированному флагу.
 type ProjectFeatures struct {
@@ -51,6 +61,7 @@ type ProjectFeatures struct {
 	UseRequiredV2        ProjectFeature
 	UseUTCForDateTime    ProjectFeature
 	UseOptional          ProjectFeature
+	SchemaAny            SchemaAnyFeature
 }
 
 // newDefaultRegistry создаёт Registry со всеми поддерживаемыми флагами.
@@ -63,6 +74,11 @@ func newDefaultRegistry() *genflags.Registry {
 	r.Register(genflags.BoolFlag{FlagName: FlagUseRequiredV2})
 	r.Register(genflags.BoolFlag{FlagName: FlagUseUTCForDateTime})
 	r.Register(genflags.BoolFlag{FlagName: FlagUseOptional})
+	r.Register(genflags.EnumFlag{
+		FlagName:    FlagSchemaAny,
+		Allowed:     []string{"silent", "warn", "error"},
+		FlagDefault: "warn",
+	})
 
 	return r
 }
