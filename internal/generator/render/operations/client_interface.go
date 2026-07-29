@@ -49,7 +49,7 @@ func (r *ClientInterfaceRenderer) Render(ctx *render.RenderContext) ([]byte, *re
 	w.Print("}\n\n")
 
 	for _, op := range ops {
-		renderRequestStruct(w, op, m)
+		renderRequestStruct(w, op, m, ctx.Diagnostics)
 		renderResponseStruct(w, op, m, ctx.Diagnostics)
 	}
 
@@ -75,7 +75,7 @@ func clientExtraImports(ops []*parser.Method) (needJSON, needFmt bool) {
 	return
 }
 
-func renderRequestStruct(w *codegen.BufferWriter, op *parser.Method, m render.TypeMapper) {
+func renderRequestStruct(w *codegen.BufferWriter, op *parser.Method, m render.TypeMapper, diagnostics *render.Collector) {
 	name := operationMethodName(op) + "Request"
 	w.Print("type ", name, " struct {\n")
 	m.SetMode("Request")
@@ -83,7 +83,7 @@ func renderRequestStruct(w *codegen.BufferWriter, op *parser.Method, m render.Ty
 		renderParamField(w, p, m)
 	}
 	if op.RequestBody != nil {
-		renderBodyField(w, op.RequestBody, m)
+		renderBodyField(w, op, op.RequestBody, m, diagnostics)
 	}
 	w.Print("}\n\n")
 }
@@ -104,7 +104,12 @@ func renderParamField(w *codegen.BufferWriter, p *parser.Parameter, m render.Typ
 	w.Print("\t", fieldName, " ", fieldType, " `", echoTag(p.In, p.Name), "`\n")
 }
 
-func renderBodyField(w *codegen.BufferWriter, rb *parser.RequestBody, m render.TypeMapper) {
+// renderBodyField рендерит поле Body request-структуры. diagnostics —
+// best-effort GOLANG_SCHEMA_ANY аудит: если схема свелась к any (например,
+// requestBody со схемой {}), в коллектор добавляется Diagnostic. Аудит
+// применяется к сырому fieldType (до pointer-wrapping), т.к. обёртка
+// конкретного типа в указатель никогда не даёт any. nil-коллектор — no-op.
+func renderBodyField(w *codegen.BufferWriter, op *parser.Method, rb *parser.RequestBody, m render.TypeMapper, diagnostics *render.Collector) {
 	schema := bodySchema(rb)
 	if schema == nil {
 		return
@@ -113,6 +118,7 @@ func renderBodyField(w *codegen.BufferWriter, rb *parser.RequestBody, m render.T
 		writeDocComment(w, rb.Description)
 	}
 	fieldType := m.GoType(schema)
+	reportPayloadIfAny(diagnostics, "paths."+op.Method+"."+op.Path+".requestBody", schema, fieldType)
 	if !rb.Required && !strings.HasPrefix(fieldType, "*") && !isInherentlyNilable(fieldType) {
 		fieldType = "*" + fieldType
 	}

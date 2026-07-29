@@ -3,9 +3,11 @@ package operations
 import (
 	"testing"
 
+	"github.com/ilovepitsa/oapicodegen/internal/codegen"
 	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
 	"github.com/ilovepitsa/oapicodegen/internal/parser"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsAnyType(t *testing.T) {
@@ -134,4 +136,125 @@ func TestOpLocation(t *testing.T) {
 
 	assert.Equal(t, "paths.get./pets.responses.200", opLocation("get", "/pets", "200"))
 	assert.Equal(t, "paths.post./pets/{id}.responses.default", opLocation("post", "/pets/{id}", "default"))
+}
+
+// bodyAnyTypeMapper — TypeMapper, эмулирующий поведение реального typeMapper
+// для request body: пустой объект (schema {}, Type=="object" без Properties и
+// AdditionalProperties) → "map[string]any"; явный additionalProperties →
+// "map[string]any" (но аудит различает их по *parser.Schema); прочее — как в
+// mockTypeMapper. Используется для проверки, что renderBodyField реально зовёт
+// reportPayloadIfAny при разрешении body в any-тип.
+type bodyAnyTypeMapper struct{ mode string }
+
+func (m *bodyAnyTypeMapper) GoType(s *parser.Schema) string {
+	if s == nil {
+		return "any"
+	}
+	if s.Type == "object" && len(s.Properties) == 0 {
+		if s.AdditionalPropertiesFalse {
+			return "struct{}"
+		}
+		if s.AdditionalProperties != nil {
+			return "map[string]any"
+		}
+		return "map[string]any"
+	}
+	switch s.Type {
+	case "integer":
+		return "int"
+	case "number":
+		return "float64"
+	case "boolean":
+		return "bool"
+	case "string":
+		return "string"
+	}
+	return "any"
+}
+
+func (m *bodyAnyTypeMapper) SetMode(mode string) { m.mode = mode }
+func (m *bodyAnyTypeMapper) Mode() string        { return m.mode }
+
+// TestRenderBodyField_AuditsEmptyObjectBody проверяет, что renderBodyField
+// вызывает reportPayloadIfAny для request body со схемой {} (пустой объект без
+// Properties и AdditionalProperties), разрешающейся в map[string]any.
+func TestRenderBodyField_AuditsEmptyObjectBody(t *testing.T) {
+	t.Parallel()
+
+	w := codegen.NewBufferWriter()
+	col := render.NewCollector()
+	op := &parser.Method{Method: "post", Path: "/items"}
+	rb := &parser.RequestBody{
+		Required: true,
+		Content: map[string]*parser.MediaType{
+			"application/json": {Schema: &parser.Schema{Type: "object"}},
+		},
+	}
+
+	renderBodyField(w, op, rb, &bodyAnyTypeMapper{}, col)
+
+	got := col.Drain()
+	require.Len(t, got, 1, "empty object body schema must produce a diagnostic")
+	assert.Equal(t, "paths.post./items.requestBody", got[0].Location)
+	assert.Contains(t, got[0].Reason, "empty schema")
+}
+
+// TestRenderBodyField_ExemptsExplicitAdditionalProperties проверяет, что
+// явный additionalProperties не триггерит аудит, даже если GoType —
+// map[string]any.
+func TestRenderBodyField_ExemptsExplicitAdditionalProperties(t *testing.T) {
+	t.Parallel()
+
+	w := codegen.NewBufferWriter()
+	col := render.NewCollector()
+	op := &parser.Method{Method: "post", Path: "/items"}
+	rb := &parser.RequestBody{
+		Required: true,
+		Content: map[string]*parser.MediaType{
+			"application/json": {Schema: &parser.Schema{
+				Type:                 "object",
+				AdditionalProperties: &parser.Schema{Type: "string"},
+			}},
+		},
+	}
+
+	renderBodyField(w, op, rb, &bodyAnyTypeMapper{}, col)
+	assert.Empty(t, col.Drain(), "explicit additionalProperties body must be exempt")
+}
+
+// TestRenderBodyField_NoAuditOnConcreteBody проверяет, что конкретный тип body
+// не порождает diagnostic.
+func TestRenderBodyField_NoAuditOnConcreteBody(t *testing.T) {
+	t.Parallel()
+
+	w := codegen.NewBufferWriter()
+	col := render.NewCollector()
+	op := &parser.Method{Method: "post", Path: "/items"}
+	rb := &parser.RequestBody{
+		Required: true,
+		Content: map[string]*parser.MediaType{
+			"application/json": {Schema: &parser.Schema{Type: "string"}},
+		},
+	}
+
+	renderBodyField(w, op, rb, &bodyAnyTypeMapper{}, col)
+	assert.Empty(t, col.Drain(), "concrete body type must not produce a diagnostic")
+}
+
+// TestRenderBodyField_NilCollectorNoOp проверяет, что nil-коллектор не паникует.
+func TestRenderBodyField_NilCollectorNoOp(t *testing.T) {
+	t.Parallel()
+
+	w := codegen.NewBufferWriter()
+	op := &parser.Method{Method: "post", Path: "/items"}
+	rb := &parser.RequestBody{
+		Required: true,
+		Content: map[string]*parser.MediaType{
+			"application/json": {Schema: &parser.Schema{Type: "object"}},
+		},
+	}
+
+	assert.NotPanics(t, func() {
+		renderBodyField(w, op, rb, &bodyAnyTypeMapper{}, nil)
+	})
 }

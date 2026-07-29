@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 )
 
 // FlagConfig — YAML-совместимая запись одной генерационной записи флага.
@@ -230,6 +231,19 @@ func (r *Registry) ValidateConfig(name string, cfg FlagConfig) error {
 		return errors.New(
 			"flag with same default and target values must not contain dependsOn",
 		)
+	}
+
+	// Для EnumFlag DefaultEnum обязан входить в Allowed. Пустой DefaultEnum
+	// также недопустим, если Allowed не содержит "". Без этой проверки опечатка
+	// в generation_flags.yaml (например, defaultEnum: verbose) молчаливо
+	// становится резолвнутым дефолтом для всех проектов без override.
+	if e, ok := f.(EnumFlag); ok {
+		if !slices.Contains(e.Allowed, cfg.DefaultEnum) {
+			return fmt.Errorf(
+				"flag %q: defaultEnum %q must be one of %s",
+				name, cfg.DefaultEnum, strings.Join(e.Allowed, ", "),
+			)
+		}
 	}
 
 	return nil
