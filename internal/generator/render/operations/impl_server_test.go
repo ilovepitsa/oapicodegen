@@ -117,6 +117,27 @@ func TestImplServerRenderer_URLFormBranchPreserved(t *testing.T) {
 	assert.Contains(t, got, "u.UnmarshalURLForm(c.Request().PostForm)")
 }
 
+// TestRenderImplServerStruct_Shape фиксирует форму struct + конструктора:
+// ServerHTTP хранит *validator.Registry, NewServerHTTP принимает (impl, reg).
+func TestRenderImplServerStruct_Shape(t *testing.T) {
+	t.Parallel()
+
+	w := codegen.NewBufferWriter()
+	renderImplServerStruct(w, false, false)
+	got := string(w.Content())
+
+	assert.Contains(t, got, "type ServerHTTP struct {")
+	assert.Contains(t, got, "\timpl apiserver.Server\n")
+	assert.Contains(t, got, "\treg  *validator.Registry\n")
+
+	assert.Contains(t, got, "func NewServerHTTP(impl apiserver.Server, reg *validator.Registry) *ServerHTTP {")
+	assert.Contains(t, got, "\treturn &ServerHTTP{impl: impl, reg: reg}\n")
+
+	// No body helpers when needBody=false.
+	assert.NotContains(t, got, "func bindBody(")
+	assert.NotContains(t, got, "func extractUnknownField(")
+}
+
 // TestRenderBindBody_OutputShape проверяет буфер напрямую, без полной сборки
 // проекта — фиксирует форму JSON-ветки и helper'а.
 func TestRenderBindBody_OutputShape(t *testing.T) {
@@ -130,4 +151,39 @@ func TestRenderBindBody_OutputShape(t *testing.T) {
 	assert.Contains(t, got, "dec.DisallowUnknownFields()")
 	assert.Contains(t, got, "func extractUnknownField(err error) string {")
 	assert.Contains(t, got, "return rest[:j]")
+}
+
+// TestImplServerRenderer_ValidatorImport проверяет, что рендер добавляет
+// импорт pkg/validator с алиасом validator — он нужен каждому хендлеру
+// для вызова validator.Validate(req, s.reg) (Task 7).
+func TestImplServerRenderer_ValidatorImport(t *testing.T) {
+	t.Parallel()
+
+	project := &parser.Project{}
+	project.CreatePaths("example.com/test")
+	project.Paths.Services = []*parser.Service{
+		{Name: "default", Methods: []*parser.Method{
+			{OperationID: "createItem", RequestBody: &parser.RequestBody{
+				Content: map[string]*parser.MediaType{
+					"application/json": {Schema: &parser.Schema{Type: "object"}},
+				},
+			}},
+		}},
+	}
+
+	ctx := &render.RenderContext{
+		Project:      project,
+		ImportPrefix: "example.com/test",
+		TypeMapper:   &mockTypeMapper{},
+	}
+
+	r := NewImplServerRenderer()
+	body, imps, err := r.Render(ctx)
+	require.NoError(t, err)
+
+	got := string(body)
+	assert.Contains(t, got, "reg  *validator.Registry")
+	assert.Contains(t, got, "func NewServerHTTP(impl apiserver.Server, reg *validator.Registry) *ServerHTTP {")
+
+	assertImportHasPath(t, imps, "github.com/ilovepitsa/oapicodegen/pkg/validator")
 }

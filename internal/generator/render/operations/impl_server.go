@@ -34,6 +34,10 @@ func (r *ImplServerRenderer) Render(ctx *render.RenderContext) ([]byte, *render.
 		imps.Add(gogen.Import{Path: ctx.Project.Paths.Imports.ServerInterfaces.Path, Alias: "apiserver"})
 	}
 
+	// pkg/validator — обязательный импорт: каждый хендлер вызывает
+	// validator.Validate(req, s.reg) после bind (Task 7).
+	imps.Add(gogen.Import{Path: "github.com/ilovepitsa/oapicodegen/pkg/validator", Alias: "validator"})
+
 	needBody, needURLForm := false, false
 	for _, op := range ops {
 		if op.RequestBody != nil {
@@ -83,10 +87,11 @@ func (r *ImplServerRenderer) Render(ctx *render.RenderContext) ([]byte, *render.
 func renderImplServerStruct(w *codegen.BufferWriter, needBody, needURLForm bool) {
 	w.Print("type ServerHTTP struct {\n")
 	w.Print("\timpl apiserver.Server\n")
+	w.Print("\treg  *validator.Registry\n")
 	w.Print("}\n\n")
 
-	w.Print("func NewServerHTTP(impl apiserver.Server) *ServerHTTP {\n")
-	w.Print("\treturn &ServerHTTP{impl: impl}\n")
+	w.Print("func NewServerHTTP(impl apiserver.Server, reg *validator.Registry) *ServerHTTP {\n")
+	w.Print("\treturn &ServerHTTP{impl: impl, reg: reg}\n")
 	w.Print("}\n\n")
 
 	if needBody {
