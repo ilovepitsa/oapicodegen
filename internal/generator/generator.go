@@ -47,6 +47,18 @@ type Generator struct {
 // Option настраивает Generator.
 type Option func(*Generator)
 
+// WithDiagnostics инжектит внешний коллектор диагностики. Если не задан,
+// Generator создаёт внутренний в Generate (доступен через Diagnostics()).
+// Внешний путь предпочтителен для cmd/oapigen: вызывающая сторона держит тот
+// же указатель и дренажит его после Generate без доступа к Generator.
+func WithDiagnostics(col *render.Collector) Option {
+	return func(g *Generator) { g.diagnostics = col }
+}
+
+// Diagnostics возвращает коллектор, использованный при последнем Generate.
+// Может быть внешним (WithDiagnostics) или внутренним (создан по умолчанию).
+func (g *Generator) Diagnostics() *render.Collector { return g.diagnostics }
+
 // Generate обходит все схемы и операции, пишет Go-файлы через fw.
 func Generate(
 	fw codegen.FileWriter,

@@ -18,6 +18,7 @@ import (
 	"github.com/ilovepitsa/oapicodegen/internal/codegen/configurator"
 	"github.com/ilovepitsa/oapicodegen/internal/fs"
 	"github.com/ilovepitsa/oapicodegen/internal/generator"
+	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
 	"github.com/ilovepitsa/oapicodegen/internal/parser"
 	"os"
 
@@ -120,8 +121,12 @@ func run(args []string, stderr *os.File) error {
 
 	for _, project := range ps.Projects {
 		projectFW := codegen.WithPath(fw, project.Folder)
-		if err := generator.Generate(projectFW, project, si); err != nil {
+		col := render.NewCollector()
+		if err := generator.Generate(projectFW, project, si, generator.WithDiagnostics(col)); err != nil {
 			return fmt.Errorf("generate project %q: %w", project.Folder, err)
+		}
+		if err := drainDiagnostics(col, project.Folder, project.Features.SchemaAny.Mode, sugar); err != nil {
+			return err
 		}
 
 		sugar.Infof("generated project: %s", project.Folder)
@@ -197,6 +202,36 @@ func runCompileCheck(output string, sugar *zap.SugaredLogger) error {
 	}
 
 	sugar.Info("compile check passed")
+
+	return nil
+}
+
+// drainDiagnostics обрабатывает накопленные аудитом GOLANG_SCHEMA_ANY
+// диагностики по режиму флага:
+//   - silent: ничего не делает;
+//   - warn:   логирует каждую через sugar.Warnf и продолжает;
+//   - error:  логирует каждую, затем возвращает aggregated error —
+//     генерация прерывается (cmd завершается с non-zero exit).
+//
+// Логирование в error-режиме тоже происходит — пользователь видит список
+// проблем до сообщения о прерывании. Пустой коллектор — no-op для любого режима.
+func drainDiagnostics(col *render.Collector, project, mode string, sugar *zap.SugaredLogger) error {
+	diag := col.Drain()
+	if len(diag) == 0 || mode == "silent" {
+		return nil
+	}
+
+	for _, d := range diag {
+		sugar.Warnf("schema-any [%s] %s: %s", project, d.Location, d.Reason)
+	}
+
+	if mode == "error" {
+		return fmt.Errorf(
+			"project %q: %d schema(s) resolve to Go `any` (GOLANG_SCHEMA_ANY=error); "+
+				"fix the schemas or set the flag to warn/silent",
+			project, len(diag),
+		)
+	}
 
 	return nil
 }
