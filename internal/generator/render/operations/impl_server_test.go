@@ -187,3 +187,115 @@ func TestImplServerRenderer_ValidatorImport(t *testing.T) {
 
 	assertImportHasPath(t, imps, "github.com/ilovepitsa/oapicodegen/pkg/validator")
 }
+
+// TestImplServerRenderer_HandlerCallsValidate проверяет, что каждый хендлер
+// после bind (и SetDefaults, если есть) вызывает validator.Validate(req, s.reg)
+// и при ошибке возвращает writeValidationError(c, err) (Task 7).
+func TestImplServerRenderer_HandlerCallsValidate(t *testing.T) {
+	t.Parallel()
+
+	project := &parser.Project{}
+	project.CreatePaths("example.com/test")
+	project.Paths.Services = []*parser.Service{
+		{Name: "default", Methods: []*parser.Method{
+			{OperationID: "createItem", RequestBody: &parser.RequestBody{
+				Content: map[string]*parser.MediaType{
+					"application/json": {Schema: &parser.Schema{Type: "object"}},
+				},
+			}},
+		}},
+	}
+
+	ctx := &render.RenderContext{
+		Project:      project,
+		ImportPrefix: "example.com/test",
+		TypeMapper:   &mockTypeMapper{},
+	}
+
+	r := NewImplServerRenderer()
+	body, _, err := r.Render(ctx)
+	require.NoError(t, err)
+
+	got := string(body)
+
+	// Validate call after bind, before s.impl.
+	bindIdx := strings.Index(got, "if err := c.Bind(req); err != nil {")
+	validateIdx := strings.Index(got, "if err := validator.Validate(req, s.reg); err != nil {")
+	implIdx := strings.Index(got, "resp, err := s.impl.")
+	require.GreaterOrEqual(t, bindIdx, 0)
+	require.GreaterOrEqual(t, validateIdx, 0)
+	require.GreaterOrEqual(t, implIdx, 0)
+	assert.Less(t, bindIdx, validateIdx, "Validate must come after c.Bind")
+	assert.Less(t, validateIdx, implIdx, "Validate must come before s.impl call")
+
+	assert.Contains(t, got, "if err := validator.Validate(req, s.reg); err != nil {")
+	assert.Contains(t, got, "\t\treturn writeValidationError(c, err)\n")
+}
+
+// TestImplServerRenderer_ValidationHelpers фиксирует тела двух package-level
+// helper'ов: writeValidationError (400 + structured JSON {error,field,message})
+// и splitValidationErr (режет строку ошибки walker'а по первому ": ").
+func TestImplServerRenderer_ValidationHelpers(t *testing.T) {
+	t.Parallel()
+
+	project := &parser.Project{}
+	project.CreatePaths("example.com/test")
+	project.Paths.Services = []*parser.Service{
+		{Name: "default", Methods: []*parser.Method{
+			{OperationID: "createItem", RequestBody: &parser.RequestBody{
+				Content: map[string]*parser.MediaType{
+					"application/json": {Schema: &parser.Schema{Type: "object"}},
+				},
+			}},
+		}},
+	}
+
+	ctx := &render.RenderContext{
+		Project:      project,
+		ImportPrefix: "example.com/test",
+		TypeMapper:   &mockTypeMapper{},
+	}
+
+	r := NewImplServerRenderer()
+	body, imps, err := r.Render(ctx)
+	require.NoError(t, err)
+
+	got := string(body)
+
+	// writeValidationError: 400 + structured JSON body.
+	assert.Contains(t, got, "func writeValidationError(c echo.Context, err error) error {")
+	assert.Contains(t, got, "\tfield, msg := splitValidationErr(err.Error())\n")
+	assert.Contains(t, got, "\treturn c.JSON(http.StatusBadRequest, map[string]any{\n")
+	assert.Contains(t, got, "\t\t\"error\":   \"validation_error\",\n")
+	assert.Contains(t, got, "\t\t\"field\":   field,\n")
+	assert.Contains(t, got, "\t\t\"message\": msg,\n")
+	assert.Contains(t, got, "\t})\n")
+	assert.Contains(t, got, "}\n\n")
+
+	// splitValidationErr: cuts walker error string by first ": ".
+	assert.Contains(t, got, "func splitValidationErr(s string) (field, msg string) {")
+	assert.Contains(t, got, "\ti := strings.Index(s, \": \")\n")
+	assert.Contains(t, got, "\tif i < 0 {\n\t\treturn \"\", s\n\t}\n")
+	assert.Contains(t, got, "\treturn s[:i], s[i+2:]\n")
+
+	// strings import present (splitValidationErr uses strings.Index).
+	assertImportHasPath(t, imps, "strings")
+}
+
+// TestRenderImplServerStruct_HelpersAlwaysEmitted проверяет, что helper'ы
+// рендерятся безусловно (даже при needBody=false), т.к. каждый хендлер их
+// использует. bindBody/extractUnknownField при этом не рендерятся.
+func TestRenderImplServerStruct_HelpersAlwaysEmitted(t *testing.T) {
+	t.Parallel()
+
+	w := codegen.NewBufferWriter()
+	renderImplServerStruct(w, false, false)
+	got := string(w.Content())
+
+	assert.Contains(t, got, "func writeValidationError(c echo.Context, err error) error {")
+	assert.Contains(t, got, "func splitValidationErr(s string) (field, msg string) {")
+
+	// Body helpers still gated by needBody.
+	assert.NotContains(t, got, "func bindBody(")
+	assert.NotContains(t, got, "func extractUnknownField(")
+}
