@@ -3,8 +3,8 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"github.com/ilovepitsa/oapicodegen/internal/genflags"
+	"io/fs"
 
 	realfs "github.com/ilovepitsa/oapicodegen/internal/fs"
 
@@ -23,7 +23,8 @@ type GenerationFlagsLoader struct {
 	fsys     realfs.ReadOnlyFS
 	registry *genflags.Registry
 
-	gfConfigs map[string]GenerationFlagConfig
+	gfConfigs       map[string]GenerationFlagConfig
+	projectFlagsAny map[string]any
 }
 
 // NewGenerationFlagsLoader создаёт loader поверх readonly FS с стандартным
@@ -81,21 +82,22 @@ func (l *GenerationFlagsLoader) GetProjectFeatures(projectPath string) (ProjectF
 	}
 
 	features := ProjectFeatures{}
-	setters := map[string]func(ProjectFeature){
-		FlagServerNoAutoDefaults: func(f ProjectFeature) { features.ServerNoAutoDefaults = f },
-		FlagSplitRequestResponse: func(f ProjectFeature) { features.SplitRequestResponse = f },
-		FlagUseRequiredV2:        func(f ProjectFeature) { features.UseRequiredV2 = f },
-		FlagUseUTCForDateTime:    func(f ProjectFeature) { features.UseUTCForDateTime = f },
-		FlagUseOptional:          func(f ProjectFeature) { features.UseOptional = f },
+	setters := map[string]func(ProjectFeature, SchemaAnyFeature){
+		FlagServerNoAutoDefaults: func(f ProjectFeature, _ SchemaAnyFeature) { features.ServerNoAutoDefaults = f },
+		FlagSplitRequestResponse: func(f ProjectFeature, _ SchemaAnyFeature) { features.SplitRequestResponse = f },
+		FlagUseRequiredV2:        func(f ProjectFeature, _ SchemaAnyFeature) { features.UseRequiredV2 = f },
+		FlagUseUTCForDateTime:    func(f ProjectFeature, _ SchemaAnyFeature) { features.UseUTCForDateTime = f },
+		FlagUseOptional:          func(f ProjectFeature, _ SchemaAnyFeature) { features.UseOptional = f },
+		FlagSchemaAny:            func(_ ProjectFeature, e SchemaAnyFeature) { features.SchemaAny = e },
 	}
 
 	for _, name := range l.registry.Names() {
-		feature, err := l.resolveFlag(projectFlags, name)
+		pf, ef, err := l.resolveFlag(projectFlags, name)
 		if err != nil {
 			return ProjectFeatures{}, err
 		}
 
-		setters[name](feature)
+		setters[name](pf, ef)
 	}
 
 	return features, nil
@@ -104,38 +106,67 @@ func (l *GenerationFlagsLoader) GetProjectFeatures(projectPath string) (ProjectF
 func (l *GenerationFlagsLoader) resolveFlag(
 	projectFlags map[string]bool,
 	name string,
-) (ProjectFeature, error) {
+) (ProjectFeature, SchemaAnyFeature, error) {
 	cfg := l.gfConfigs[name]
 
 	var override any
-	if v, has := projectFlags[name]; has {
+	if v, has := l.projectFlagsAny[name]; has {
 		override = v
 	}
 
 	value, err := l.registry.Resolve(name, override, projectFlags, cfg)
 	if err != nil {
-		return ProjectFeature{}, fmt.Errorf("resolve flag %q: %w", name, err)
+		return ProjectFeature{}, SchemaAnyFeature{}, fmt.Errorf("resolve flag %q: %w", name, err)
 	}
 
-	boolValue, ok := value.(bool)
-	if !ok {
-		// Enum-флаги обрабатываются отдельным setter'ом в последующих задачах;
-		// здесь — только bool-флаги.
-		return ProjectFeature{}, fmt.Errorf("resolve flag %q: expected bool, got %T", name, value)
+	switch v := value.(type) {
+	case bool:
+		return ProjectFeature{Value: v}, SchemaAnyFeature{}, nil
+	case string:
+		return ProjectFeature{}, SchemaAnyFeature{Mode: v}, nil
+	default:
+		return ProjectFeature{}, SchemaAnyFeature{}, fmt.Errorf("resolve flag %q: unexpected type %T", name, value)
 	}
-
-	return ProjectFeature{Value: boolValue}, nil
 }
 
+// loadProjectFlags читает per-project override как map[string]any, сохраняет
+// результат в l.projectFlagsAny и возвращает bool-only подмножество для
+// использования в роли `resolved` (DependsOn ссылается только на bool-флаги).
 func (l *GenerationFlagsLoader) loadProjectFlags(path string) (map[string]bool, error) {
+	anyMap, err := l.loadProjectFlagsAny(path)
+	if err != nil {
+		return nil, err
+	}
+
+	l.projectFlagsAny = anyMap
+
+	boolMap := make(map[string]bool, len(anyMap))
+	for name, v := range anyMap {
+		b, ok := v.(bool)
+		if !ok {
+			// Не-bool значения (enum-override) пропускаем: они разрешаются
+			// отдельной веткой в resolveFlag и не нужны для DependsOn.
+			continue
+		}
+
+		boolMap[name] = b
+	}
+
+	return boolMap, nil
+}
+
+// loadProjectFlagsAny декодирует per-project override в map[string]any.
+// Семантика отсутствия файла/пустого файла совпадает с исходной: пустой путь
+// или отсутствующий файл → пустой map (без ошибки); пустой файл → пустой map.
+func (l *GenerationFlagsLoader) loadProjectFlagsAny(path string) (map[string]any, error) {
 	if path == "" {
-		return map[string]bool{}, nil
+		return map[string]any{}, nil
 	}
 
 	file, err := l.fsys.Open(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return map[string]bool{}, nil
+			return map[string]any{}, nil
 		}
 
 		return nil, fmt.Errorf("open project generation flags %q: %w", path, err)
@@ -149,10 +180,10 @@ func (l *GenerationFlagsLoader) loadProjectFlags(path string) (map[string]bool, 
 	}
 
 	if info.Size() == 0 {
-		return map[string]bool{}, nil
+		return map[string]any{}, nil
 	}
 
-	var flags map[string]bool
+	var flags map[string]any
 	if err := yaml.NewDecoder(file).Decode(&flags); err != nil {
 		return nil, fmt.Errorf("decode project generation flags: %w", err)
 	}

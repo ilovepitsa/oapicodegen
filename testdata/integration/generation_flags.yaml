@@ -23,3 +23,8 @@
   description: "Use optional.Optional[T] for x-optional fields"
   affects: [golang]
   enabled: true
+- name: GOLANG_SCHEMA_ANY
+  default_enum: warn
+  description: "Control generation of Go `any` types (silent|warn|error)"
+  affects: [golang]
+  enabled: true

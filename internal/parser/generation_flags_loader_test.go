@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// validGlobalConfig — эталонный глобальный конфиг со всеми 5 флагами.
+// validGlobalConfig — эталонный глобальный конфиг со всеми 6 флагами.
 // Используется в большинстве тестов как базовая фикстура.
 const validGlobalConfig = `- name: GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS
   description: "Don't auto-fill defaults in server request binding"
@@ -46,6 +46,12 @@ const validGlobalConfig = `- name: GOLANG_SERVER_BODY_REQUEST_NO_AUTO_DEFAULTS
   defaultValue: false
   targetValue: true
   affects: [golang]
+
+- name: GOLANG_SCHEMA_ANY
+  description: "Control generation of Go any types (silent|warn|error)"
+  enabled: true
+  defaultEnum: warn
+  affects: [golang]
 `
 
 func newTestFS(files map[string]string) fstest.MapFS {
@@ -63,12 +69,13 @@ func TestGenerationFlagsLoader_Load_Success(t *testing.T) {
 	loader := NewGenerationFlagsLoader(fsys)
 	require.NoError(t, loader.Load("generation_flags.yaml"))
 
-	assert.Len(t, loader.gfConfigs, 5)
+	assert.Len(t, loader.gfConfigs, 6)
 	assert.Contains(t, loader.gfConfigs, FlagServerNoAutoDefaults)
 	assert.Contains(t, loader.gfConfigs, FlagSplitRequestResponse)
 	assert.Contains(t, loader.gfConfigs, FlagUseRequiredV2)
 	assert.Contains(t, loader.gfConfigs, FlagUseUTCForDateTime)
 	assert.Contains(t, loader.gfConfigs, FlagUseOptional)
+	assert.Contains(t, loader.gfConfigs, FlagSchemaAny)
 }
 
 func TestGenerationFlagsLoader_Load_MissingFlag(t *testing.T) {
@@ -307,4 +314,68 @@ func TestGenerationFlagsLoader_Load_FileNotFound(t *testing.T) {
 	err := loader.Load("nonexistent.yaml")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "read")
+}
+
+// validGlobalConfigWithSchemaAny — alias; валидный глобальный конфиг уже
+// включает GOLANG_SCHEMA_ANY (см. validGlobalConfig). Alias сохранён для
+// читаемости тестов SchemaAny.
+const validGlobalConfigWithSchemaAny = validGlobalConfig
+
+func TestGenerationFlagsLoader_GetProjectFeatures_SchemaAny_Default(t *testing.T) {
+	fsys := newTestFS(map[string]string{
+		"generation_flags.yaml": validGlobalConfigWithSchemaAny,
+	})
+
+	loader := NewGenerationFlagsLoader(fsys)
+	require.NoError(t, loader.Load("generation_flags.yaml"))
+
+	features, err := loader.GetProjectFeatures("project_flags.yaml")
+	require.NoError(t, err)
+
+	// Без override — defaultEnum "warn".
+	assert.Equal(t, "warn", features.SchemaAny.Mode)
+
+	// Bool-флаги по-прежнему берут defaultValue (false).
+	assert.False(t, features.ServerNoAutoDefaults.Value)
+	assert.False(t, features.SplitRequestResponse.Value)
+	assert.False(t, features.UseRequiredV2.Value)
+	assert.False(t, features.UseUTCForDateTime.Value)
+	assert.False(t, features.UseOptional.Value)
+}
+
+func TestGenerationFlagsLoader_GetProjectFeatures_SchemaAny_OverrideError(t *testing.T) {
+	fsys := newTestFS(map[string]string{
+		"generation_flags.yaml": validGlobalConfigWithSchemaAny,
+		"project_flags.yaml": `GOLANG_SCHEMA_ANY: error
+GOLANG_SPLIT_REQUEST_RESPONSE: true
+USE_REQUIRED_V2: true
+`,
+	})
+
+	loader := NewGenerationFlagsLoader(fsys)
+	require.NoError(t, loader.Load("generation_flags.yaml"))
+
+	features, err := loader.GetProjectFeatures("project_flags.yaml")
+	require.NoError(t, err)
+
+	// Override "error" применён.
+	assert.Equal(t, "error", features.SchemaAny.Mode)
+
+	// Bool-override продолжают работать.
+	assert.True(t, features.SplitRequestResponse.Value)
+	assert.True(t, features.UseRequiredV2.Value)
+}
+
+func TestGenerationFlagsLoader_GetProjectFeatures_SchemaAny_OverrideInvalid(t *testing.T) {
+	fsys := newTestFS(map[string]string{
+		"generation_flags.yaml": validGlobalConfigWithSchemaAny,
+		"project_flags.yaml":    "GOLANG_SCHEMA_ANY: bogus\n",
+	})
+
+	loader := NewGenerationFlagsLoader(fsys)
+	require.NoError(t, loader.Load("generation_flags.yaml"))
+
+	_, err := loader.GetProjectFeatures("project_flags.yaml")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "GOLANG_SCHEMA_ANY")
 }
