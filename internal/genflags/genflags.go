@@ -44,6 +44,10 @@ type FlagConfig struct {
 	// Override этого флага (в не-default значение) допустим, только если каждая
 	// зависимость в резолвнутом наборе совпадает с ожидаемым значением.
 	DependsOn map[string]bool `yaml:"dependsOn"` //nolint:tagliatelle // external camelCase key
+	// DefaultEnum — string-дефолт для enum-флагов. Используется только EnumFlag;
+	// для bool-флагов игнорируется. Когда override == nil, EnumFlag возвращает
+	// cfg.DefaultEnum.
+	DefaultEnum string `yaml:"defaultEnum"` //nolint:tagliatelle // external camelCase key
 }
 
 // Flag описывает один generation-флаг и правила валидации его override.
@@ -51,6 +55,10 @@ type FlagConfig struct {
 // Реализации инкапсулируют типоспецифичную валидацию (например, приведение к
 // bool, membership в enum). Registry вызывает ValidateOverride с уже
 // резолвнутыми значениями флагов проекта, чтобы можно было проверить зависимости.
+//
+// Контракт обобщён до any (вместо bool), чтобы одна и та же Registry могла
+// обслуживать bool-флаги (BoolFlag) и enum-флаги (EnumFlag, добавляется в
+// последующих задачах). BoolFlag по-прежнему возвращает bool, стёртый до any.
 type Flag interface {
 	// Name — стабильный идентификатор, совпадающий с FlagConfig.Name.
 	Name() string
@@ -58,10 +66,10 @@ type Flag interface {
 	// override не передан, а конфиг флага недоступен.
 	Default() any
 	// ValidateOverride проверяет per-project override против конфига флага и
-	// возвращает валидированный bool. `resolved` несёт уже резолвнутые значения
-	// флагов проекта — нужны для проверки DependsOn. Non-nil error отвергает
-	// override.
-	ValidateOverride(value any, resolved map[string]bool, cfg FlagConfig) (bool, error)
+	// возвращает валидированное значение, стёртое до any. `resolved` несёт уже
+	// резолвнутые значения флагов проекта — нужны для проверки DependsOn.
+	// Non-nil error отвергает override.
+	ValidateOverride(value any, resolved map[string]bool, cfg FlagConfig) (any, error)
 }
 
 // BoolFlag — реализация Flag для boolean generation-флагов. Все флаги,
@@ -83,14 +91,15 @@ func (b BoolFlag) Default() any {
 }
 
 // ValidateOverride валидирует boolean per-project override против конфига флага
-// и возвращает валидированный bool. Правила зеркалируют исходную логику parser:
+// и возвращает валидированный bool, стёртый до any. Правила зеркалируют исходную
+// логику parser:
 //
 //  1. value обязан быть bool; любой другой тип отвергается.
 //  2. Если cfg.Enabled == false, разрешено только cfg.DefaultValue.
 //  3. Если value совпадает с cfg.DefaultValue, override — no-op и принимается.
 //  4. Каждая запись в cfg.DependsOn обязана присутствовать в `resolved` с
 //     совпадающим bool-значением.
-func (b BoolFlag) ValidateOverride(value any, resolved map[string]bool, cfg FlagConfig) (bool, error) { //nolint:lll // signature line
+func (b BoolFlag) ValidateOverride(value any, resolved map[string]bool, cfg FlagConfig) (any, error) { //nolint:lll // signature line
 	boolValue, ok := value.(bool)
 	if !ok {
 		return false, fmt.Errorf(
@@ -226,10 +235,14 @@ func (r *Registry) ValidateConfig(name string, cfg FlagConfig) error {
 	return nil
 }
 
-// Resolve вычисляет финальное bool-значение флага для проекта. Nil-override
-// даёт cfg.DefaultValue; любое другое значение проходит валидацию через
-// ValidateOverride флага (которая отвергает non-bool и нарушения DependsOn),
-// после чего возвращается.
+// Resolve вычисляет финальное значение флага для проекта, стёртое до any.
+// Nil-override даёт cfg.DefaultValue (bool для BoolFlag); любое другое значение
+// проходит валидацию через ValidateOverride флага (которая отвергает non-bool и
+// нарушения DependsOn), после чего возвращается.
+//
+// Возвращаемое значение имеет тип any, чтобы одна и та же Registry могла
+// обслуживать bool-флаги (BoolFlag возвращает bool) и enum-флаги (EnumFlag
+// возвращает string). Caller обязан привести значение к ожидаемому типу.
 //
 // `resolved` несёт уже резолвнутые значения флагов проекта; используется для
 // проверки DependsOn и не мутируется.
@@ -238,7 +251,7 @@ func (r *Registry) Resolve(
 	override any,
 	resolved map[string]bool,
 	cfg FlagConfig,
-) (bool, error) {
+) (any, error) {
 	f, ok := r.flags[name]
 	if !ok {
 		return false, fmt.Errorf("generation flag %q is not registered", name)
@@ -248,12 +261,12 @@ func (r *Registry) Resolve(
 		return cfg.DefaultValue, nil
 	}
 
-	boolValue, err := f.ValidateOverride(override, resolved, cfg)
+	value, err := f.ValidateOverride(override, resolved, cfg)
 	if err != nil {
 		return false, fmt.Errorf("resolve flag %q: %w", name, err)
 	}
 
-	return boolValue, nil
+	return value, nil
 }
 
 // CloneResolved возвращает shallow-копию map резолвнутых значений, чтобы
