@@ -14,7 +14,7 @@ VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo dev)
 LDFLAGS := -X github.com/ilovepitsa/oapicodegen/internal/version.Version=$(VERSION)
 
 build:
-	$(GO) build -ldflags "$(LDFLAGS)" $(PKG)
+	$(GO) build -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/oapigen
 
 test:
 	$(GO) test $(PKG)

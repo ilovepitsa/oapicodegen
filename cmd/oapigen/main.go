@@ -130,6 +130,10 @@ func run(args []string, stderr *os.File) error {
 		len(ps.Projects), ps.Common != nil,
 	)
 
+	// Версия бинарника константа на запуск — логируем один раз на старте,
+	// до начала per-project генерации.
+	sugar.Infof("oapigen version %s", version.Get())
+
 	for _, project := range ps.Projects {
 		projectFW := codegen.WithPath(fw, project.Folder)
 		col := render.NewCollector()
@@ -149,7 +153,7 @@ func run(args []string, stderr *os.File) error {
 		}
 	}
 
-	sugar.Infof("generation complete: version=%s output=%s import-prefix=%s", version.Get(), output, importPrefix)
+	sugar.Infof("generation complete: output=%s import-prefix=%s", output, importPrefix)
 
 	return nil
 }
