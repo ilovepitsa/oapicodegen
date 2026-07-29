@@ -50,7 +50,7 @@ func (r *ClientInterfaceRenderer) Render(ctx *render.RenderContext) ([]byte, *re
 
 	for _, op := range ops {
 		renderRequestStruct(w, op, m)
-		renderResponseStruct(w, op, m)
+		renderResponseStruct(w, op, m, ctx.Diagnostics)
 	}
 
 	return w.Content(), imps, nil
@@ -119,7 +119,7 @@ func renderBodyField(w *codegen.BufferWriter, rb *parser.RequestBody, m render.T
 	w.Print("\tBody ", fieldType, " `json:\"-\"`\n")
 }
 
-func renderResponseStruct(w *codegen.BufferWriter, op *parser.Method, m render.TypeMapper) {
+func renderResponseStruct(w *codegen.BufferWriter, op *parser.Method, m render.TypeMapper, diagnostics *render.Collector) {
 	name := operationMethodName(op) + "Response"
 	w.Print("type ", name, " struct {\n")
 	w.Print("\tCode int\n")
@@ -133,6 +133,7 @@ func renderResponseStruct(w *codegen.BufferWriter, op *parser.Method, m render.T
 			w.Print("\t", fieldName, " *", typeName, "\n")
 		} else {
 			payloadType := responsePayloadType(resp, m)
+			reportPayloadIfAny(diagnostics, opLocation(op.Method, op.Path, resp.StatusCode), responseSchema(resp), strings.TrimPrefix(payloadType, "*"))
 			w.Print("\t", fieldName, " ", payloadType, "\n")
 		}
 	}
@@ -142,15 +143,20 @@ func renderResponseStruct(w *codegen.BufferWriter, op *parser.Method, m render.T
 		if !hasResponseHeaders(resp) {
 			continue
 		}
-		renderPayloadWithHeadersType(w, op, code, resp, m)
+		renderPayloadWithHeadersType(w, op, code, resp, m, diagnostics)
 	}
 }
 
-func renderPayloadWithHeadersType(w *codegen.BufferWriter, op *parser.Method, code string, resp *parser.Response, m render.TypeMapper) {
+func renderPayloadWithHeadersType(w *codegen.BufferWriter, op *parser.Method, code string, resp *parser.Response, m render.TypeMapper, diagnostics *render.Collector) {
 	typeName := payloadWithHeadersTypeName(op, code)
 
 	w.Print("type ", typeName, " struct {\n")
-	w.Print("\tPayload *", m.GoType(responseSchema(resp)), "\n")
+	payloadSchema := responseSchema(resp)
+	payloadType := m.GoType(payloadSchema)
+	// Аудит GOLANG_SCHEMA_ANY для payload'а с headers — ловим *any из пустой
+	// схемы. Явный additionalProperties — exempt.
+	reportPayloadIfAny(diagnostics, opLocation(op.Method, op.Path, resp.StatusCode), payloadSchema, payloadType)
+	w.Print("\tPayload *", payloadType, "\n")
 
 	for _, h := range sortedHeaders(resp.Headers) {
 		goType := headerGoBaseType(h.Schema)

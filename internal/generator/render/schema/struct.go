@@ -107,7 +107,7 @@ func (r *StructRenderer) renderStructBody(
 			continue
 		}
 
-		r.renderField(p)
+		r.renderField(s.Name, p)
 	}
 
 	r.Buf.Print("}\n\n")
@@ -128,7 +128,7 @@ func (r *StructRenderer) renderFilteredStruct(
 			continue
 		}
 
-		r.renderField(p)
+		r.renderField(s.Name, p)
 	}
 
 	r.Buf.Print("}\n\n")
@@ -145,7 +145,10 @@ func (r *StructRenderer) currentMode() string {
 //   - p.Optional && GOLANG_USE_OPTIONAL → optional.Optional[T] (импорт optional);
 //   - поле optional (не required и не nilable) → *T;
 //   - иначе — примитивный тип с json/yaml-тегом, omitempty если не required.
-func (r *StructRenderer) renderField(p *parser.Property) {
+//
+// structName — имя текущей object-схемы (s.Name), используется для
+// best-effort location в аудите GOLANG_SCHEMA_ANY (reportSchemaAny).
+func (r *StructRenderer) renderField(structName string, p *parser.Property) {
 	if p.Schema != nil && p.Schema.Description != "" {
 		writeDocComment(r.Buf, p.Schema.Description)
 	}
@@ -156,6 +159,11 @@ func (r *StructRenderer) renderField(p *parser.Property) {
 
 	fieldName := goName(p.Name)
 	fieldType := r.Ctx.TypeMapper.GoType(p.Schema)
+	// Аудит GOLANG_SCHEMA_ANY: ловим поля, чей тип свёлся к any из-за
+	// пустой/неразрешённой схемы. Явный additionalProperties — exempt.
+	// Аудитим raw fieldType из GoType (до pointer-wrapping): any уже
+	// триггерит, а pointer-wrapping конкретного типа никогда не даёт any.
+	reportSchemaAny(r.Ctx.Diagnostics, schemaFieldLocation(structName, p), p.Schema, fieldType)
 	required := r.requiredForMode(p)
 
 	if r.Ctx.Features.UseOptional.Value && p.Optional {

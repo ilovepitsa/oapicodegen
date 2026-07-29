@@ -152,6 +152,13 @@ func hasResponseHeaders(resp *parser.Response) bool {
 	return resp != nil && len(resp.Headers) > 0
 }
 
+// responsePayloadType возвращает Go-тип поля response-структуры (с префиксом
+// `*` для схем и `bool` для ответов без content/schema). Это вспомогательная
+// функция над GoType — аудит GOLANG_SCHEMA_ANY покрывается на call-site в
+// renderResponseStruct (client_interface.go), где доступна Diagnostics-коллектор
+// и *parser.Schema для exemption-проверки additionalProperties. Audit-структуры
+// в audit_client.go используют предопределённый `Payload any` (осознанно) и
+// через этот хелпер не проходят.
 func responsePayloadType(resp *parser.Response, m render.TypeMapper) string {
 	schema := responseSchema(resp)
 	if schema == nil {
