@@ -1998,7 +1998,7 @@ func testGenerator(t *testing.T, doc *oapiparser.Document) *Generator {
 
 	g := &Generator{
 		project: testProject(t, doc, ""),
-		factory: gogen.NewFileFactory("oapigen", "v2.0.0"),
+		factory: gogen.NewFileFactory("oapigen", "v1.2.0"),
 	}
 	g.composer = compose.NewFileComposer(g.factory)
 
@@ -2016,7 +2016,7 @@ func testGeneratorFromSchemas(schemas ...*oapiparser.Schema) *Generator {
 
 	return &Generator{
 		project: project,
-		factory: gogen.NewFileFactory("oapigen", "v2.0.0"),
+		factory: gogen.NewFileFactory("oapigen", "v1.2.0"),
 	}
 }
 
@@ -4050,7 +4050,7 @@ func generateAuditClientFile(t *testing.T, doc *oapiparser.Document) []byte {
 
 	g := &Generator{
 		project: testProject(t, doc, testModulePath),
-		factory: gogen.NewFileFactory("oapigen", "v2.0.0"),
+		factory: gogen.NewFileFactory("oapigen", "v1.2.0"),
 	}
 	g.composer = compose.NewFileComposer(g.factory)
 
@@ -4432,7 +4432,7 @@ func TestCrossServiceRef_GeneratesImport(t *testing.T) {
 	g := &Generator{
 		project:     userBackendProject,
 		schemaIndex: si,
-		factory:     gogen.NewFileFactory("oapigen", "v2.0.0"),
+		factory:     gogen.NewFileFactory("oapigen", "v1.2.0"),
 	}
 
 	m := g.newTypeMapper("model")
@@ -4458,7 +4458,7 @@ func TestCrossServiceRef_NoSchemaIndex_FallbackToAny(t *testing.T) {
 
 	g := &Generator{
 		project: project,
-		factory: gogen.NewFileFactory("oapigen", "v2.0.0"),
+		factory: gogen.NewFileFactory("oapigen", "v1.2.0"),
 	}
 
 	m := g.newTypeMapper("model")
@@ -4515,7 +4515,7 @@ func TestCrossServiceRef_SplitModeAddsSuffix(t *testing.T) {
 	g := &Generator{
 		project:     userBackendProject,
 		schemaIndex: si,
-		factory:     gogen.NewFileFactory("oapigen", "v2.0.0"),
+		factory:     gogen.NewFileFactory("oapigen", "v1.2.0"),
 	}
 
 	m := g.newTypeMapper("model")
