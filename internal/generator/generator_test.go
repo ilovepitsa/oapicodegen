@@ -3963,6 +3963,113 @@ components:
 	assert.Contains(t, got, "am.Tag = m.Tag")
 }
 
+// generatePetAuditModelFileSplit — как generatePetAuditModelFile, но с включённым
+// GOLANG_SPLIT_REQUEST_RESPONSE: Generator.splittable отмечает Pet как
+// splittable, и auditModelFile должен эмитить оба варианта (Request/Response).
+func generatePetAuditModelFileSplit(t *testing.T, doc *oapiparser.Document) []byte {
+	t.Helper()
+
+	g := testGenerator(t, doc)
+	g.project.Features.SplitRequestResponse = oapiparser.ProjectFeature{Value: true}
+	g.splittable = computeSplittable(doc.Schemas)
+
+	for _, sh := range doc.Schemas {
+		if sh.Name == "Pet" {
+			return g.auditModelFile(sh).Content()
+		}
+	}
+
+	require.Fail(t, "Pet schema not found in doc")
+
+	return nil
+}
+
+// splitAuditSections делит вывод auditModelFile на Request- и Response-секции
+// по receiver-имени. Нужно, чтобы точечно проверять поля каждого варианта
+// (NotContains на весь файл ложно срабатывает — поле валидно присутствует в
+// соседнем варианте).
+func splitAuditSections(got, baseName string) (req, resp string) {
+	reqMarker := "func (m " + baseName + "Request) GetAuditData()"
+	respMarker := "func (m " + baseName + "Response) GetAuditData()"
+
+	reqIdx := strings.Index(got, reqMarker)
+	respIdx := strings.Index(got, respMarker)
+
+	if reqIdx == -1 || respIdx == -1 {
+		return "", ""
+	}
+
+	// Request-секция: от начала до начала Response struct.
+	respStructIdx := strings.Index(got, "type "+baseName+"ResponseAuditData")
+	if respStructIdx == -1 {
+		respStructIdx = respIdx
+	}
+
+	return got[:respStructIdx], got[respStructIdx:]
+}
+
+// TestAuditModel_SplitFiltersFieldsByVariant — регрессия бага audit × split:
+// audit_model.go итерировал по всем свойствам схемы при receiver'е
+// <Name>Request, из-за чего readOnly серверные поля попадали в
+// <Name>RequestAuditData и копировались из receiver'а, у которого их нет.
+// При split поля должны фильтроваться как у StructRenderer: Request — без
+// readOnly, Response — без writeOnly; оба варианта получают свой GetAuditData.
+func TestAuditModel_SplitFiltersFieldsByVariant(t *testing.T) {
+	t.Parallel()
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pet'}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, format: int64, readOnly: true}
+        name: {type: string}
+        secret: {type: string, writeOnly: true}
+`)
+	got := string(generatePetAuditModelFileSplit(t, doc))
+
+	// Разделяем вывод на Request- и Response-секции для точечных проверок.
+	reqSection, respSection := splitAuditSections(got, "Pet")
+
+	// Request-вариант: без readOnly id, содержит writeOnly secret.
+	assert.NotEmpty(t, reqSection, "PetRequest audit section must exist")
+	assert.Contains(t, reqSection, "type PetRequestAuditData struct {")
+	assert.Contains(t, reqSection, "func (m PetRequest) GetAuditData() any {")
+	assert.NotContains(t, reqSection, "am.ID = m.ID", "readOnly id must not appear in Request audit copy")
+	assert.NotContains(t, reqSection, "ID   ", "readOnly id field must not appear in Request audit struct")
+	assert.Contains(t, reqSection, "am.Secret = m.Secret", "writeOnly secret belongs to Request variant")
+
+	// Response-вариант: без writeOnly secret, содержит readOnly id.
+	assert.NotEmpty(t, respSection, "PetResponse audit section must exist")
+	assert.Contains(t, respSection, "type PetResponseAuditData struct {")
+	assert.Contains(t, respSection, "func (m PetResponse) GetAuditData() any {")
+	assert.Contains(t, respSection, "am.ID = m.ID", "readOnly id belongs to Response variant")
+	assert.NotContains(t, respSection, "am.Secret = m.Secret", "writeOnly secret must not appear in Response audit copy")
+
+	// Моно-вариант Pet (без суффикса) при split не эмитится.
+	assert.NotContains(t, got, "type PetAuditData struct {")
+	assert.NotContains(t, got, "func (m Pet) GetAuditData() any {")
+}
+
 func TestSchemaReferencedByOperation_RequestBody(t *testing.T) {
 	t.Parallel()
 
@@ -4372,6 +4479,116 @@ components:
 
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("generated audit-data model package did not compile: %v\n--- output ---\n%s", err, out)
+	}
+}
+
+// TestGenerate_AuditData_SplitCompiles — end-to-end проверка audit-генерации
+// при включённом GOLANG_SPLIT_REQUEST_RESPONSE. Регрессия для бага
+// audit × split: audit_model.go итерировал по всем свойствам схемы (включая
+// readOnly серверные поля) при receiver'е <Name>Request, у которого этих полей
+// нет, и эмитил GetAuditData только для Request-варианта, тогда как
+// interfaces/client/audit.gen.go зовёт GetAuditData и на Response-типе операции.
+//
+// Спека: Pet с readOnly id (серверное), name, writeOnly secret. Операция POST
+// ссылается на Pet в request body и в response 200 → триггерит и request-, и
+// response-audit. Тест компилирует ./model и ./interfaces/client вместе.
+func TestGenerate_AuditData_SplitCompiles(t *testing.T) {
+	if testing.Short() {
+		t.Skip("compile test skipped in short mode")
+	}
+
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go binary not in PATH, skipping compile test")
+	}
+
+	doc := parseSpec(t, `
+openapi: 3.0.3
+info: {title: t, version: '1'}
+paths:
+  /pets:
+    post:
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Pet'}
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pet'}
+        '400': {description: bad request}
+components:
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: {type: integer, format: int64, readOnly: true}
+        name: {type: string}
+        secret: {type: string, writeOnly: true, x-sensitive: true}
+`)
+	pf := oapiparser.ProjectFeatures{
+		SplitRequestResponse: oapiparser.ProjectFeature{Value: true},
+	}
+
+	// Используем import-prefix = реальный module path, чтобы сгенерированный
+	// client-пакет импортировал .../oapicodegen/model, а не testModulePath
+	// (petstore) — иначе temp-модуль не сможет разрешить оба пакета одновременно.
+	fw := &collectWriter{files: map[string][]byte{}}
+	project := testProject(t, doc, "github.com/ilovepitsa/oapicodegen")
+	project.Features = pf
+	require.NoError(t, Generate(fw, project, nil))
+	files := fw.files
+
+	dir := t.TempDir()
+	modelDir := filepath.Join(dir, "model")
+	clientDir := filepath.Join(dir, "interfaces", "client")
+	sensitiveDir := filepath.Join(dir, "pkg", "sensitive")
+	require.NoError(t, os.MkdirAll(modelDir, 0o755))
+	require.NoError(t, os.MkdirAll(clientDir, 0o755))
+	require.NoError(t, os.MkdirAll(sensitiveDir, 0o755))
+
+	// Generated audit-data code imports github.com/ilovepitsa/oapicodegen/pkg/sensitive
+	// (hardcoded sensitivePkg). Temp module must match the real module path.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"),
+		[]byte("module github.com/ilovepitsa/oapicodegen\n\ngo 1.26\n"), 0o644))
+
+	sensitiveSrc, err := os.ReadFile("../../pkg/sensitive/sensitive.go")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(sensitiveDir, "sensitive.go"),
+		sensitiveSrc, 0o644))
+
+	writePkgFiles := func(prefix, target string) {
+		for name, content := range files {
+			if !strings.HasPrefix(name, prefix) {
+				continue
+			}
+
+			require.NoError(t, os.WriteFile(filepath.Join(target, filepath.Base(name)), content, 0o644))
+		}
+	}
+
+	writePkgFiles("model/", modelDir)
+	writePkgFiles("interfaces/client/", clientDir)
+
+	// ./model — audit-data split: <Name>RequestAuditData + <Name>ResponseAuditData
+	// с фильтрами полей и методами на обоих вариантах.
+	modelBuild := exec.Command("go", "build", "./model")
+	modelBuild.Dir = dir
+	if out, err := modelBuild.CombinedOutput(); err != nil {
+		t.Fatalf("generated split audit-data model package did not compile: %v\n--- output ---\n%s", err, out)
+	}
+
+	// ./interfaces/client — audit.gen.go зовёт GetAuditData на response-типе
+	// операции (*PetResponse), который эмитится только при режимно-симметричном
+	// audit_model.go.
+	clientBuild := exec.Command("go", "build", "./interfaces/client")
+	clientBuild.Dir = dir
+	if out, err := clientBuild.CombinedOutput(); err != nil {
+		t.Fatalf("generated split audit-data client package did not compile: %v\n--- output ---\n%s", err, out)
 	}
 }
 

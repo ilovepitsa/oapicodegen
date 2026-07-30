@@ -15,25 +15,72 @@ const sensitivePkg = "github.com/ilovepitsa/oapicodegen/pkg/sensitive"
 //
 // Триггер: схема referenced из request body или response любой операции —
 // см. schemaReferencedByOperation.
+//
+// При включённом GOLANG_SPLIT_REQUEST_RESPONSE схема рендерится как
+// <Name>Request + <Name>Response (см. StructRenderer.OnSplitStruct). Audit
+// повторяет эту разбивку: для каждого варианта генерируется собственный
+// <Name><Variant>AuditData-struct и метод GetAuditData на соответствующем
+// типе (<Name>Request / <Name>Response). Поля фильтруются по варианту так же,
+// как StructRenderer: Request — без readOnly, Response — без writeOnly.
+// Это требуется, потому что interfaces/client/audit.gen.go зовёт
+// GetAuditData и на request-body, и на response-типе операции.
 func (g *Generator) auditModelFile(sh *parser.Schema) codegen.File {
-	m := g.newTypeMapper("model")
 	w := codegen.NewBufferWriter()
 
-	name := goName(sh.Name)
-	// Split mode: audit captures request data, so use Request variant.
-	if g.splittable != nil && g.splittable[sh.Name] {
-		m.mode = modeRequest
-		name += modeRequest
+	baseName := goName(sh.Name)
+	splittable := g.splittable != nil && g.splittable[sh.Name]
+
+	if !splittable {
+		m := g.newTypeMapper("model")
+		g.renderAuditStruct(w, sh, m, baseName, nil)
+		g.renderGetAuditData(w, sh, m, baseName, nil)
+
+		return g.factory.Create(&gogen.File{
+			Package: "model",
+			Imports: m.imports,
+			Body:    w.Content(),
+		})
 	}
 
-	g.renderAuditStruct(w, sh, m, name)
-	g.renderGetAuditData(w, sh, m, name)
+	// Split: Request + Response варианты с фильтрами как у StructRenderer.
+	reqM := g.newTypeMapper("model")
+	reqM.mode = modeRequest
+	reqName := baseName + modeRequest
+	reqKeep := func(p *parser.Property) bool { return p.Schema == nil || !p.Schema.ReadOnly }
+	g.renderAuditStruct(w, sh, reqM, reqName, reqKeep)
+	g.renderGetAuditData(w, sh, reqM, reqName, reqKeep)
+
+	respM := g.newTypeMapper("model")
+	respM.mode = modeResponse
+	respName := baseName + modeResponse
+	respKeep := func(p *parser.Property) bool { return p.Schema == nil || !p.Schema.WriteOnly }
+	g.renderAuditStruct(w, sh, respM, respName, respKeep)
+	g.renderGetAuditData(w, sh, respM, respName, respKeep)
+
+	imports := mergeImports(reqM.imports, respM.imports)
 
 	return g.factory.Create(&gogen.File{
 		Package: "model",
-		Imports: m.imports,
+		Imports: imports,
 		Body:    w.Content(),
 	})
+}
+
+// mergeImports объединяет два списка импортов, удаляя дубликаты.
+func mergeImports(a, b []gogen.Import) []gogen.Import {
+	seen := make(map[gogen.Import]bool, len(a)+len(b))
+	out := make([]gogen.Import, 0, len(a)+len(b))
+
+	for _, imp := range append(append([]gogen.Import{}, a...), b...) {
+		if seen[imp] {
+			continue
+		}
+
+		seen[imp] = true
+		out = append(out, imp)
+	}
+
+	return out
 }
 
 // schemaReferencedByOperation сообщает, ссылается ли request body или
@@ -80,6 +127,9 @@ func schemaInResponses(responses []*parser.Response, name string) bool {
 
 // renderAuditStruct рендерит `type <Name>AuditData struct { ... }`.
 //
+// keep != nil фильтрует свойства по split-варианту (совпадает с фильтрами
+// StructRenderer.OnSplitStruct): nil = все поля (моно-режим).
+//
 // Sensitive-поля получают тип sensitive.Sensitive[T] (или *sensitive.Sensitive[T]
 // для pointer-полей); остальные — тот же тип, что в оригинале.
 func (g *Generator) renderAuditStruct(
@@ -87,11 +137,16 @@ func (g *Generator) renderAuditStruct(
 	sh *parser.Schema,
 	m *typeMapper,
 	name string,
+	keep func(*parser.Property) bool,
 ) {
 	w.Print("type ", name, "AuditData struct {\n")
 
 	for _, p := range sh.Properties {
 		if p.Schema == nil {
+			continue
+		}
+
+		if keep != nil && !keep(p) {
 			continue
 		}
 
@@ -148,7 +203,8 @@ func auditSensitiveType(fieldType string, pointer bool) string {
 
 // renderGetAuditData рендерит `func (m <Name>) GetAuditData() any { ... }`.
 //
-// Для каждого поля:
+// keep != nil фильтрует свойства по split-варианту (должен совпадать с keep,
+// переданным в renderAuditStruct). Для каждого поля:
 //   - non-sensitive value:  am.Field = m.Field
 //   - non-sensitive pointer: am.Field = m.Field
 //   - sensitive value:       am.Field = sensitive.New(m.Field)
@@ -158,12 +214,17 @@ func (g *Generator) renderGetAuditData(
 	sh *parser.Schema,
 	m *typeMapper,
 	name string,
+	keep func(*parser.Property) bool,
 ) {
 	w.Print("func (m ", name, ") GetAuditData() any {\n")
 	w.Print("\tvar am ", name, "AuditData\n")
 
 	for _, p := range sh.Properties {
 		if p.Schema == nil {
+			continue
+		}
+
+		if keep != nil && !keep(p) {
 			continue
 		}
 
