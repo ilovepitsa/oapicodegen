@@ -244,9 +244,10 @@ func renderImplResponseBody(w *codegen.BufferWriter, op *parser.Method, label st
 		return
 	}
 
-	// Response with headers.
+	// Response with headers. PayloadWithHeaders-тип определён в interfaces/client
+	// (другой пакет), квалифицируем через apiclient-alias.
 	typeName := payloadWithHeadersTypeName(op, r.StatusCode)
-	w.Print("\t\tresult.", fieldName, " = &", typeName, "{}\n")
+	w.Print("\t\tresult.", fieldName, " = &apiclient.", typeName, "{}\n")
 
 	if schema != nil {
 		m.SetMode("Response")

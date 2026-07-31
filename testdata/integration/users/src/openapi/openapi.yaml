@@ -136,3 +136,4 @@ components:
     UpdateUserRequest: {$ref: './schemas/users/requests.yaml#/UpdateUserRequest'}
     LoginRequest: {$ref: './schemas/auth/login.yaml#/LoginRequest'}
     TokenResponse: {$ref: './schemas/auth/login.yaml#/TokenResponse'}
+    Address: {$ref: './schemas/auth/address.yaml#/Address'}

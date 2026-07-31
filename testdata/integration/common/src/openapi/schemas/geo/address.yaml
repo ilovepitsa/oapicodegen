@@ -3,7 +3,7 @@ Address:
   properties:
     street:
       type: string
-      x-validations: [">0"]
+      x-validations: ["Size >0"]
     city:
       type: string
     zip:

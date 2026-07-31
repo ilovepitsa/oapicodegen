@@ -32,6 +32,7 @@ func (g *Generator) auditModelFile(sh *parser.Schema) codegen.File {
 
 	if !splittable {
 		m := g.newTypeMapper("model")
+		m.subPkg = sh.SubPackage
 		g.renderAuditStruct(w, sh, m, baseName, nil)
 		g.renderGetAuditData(w, sh, m, baseName, nil)
 
@@ -45,6 +46,7 @@ func (g *Generator) auditModelFile(sh *parser.Schema) codegen.File {
 	// Split: Request + Response варианты с фильтрами как у StructRenderer.
 	reqM := g.newTypeMapper("model")
 	reqM.mode = modeRequest
+	reqM.subPkg = sh.SubPackage
 	reqName := baseName + modeRequest
 	reqKeep := func(p *parser.Property) bool { return p.Schema == nil || !p.Schema.ReadOnly }
 	g.renderAuditStruct(w, sh, reqM, reqName, reqKeep)
@@ -52,6 +54,7 @@ func (g *Generator) auditModelFile(sh *parser.Schema) codegen.File {
 
 	respM := g.newTypeMapper("model")
 	respM.mode = modeResponse
+	respM.subPkg = sh.SubPackage
 	respName := baseName + modeResponse
 	respKeep := func(p *parser.Property) bool { return p.Schema == nil || !p.Schema.WriteOnly }
 	g.renderAuditStruct(w, sh, respM, respName, respKeep)

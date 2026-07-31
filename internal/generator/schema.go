@@ -19,6 +19,12 @@ import (
 // $ref-схемы, которые практически всегда object-struct — см. update_marker.go).
 func (g *Generator) schemaFile(sh *parser.Schema) codegen.File {
 	m := g.newTypeMapper("model")
+	// subPkg рендерящейся схемы нужен для корректной cross-subpackage квалификации:
+	// без него m.subPkg="" и refs на схемы того же subpackage ошибочно получают
+	// префикс "<subPkg>." + self-import (см. qualifyModelType). StructRenderer
+	// получает subPkg через newSchemaRenderContext; этот (legacy union/allof/array)
+	// путь обязан выставлять его сам.
+	m.subPkg = sh.SubPackage
 	body := g.renderSchema(sh, m)
 
 	return g.factory.Create(&gogen.File{

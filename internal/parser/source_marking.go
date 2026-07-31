@@ -48,11 +48,21 @@ func addProjectSchemas(si *SchemaIndex, project *Project) {
 //     каждой top-level схеме (components.schemas).
 //   - OwnerProject — проект-владелец, выставляется на каждой top-level схеме.
 //   - ExternalRef — выставляется на вложенных схемах (properties, items,
-//     allOf, ...), чей $ref указывает на файл другого сервиса. Содержит
-//     абсолютный путь к целевому файлу + фрагмент.
+//     allOf, ...), чей $ref указывает на схему ДРУГОГО сервиса. Содержит
+//     абсолютный путь к целевому openapi.yaml сервиса-владельца + фрагмент.
 //
 // specPath — абсолютный путь к openapi.yaml проекта. Используется как
 // SourceFile и как база для разрешения относительных external $ref.
+//
+// Внутрисервисные cross-file $ref (схема из соседнего файла того же проекта,
+// например ./UserStatus.yaml#/UserStatus внутри User.yaml) НЕ помечаются как
+// external: rolodex libopenapi уже резолвит их в полную схему, а целевая схема
+// присутствует в project.Model и разрешается генератором через qualifyModelType
+// (с квалификацией subpackage). Ранее такие ref помечались ExternalRef'ом,
+// резолвленным относительно корневого specPath (неверная база) с фрагментом
+// #/<Name> вместо #/components/schemas/<Name> — qualifyExternalType не находил
+// их в SchemaIndex и поле падало в any. Признак внутрисервисности — целевая
+// схема найдена в project.Model по имени (Model.Lookup).
 func markExternalRefs(project *Project, specPath string) {
 	if project == nil || project.Model == nil {
 		return
@@ -60,7 +70,7 @@ func markExternalRefs(project *Project, specPath string) {
 
 	for _, s := range project.Model.schemas {
 		markTopLevel(s, project, specPath)
-		markNestedRefs(s, specPath)
+		markNestedRefs(s, project, specPath)
 	}
 }
 
@@ -88,46 +98,58 @@ func markTopLevel(s *Schema, project *Project, specPath string) {
 }
 
 // markNestedRefs обходит вложенные схемы и выставляет ExternalRef на
-// тех, чей $ref указывает на внешний файл.
-func markNestedRefs(s *Schema, specPath string) {
+// тех, чей $ref указывает на схему другого сервиса (cross-service).
+// Внутрисервисные cross-file ref пропускаются — см. комментарий markExternalRefs.
+func markNestedRefs(s *Schema, project *Project, specPath string) {
 	if s == nil {
 		return
 	}
 
-	walkNested(s, specPath)
+	walkNested(s, project, specPath)
 }
 
 // walkNested рекурсивно обходит вложенные схемы, пропуская top-level
-// (вызывается после markTopLevel). Для каждой схемы с $ref на внешний
-// файл выставляет ExternalRef.
-func walkNested(s *Schema, specPath string) {
+// (вызывается после markTopLevel). Для каждой схемы с $ref выставляет
+// ExternalRef, только если целевая схема НЕ найдена в project.Model
+// (т.е. $ref указывает на другой сервис). Внутрисервисные ref оставляются
+// без ExternalRef — генератор резолвит их через qualifyModelType.
+func walkNested(s *Schema, project *Project, specPath string) {
 	if s == nil {
 		return
 	}
 
 	if s.Ref != "" {
-		if extRef := resolveExternalRef(s.Ref, specPath); extRef != "" {
-			s.ExternalRef = extRef
+		name := refToSchemaName(s.Ref)
+		_, isLocal := project.Model.Lookup(name)
+
+		// Внутрисервисный cross-file $ref: целевая схема есть в этом проекте.
+		// rolodex уже резолвил её; генератор использует локальный тип. Не
+		// выставляем ExternalRef (иначе qualifyExternalType даст any из-за
+		// неверной базы/формата, см. markExternalRefs).
+		if !isLocal {
+			if extRef := resolveExternalRef(s.Ref, specPath); extRef != "" {
+				s.ExternalRef = extRef
+			}
 		}
 	}
 
 	for _, prop := range s.Properties {
-		walkNested(prop.Schema, specPath)
+		walkNested(prop.Schema, project, specPath)
 	}
 
-	walkNested(s.Items, specPath)
-	walkNested(s.AdditionalProperties, specPath)
+	walkNested(s.Items, project, specPath)
+	walkNested(s.AdditionalProperties, project, specPath)
 
 	for _, sub := range s.AllOf {
-		walkNested(sub, specPath)
+		walkNested(sub, project, specPath)
 	}
 
 	for _, sub := range s.OneOf {
-		walkNested(sub, specPath)
+		walkNested(sub, project, specPath)
 	}
 
 	for _, sub := range s.AnyOf {
-		walkNested(sub, specPath)
+		walkNested(sub, project, specPath)
 	}
 }
 

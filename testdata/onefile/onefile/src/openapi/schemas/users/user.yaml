@@ -1,0 +1,17 @@
+User:
+  type: object
+  required: [email, name]
+  properties:
+    id:
+      type: string
+      readOnly: true
+    email: {type: string}
+    name: {type: string}
+    status:
+      $ref: "./user_status.yaml#/UserStatus"
+    address:
+      $ref: "./../common/address.yaml#/Address"
+    createdAt:
+      type: string
+      format: date-time
+      readOnly: true

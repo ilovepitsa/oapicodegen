@@ -57,7 +57,12 @@ func (r *ConvertersRenderer) OnSplitStruct(s *parser.Schema) error {
 //	    return resp
 //	}
 //
-// Shared-поля копируются напрямую (pointer/struct/slice — shallow copy).
+// Shared-поля копируются напрямую (pointer/struct/slice — shallow copy), КРОМЕ
+// полей, чей тип — splittable-схема: их Request- и Response-варианты — разные
+// Go-типы (*<Type>Request vs *<Type>Response), прямое присваивание не
+// компилируется. Такие поля конвертируются через вложенный
+// <Type>RequestToResponse (с квалификацией subpackage); см.
+// isSplittableField / renderSplittableFieldConvert.
 //
 // Тело перенесено из Generator.renderRequestToResponse (converter_methods.go:55-78)
 // с заменой w.Print → r.Buf.Print.
@@ -75,11 +80,59 @@ func (r *ConvertersRenderer) renderRequestToResponse(s *parser.Schema, name stri
 		}
 
 		fieldName := goName(p.Name)
+
+		if r.isSplittableField(p.Schema) {
+			r.renderSplittableFieldConvert(p, fieldName)
+			continue
+		}
+
 		r.Buf.Print("\tresp.", fieldName, " = req.", fieldName, "\n")
 	}
 
 	r.Buf.Print("\treturn resp\n")
 	r.Buf.Print("}\n")
+}
+
+// isSplittableField сообщает, является ли тип поля splittable-схемой. Целевое
+// имя берётся из $ref (refToName) или Schema.Name (когда rolodex резолвит
+// inline). Поля-примитивы/enum/не-splittable объекты — false (прямое copy).
+func (r *ConvertersRenderer) isSplittableField(s *parser.Schema) bool {
+	if s == nil || r.Ctx == nil || r.Ctx.Splittable == nil {
+		return false
+	}
+
+	targetName := s.Name
+	if s.Ref != "" {
+		targetName = refToName(s.Ref)
+	}
+
+	return targetName != "" && r.Ctx.Splittable[targetName]
+}
+
+// renderSplittableFieldConvert рендерит конверсию splittable-поля через вложенный
+// <Type>RequestToResponse. converterCall — квалифицированное имя вызова
+// (с subpackage), полученное из Request-типа поля (GoType в modeRequest) с
+// суффиксом "ToResponse". Pointer-поле разыменовывается и переоборачивается.
+func (r *ConvertersRenderer) renderSplittableFieldConvert(p *parser.Property, fieldName string) {
+	r.Ctx.TypeMapper.SetMode(modeRequest)
+	base := r.Ctx.TypeMapper.GoType(p.Schema)
+
+	// Pointer-wrapping повторяет renderField: optional non-nilable поле → *T.
+	required := requiredForMode(r.Ctx, p)
+	pointer := fieldIsOptional(required, base)
+
+	converterCall := base + "ToResponse"
+
+	if !pointer {
+		r.Buf.Print("\tresp.", fieldName, " = ", converterCall, "(req.", fieldName, ")\n")
+		return
+	}
+
+	// pointer: deref, convert, re-wrap. nil → оставить nil.
+	r.Buf.Print("\tif req.", fieldName, " != nil {\n")
+	r.Buf.Print("\t\tv := ", converterCall, "(*req.", fieldName, ")\n")
+	r.Buf.Print("\t\tresp.", fieldName, " = &v\n")
+	r.Buf.Print("\t}\n")
 }
 
 // schemaHasSharedFields сообщает, есть ли у схемы хотя бы одно shared-поле

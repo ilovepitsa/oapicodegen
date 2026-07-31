@@ -1,0 +1,25 @@
+openapi: 3.0.3
+info:
+  title: onefile
+  version: '1.0.0'
+paths:
+  /users:
+    post:
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/User'}
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/User'}
+        '400': {description: bad request}
+components:
+  schemas:
+    User: {$ref: './schemas/users/user.yaml#/User'}
+    UserStatus: {$ref: './schemas/users/user_status.yaml#/UserStatus'}
+    Address: {$ref: './schemas/common/address.yaml#/Address'}

@@ -83,6 +83,17 @@ func TestURLFormRenderer_UnsupportedField_RendersErrorReturn(t *testing.T) {
 	// UnmarshalURLForm: unsupported → runtime error return.
 	assert.Contains(t, got, "func (m *Pet) UnmarshalURLForm(values url.Values) error {")
 	assert.Contains(t, got, `return fmt.Errorf("field Tags: url-form decoding not supported")`)
+
+	// fmt добавляется только при наличии unsupported-поля (используется в
+	// error-return). net/url — всегда.
+	imps := r.Imports.Imports()
+	hasPath := func(path string) bool {
+		return slices.ContainsFunc(imps, func(imp gogen.Import) bool {
+			return imp.Path == path
+		})
+	}
+	assert.True(t, hasPath("fmt"), "fmt import must be tracked for unsupported-field error return")
+	assert.True(t, hasPath("net/url"), "net/url import must be tracked")
 }
 
 func TestURLFormRenderer_OptionalField_RendersPointerGuard(t *testing.T) {
@@ -137,9 +148,10 @@ func TestURLFormRenderer_ImportsAdded(t *testing.T) {
 
 	tm := &fakeTypeMapper{got: "int"}
 	r := newURLFormTestRenderer(t, tm)
-	// Зарегистрируем две схемы (string + integer) — нужны оба импорта strconv
-	// и fmt (для unsupported-возврата, если бы был) и net/url (всегда).
-	// Здесь integer + date-time — чтобы покрыть strconv + time.
+	// integer + date-time — оба поддерживаются url-form. Нужны импорты
+	// strconv (integer), time (date-time), net/url (всегда). fmt здесь НЕ
+	// нужен — он добавляется только при наличии unsupported-поля (см.
+	// TestURLFormRenderer_UnsupportedField_RendersErrorReturn).
 	tm.got = "time.Time"
 
 	require.NoError(t, r.OnStruct(&parser.Schema{
@@ -161,12 +173,12 @@ func TestURLFormRenderer_ImportsAdded(t *testing.T) {
 	}
 
 	assert.True(t, hasPath("net/url"), "net/url import must be tracked")
-	assert.True(t, hasPath("fmt"), "fmt import must be tracked")
+	assert.False(t, hasPath("fmt"), "fmt must not be tracked when all fields are supported")
 	assert.True(t, hasPath("strconv"), "strconv import must be tracked (integer field)")
 	assert.True(t, hasPath("time"), "time import must be tracked (date-time field)")
 }
 
-func TestURLFormRenderer_OnSplitStruct_RendersForBaseName(t *testing.T) {
+func TestURLFormRenderer_OnSplitStruct_RendersForRequestVariant(t *testing.T) {
 	t.Parallel()
 
 	tm := &fakeTypeMapper{got: "string"}
@@ -182,9 +194,12 @@ func TestURLFormRenderer_OnSplitStruct_RendersForBaseName(t *testing.T) {
 	}))
 
 	got := string(r.Buf.Content())
-	// URLForm рендерится на базовое имя Pet, а не PetRequest/PetResponse.
-	assert.Contains(t, got, "func (m Pet) MarshalURLForm() (url.Values, error) {")
-	assert.Contains(t, got, "func (m *Pet) UnmarshalURLForm(values url.Values) error {")
-	assert.NotContains(t, got, "PetRequest")
-	assert.NotContains(t, got, "PetResponse")
+	// При split URLForm рендерится на <Name>Request — именно этот split-вариант
+	// является типом form-body операции (server bindBody вызывает
+	// UnmarshalURLForm через interface-assertion на dst = *<Name>Request).
+	// Рендерить на моно Pet нельзя: при split StructRenderer эмитит только
+	// PetRequest + PetResponse, моно-типа Pet нет → undefined.
+	assert.Contains(t, got, "func (m PetRequest) MarshalURLForm() (url.Values, error) {")
+	assert.Contains(t, got, "func (m *PetRequest) UnmarshalURLForm(values url.Values) error {")
+	assert.NotContains(t, got, "\"Pet\"")
 }

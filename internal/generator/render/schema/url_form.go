@@ -47,28 +47,32 @@ func (r *URLFormRenderer) OnStruct(s *parser.Schema) error {
 	defer r.Ctx.TypeMapper.SetMode("")
 	r.Ctx.TypeMapper.SetMode("")
 
-	r.renderURLForm(s, goName(s.Name))
+	r.renderURLForm(s, goName(s.Name), nil)
 
 	return nil
 }
 
-// OnSplitStruct делегирует в renderURLForm с базовым именем <Name>. Form body
-// ссылается на схему по её базовому $ref-имени — рендерить методы на
-// <Name>Request/<Name>Response не нужно (тела формы парсятся в моно-структуру).
+// OnSplitStruct рендерит MarshalURLForm/UnmarshalURLForm на <Name>Request —
+// именно этот split-вариант является типом form-body операции (server bindBody
+// вызывает UnmarshalURLForm через interface-assertion на dst = *<Name>Request).
+// Рендерить на моно <Name> нельзя: при split StructRenderer эмитит только
+// <Name>Request + <Name>Response, моно-типа <Name> нет → undefined.
+// Поля фильтруются как у StructRenderer.OnSplitStruct для Request: без readOnly.
 func (r *URLFormRenderer) OnSplitStruct(s *parser.Schema) error {
 	defer r.Ctx.TypeMapper.SetMode("")
-	r.Ctx.TypeMapper.SetMode("")
+	r.Ctx.TypeMapper.SetMode(modeRequest)
 
-	r.renderURLForm(s, goName(s.Name))
+	reqKeep := func(p *parser.Property) bool { return p.Schema == nil || !p.Schema.ReadOnly }
+	r.renderURLForm(s, goName(s.Name)+modeRequest, reqKeep)
 
 	return nil
 }
 
 // renderURLForm рендерит MarshalURLForm и UnmarshalURLForm последовательно
-// в общий Buf.
-func (r *URLFormRenderer) renderURLForm(s *parser.Schema, name string) {
-	r.renderMarshalURLForm(s, name)
-	r.renderUnmarshalURLForm(s, name)
+// в общий Buf. keep != nil фильтрует свойства (nil = все, моно-режим).
+func (r *URLFormRenderer) renderURLForm(s *parser.Schema, name string, keep func(*parser.Property) bool) {
+	r.renderMarshalURLForm(s, name, keep)
+	r.renderUnmarshalURLForm(s, name, keep)
 }
 
 // renderMarshalURLForm рендерит `func (m <Name>) MarshalURLForm() (url.Values, error)`.
@@ -76,13 +80,14 @@ func (r *URLFormRenderer) renderURLForm(s *parser.Schema, name string) {
 // Если хотя бы одно поле не поддерживается url-form encoding — метод сразу
 // возвращает ошибку с именем первого unsupported поля (dead-code-безопасно:
 // return стоит до encode-блока).
-func (r *URLFormRenderer) renderMarshalURLForm(s *parser.Schema, name string) {
+func (r *URLFormRenderer) renderMarshalURLForm(s *parser.Schema, name string, keep func(*parser.Property) bool) {
 	r.Imports.Add(gogen.Import{Path: "net/url"})
-	r.Imports.Add(gogen.Import{Path: "fmt"})
 
 	r.Buf.Print("func (m ", name, ") MarshalURLForm() (url.Values, error) {\n")
 
-	if unsupported := r.firstUnsupportedURLFormField(s); unsupported != "" {
+	if unsupported := r.firstUnsupportedURLFormField(s, keep); unsupported != "" {
+		r.Imports.Add(gogen.Import{Path: "fmt"})
+
 		msg := "field " + unsupported + ": url-form encoding not supported"
 		r.Buf.Print("\treturn nil, fmt.Errorf(", strconv.Quote(msg), ")\n")
 		r.Buf.Print("}\n\n")
@@ -94,6 +99,10 @@ func (r *URLFormRenderer) renderMarshalURLForm(s *parser.Schema, name string) {
 
 	for _, p := range s.Properties {
 		if p.Schema == nil {
+			continue
+		}
+
+		if keep != nil && !keep(p) {
 			continue
 		}
 
@@ -194,9 +203,14 @@ func (r *URLFormRenderer) marshalStringConverter(s *parser.Schema, accessor stri
 
 // firstUnsupportedURLFormField возвращает Go-имя первого поля, не
 // поддерживаемого url-form encoding. "" — все поля поддерживаются.
-func (r *URLFormRenderer) firstUnsupportedURLFormField(s *parser.Schema) string {
+// keep != nil фильтрует свойства (nil = все, моно-режим).
+func (r *URLFormRenderer) firstUnsupportedURLFormField(s *parser.Schema, keep func(*parser.Property) bool) string {
 	for _, p := range s.Properties {
 		if p.Schema == nil {
+			continue
+		}
+
+		if keep != nil && !keep(p) {
 			continue
 		}
 
@@ -266,13 +280,14 @@ func urlFormPrimitiveSupported(s *parser.Schema) bool {
 // (dead-code-безопасно). Для pointer-полей (nullable/optional) пустое значение
 // в форме пропускается (поле остаётся nil); для required-полей парсится
 // напрямую.
-func (r *URLFormRenderer) renderUnmarshalURLForm(s *parser.Schema, name string) {
+func (r *URLFormRenderer) renderUnmarshalURLForm(s *parser.Schema, name string, keep func(*parser.Property) bool) {
 	r.Imports.Add(gogen.Import{Path: "net/url"})
-	r.Imports.Add(gogen.Import{Path: "fmt"})
 
 	r.Buf.Print("func (m *", name, ") UnmarshalURLForm(values url.Values) error {\n")
 
-	if unsupported := r.firstUnsupportedURLFormField(s); unsupported != "" {
+	if unsupported := r.firstUnsupportedURLFormField(s, keep); unsupported != "" {
+		r.Imports.Add(gogen.Import{Path: "fmt"})
+
 		msg := "field " + unsupported + ": url-form decoding not supported"
 		r.Buf.Print("\treturn fmt.Errorf(", strconv.Quote(msg), ")\n")
 		r.Buf.Print("}\n\n")
@@ -282,6 +297,10 @@ func (r *URLFormRenderer) renderUnmarshalURLForm(s *parser.Schema, name string) 
 
 	for _, p := range s.Properties {
 		if p.Schema == nil {
+			continue
+		}
+
+		if keep != nil && !keep(p) {
 			continue
 		}
 

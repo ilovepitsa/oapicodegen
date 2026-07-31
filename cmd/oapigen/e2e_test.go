@@ -17,6 +17,17 @@ const (
 	e2eImportPfx  = "github.com/ilovepitsa/oapicodegen/testdata/project/golden"
 )
 
+// onefile — multi-file spec с subpackage-дроблением (schemas/users → model/users,
+// schemas/common → model/common) и cross-subpackage $ref. Глобальный
+// generation_flags.yaml лежит рядом с каталогом сервиса; per-project override —
+// в testdata/onefile/onefile/generation_flags.yaml.
+const (
+	onefileInputDir    = "../../testdata/onefile"
+	onefileGoldenPath  = "../../testdata/onefile/golden"
+	onefileImportPfx   = "github.com/ilovepitsa/oapicodegen/testdata/onefile/golden"
+	onefileFlagsConfig = "../../testdata/onefile/generation_flags.yaml"
+)
+
 // TestE2E_Minimal проверяет полный пайплайн cmd/oapigen на проекте из одного
 // сервиса testdata/project/minimal. CLI обходит каталог, находит сервис,
 // генерирует пакеты в <output>/minimal/... и сравнивает с golden.
@@ -94,4 +105,58 @@ func walkFiles(t *testing.T, root string) map[string][]byte {
 func TestE2E_GoldenCompiles(t *testing.T) {
 	err := codegen.CompileCheck(e2eGoldenPath)
 	require.NoError(t, err, "golden directory must compile with go build ./...")
+}
+
+// TestE2E_Onefile проверяет полный пайплайн на multi-file spec с subpackage-
+// дроблением: схемы из schemas/users и schemas/common раскладываются в
+// model/users и model/common, cross-subpackage $ref квалифицируются через
+// алиас-импорт, split-конвертеры и url_form рендерятся на Request-вариант.
+// Отличается от TestE2E_Minimal передачей -generation-flags-config-path
+// (глобальный generation_flags.yaml нужен, чтобы per-project override из
+// testdata/onefile/onefile/generation_flags.yaml резолвился во флаги).
+func TestE2E_Onefile(t *testing.T) {
+	output := t.TempDir()
+	stderr := nullFile(t)
+
+	err := run([]string{
+		"-input", onefileInputDir,
+		"-output", output,
+		"-import-prefix", onefileImportPfx,
+		"-generation-flags-config-path", onefileFlagsConfig,
+		"-skip-compile-check",
+		"-log-level", "error",
+	}, stderr)
+	require.NoError(t, err)
+
+	gotFiles := walkFiles(t, output)
+	require.NotEmpty(t, gotFiles, "no files generated")
+
+	dir := golden.NewDir(t, golden.WithPath(onefileGoldenPath), golden.WithRecreateOnUpdate())
+
+	for rel, content := range gotFiles {
+		dir.Equals(rel, content)
+	}
+
+	if golden.Update() {
+		return
+	}
+
+	wantFiles := walkFiles(t, onefileGoldenPath)
+	for rel := range wantFiles {
+		// skip non-generated files (go.mod, go.sum, etc.)
+		if filepath.Ext(rel) != ".go" {
+			continue
+		}
+		_, ok := gotFiles[rel]
+		assert.True(t, ok, "golden file %q has no corresponding generated file", rel)
+	}
+}
+
+// TestE2E_OnefileGoldenCompiles проверяет, что зафиксированные golden-файлы
+// onefile (cross-subpackage код) компилируются go build ./... — главный
+// приёмочный тест T28 subpackage-splitting: сгенерированные cross-package
+// refs/imports должны быть синтаксически и типно корректны.
+func TestE2E_OnefileGoldenCompiles(t *testing.T) {
+	err := codegen.CompileCheck(onefileGoldenPath)
+	require.NoError(t, err, "onefile golden directory must compile with go build ./...")
 }

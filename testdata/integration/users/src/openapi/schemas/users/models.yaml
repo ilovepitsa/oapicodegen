@@ -2,7 +2,7 @@ User:
   type: object
   properties:
     id: {type: string, readOnly: true}
-    email: {type: string, x-validations: [">0", "pkg.EmailValidator"]}
+    email: {type: string, x-validations: ["Size >0", "pkg.EmailValidator"]}
     name: {type: string}
     role: {$ref: '#/UserRole'}
     status: {$ref: '#/UserStatus'}
