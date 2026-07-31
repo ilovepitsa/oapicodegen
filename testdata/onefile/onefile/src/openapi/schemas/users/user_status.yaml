@@ -1,0 +1,4 @@
+UserStatus:
+  type: string
+  enum: [active, suspended, deleted]
+  default: active

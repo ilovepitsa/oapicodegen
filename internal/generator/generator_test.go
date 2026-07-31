@@ -747,7 +747,9 @@ components:
 	assert.Contains(t, clientGot, "\"fmt\"")
 
 	implGot := string(files["impl/httpclient/client.gen.go"])
-	assert.Contains(t, implGot, "result.Response200 = &ListPetsResponse200PayloadWithHeaders{}")
+	// PayloadWithHeaders-тип определён в interfaces/client (другой пакет),
+	// квалифицируется через apiclient-alias — иначе не компилируется.
+	assert.Contains(t, implGot, "result.Response200 = &apiclient.ListPetsResponse200PayloadWithHeaders{}")
 	assert.Contains(t, implGot, "result.Response200.Payload = &v")
 	assert.Contains(t, implGot, `strconv.Atoi(resp.Header.Get("X-Total-Count"))`)
 	assert.Contains(t, implGot, "result.Response200.XTotalCount = raw")

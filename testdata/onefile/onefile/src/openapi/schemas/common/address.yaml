@@ -1,0 +1,7 @@
+Address:
+  type: object
+  required: [street, city]
+  properties:
+    street: {type: string}
+    city: {type: string}
+    zip: {type: string}

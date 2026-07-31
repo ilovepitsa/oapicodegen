@@ -215,9 +215,17 @@ func (m *typeMapper) isSplittable(name string) bool {
 }
 
 // qualifyUTCTime возвращает имя UTCTime-типа для текущего пакета.
-// В model — просто UTCTime; в остальных — model.UTCTime + импорт.
+// UTCTime живёт в корневом model-пакете (model/utc_time.gen.go). В корневом
+// model-контексте (subPkg == "" и currentPkg == "model") — просто UTCTime.
+// В subpackage (model/<subPkg>, тоже package model, но другой Go-пакет) —
+// model.UTCTime + импорт, иначе undefined. В не-model контекстах
+// (client/server) — model.UTCTime + импорт.
 func (m *typeMapper) qualifyUTCTime() string {
-	if m.currentPkg == "model" || m.modelImport.Path == "" {
+	if m.currentPkg == "model" && m.subPkg == "" {
+		return "UTCTime"
+	}
+
+	if m.modelImport.Path == "" {
 		return "UTCTime"
 	}
 
