@@ -91,3 +91,68 @@ func TestConvertersRenderer_SharedFields_RendersRequestToResponse(t *testing.T) 
 	assert.NotContains(t, got, "resp.Secret = req.Secret")
 	assert.Contains(t, got, "return resp")
 }
+
+// TestConvertersRenderer_SplittableField_RendersConverter — shared-поле,
+// резолвящееся в разные Request/Response Go-типы (splittable $ref), должно
+// конвертироваться через <Type>RequestToResponse, а не прямым copy.
+func TestConvertersRenderer_SplittableField_RendersConverter(t *testing.T) {
+	t.Parallel()
+
+	tm := &fakeTypeMapper{byMode: map[string]string{
+		modeRequest:  "UserRequest",
+		modeResponse: "UserResponse",
+	}}
+	r := newConvertersTestRenderer(t, tm)
+
+	require.NoError(t, r.OnSplitStruct(&parser.Schema{
+		Name:    "Container",
+		Type:    "object",
+		IsSplit: true,
+		Properties: []*parser.Property{
+			{
+				Name:     "user",
+				Required: true,
+				Schema:   &parser.Schema{Ref: "#/components/schemas/User"},
+			},
+		},
+	}))
+
+	got := string(r.Buf.Content())
+	assert.Contains(t, got, "resp.User = UserRequestToResponse(req.User)")
+	assert.NotContains(t, got, "resp.User = req.User")
+}
+
+// TestConvertersRenderer_UnresolvedAnyField_DirectCopy — regression-тест бага
+// v1.3.0: splittable-по-имени поле, чей тип НЕ резолвится (GoType = any как в
+// Request, так и в Response — следствие дефекта #2 rolodex cross-file $ref),
+// должно копироваться напрямую, а не через несуществующую anyToResponse.
+//
+// До фикса isSplittableField возвращал true (refToName(ref)="User" ∈ Splittable),
+// а renderSplittableFieldConvert строил converterCall = "any"+"ToResponse" →
+// undefined: anyToResponse → go build падал.
+func TestConvertersRenderer_UnresolvedAnyField_DirectCopy(t *testing.T) {
+	t.Parallel()
+
+	tm := &fakeTypeMapper{got: goTypeAny} // любой mode → any (тип не резолвится)
+	r := newConvertersTestRenderer(t, tm)
+	// Имитируем имя-в-Splittable: именно это вводило в заблуждение старый gate.
+	r.Ctx.Splittable = map[string]bool{"User": true}
+
+	require.NoError(t, r.OnSplitStruct(&parser.Schema{
+		Name:    "LoginResponse",
+		Type:    "object",
+		IsSplit: true,
+		Properties: []*parser.Property{
+			{
+				Name:     "user",
+				Required: true,
+				Schema:   &parser.Schema{Ref: "../models/User.yaml"},
+			},
+		},
+	}))
+
+	got := string(r.Buf.Content())
+	assert.Contains(t, got, "resp.User = req.User")
+	assert.NotContains(t, got, "anyToResponse",
+		"unresolved any field must direct-copy, not emit undefined anyToResponse")
+}
