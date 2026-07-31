@@ -58,11 +58,17 @@ func (r *ConvertersRenderer) OnSplitStruct(s *parser.Schema) error {
 //	}
 //
 // Shared-поля копируются напрямую (pointer/struct/slice — shallow copy), КРОМЕ
-// полей, чей тип — splittable-схема: их Request- и Response-варианты — разные
-// Go-типы (*<Type>Request vs *<Type>Response), прямое присваивание не
-// компилируется. Такие поля конвертируются через вложенный
-// <Type>RequestToResponse (с квалификацией subpackage); см.
-// isSplittableField / renderSplittableFieldConvert.
+// полей, чьи Request- и Response-варианты — разные Go-типы (splittable $ref,
+// резолвящийся в <Type>Request/<Type>Response): прямое присваивание не
+// компилируется, такие поля конвертируются через вложенный <Type>RequestToResponse
+// (с квалификацией subpackage); см. renderSplittableFieldConvert.
+//
+// Критерий конверсии — фактические Go-типы поля в modeRequest и modeResponse
+// различаются. Это точнее name-based проверки Splittable: если тип поля не
+// резолвится (any — следствие неразрешённого cross-file $ref, дефект rolodex),
+// оба режима дают одинаковый any → прямой copy. Иначе name-based gate мог
+// сработать по имени ref, а GoType дать any → эмитился undefined anyToResponse
+// (регрессия v1.3.0).
 //
 // Тело перенесено из Generator.renderRequestToResponse (converter_methods.go:55-78)
 // с заменой w.Print → r.Buf.Print.
@@ -81,8 +87,16 @@ func (r *ConvertersRenderer) renderRequestToResponse(s *parser.Schema, name stri
 
 		fieldName := goName(p.Name)
 
-		if r.isSplittableField(p.Schema) {
-			r.renderSplittableFieldConvert(p, fieldName)
+		// Request- и Response-типы поля. Различаются только для splittable $ref,
+		// резолвящегося в типизированные <Type>Request/<Type>Response — в этом
+		// случае нужна конверсия; иначе прямой copy (включая неразрешённый any).
+		r.Ctx.TypeMapper.SetMode(modeRequest)
+		reqType := r.Ctx.TypeMapper.GoType(p.Schema)
+		r.Ctx.TypeMapper.SetMode(modeResponse)
+		respType := r.Ctx.TypeMapper.GoType(p.Schema)
+
+		if reqType != respType {
+			r.renderSplittableFieldConvert(p, fieldName, reqType)
 			continue
 		}
 
@@ -93,35 +107,21 @@ func (r *ConvertersRenderer) renderRequestToResponse(s *parser.Schema, name stri
 	r.Buf.Print("}\n")
 }
 
-// isSplittableField сообщает, является ли тип поля splittable-схемой. Целевое
-// имя берётся из $ref (refToName) или Schema.Name (когда rolodex резолвит
-// inline). Поля-примитивы/enum/не-splittable объекты — false (прямое copy).
-func (r *ConvertersRenderer) isSplittableField(s *parser.Schema) bool {
-	if s == nil || r.Ctx == nil || r.Ctx.Splittable == nil {
-		return false
-	}
-
-	targetName := s.Name
-	if s.Ref != "" {
-		targetName = refToName(s.Ref)
-	}
-
-	return targetName != "" && r.Ctx.Splittable[targetName]
-}
-
 // renderSplittableFieldConvert рендерит конверсию splittable-поля через вложенный
-// <Type>RequestToResponse. converterCall — квалифицированное имя вызова
-// (с subpackage), полученное из Request-типа поля (GoType в modeRequest) с
-// суффиксом "ToResponse". Pointer-поле разыменовывается и переоборачивается.
-func (r *ConvertersRenderer) renderSplittableFieldConvert(p *parser.Property, fieldName string) {
+// <Type>RequestToResponse. reqType — Go-тип поля в modeRequest (вычислен в
+// renderRequestToResponse), к нему добавляется суффикс "ToResponse".
+// Pointer-поле разыменовывается и переоборачивается: nullable-поля уже несут
+// "*" в reqType (fieldIsOptional их не оборачивает повторно), optional-поля
+// оборачиваются StructRenderer'ом в *T — для них pointer=true.
+func (r *ConvertersRenderer) renderSplittableFieldConvert(p *parser.Property, fieldName, reqType string) {
+	// requiredForMode читает режим typeMapper'а — выставляем modeRequest, как
+	// при рендере Request-варианта поля (renderField).
 	r.Ctx.TypeMapper.SetMode(modeRequest)
-	base := r.Ctx.TypeMapper.GoType(p.Schema)
 
-	// Pointer-wrapping повторяет renderField: optional non-nilable поле → *T.
 	required := requiredForMode(r.Ctx, p)
-	pointer := fieldIsOptional(required, base)
+	pointer := fieldIsOptional(required, reqType)
 
-	converterCall := base + "ToResponse"
+	converterCall := reqType + "ToResponse"
 
 	if !pointer {
 		r.Buf.Print("\tresp.", fieldName, " = ", converterCall, "(req.", fieldName, ")\n")
