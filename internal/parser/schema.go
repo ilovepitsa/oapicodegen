@@ -139,16 +139,34 @@ func extractComponentsSchemas(doc *Document, schemas *orderedmap.Map[string, *hi
 	}
 }
 
+// refToSchemaName извлекает имя схемы из $ref. Поддерживает оба формата:
+//   - "#/components/schemas/Foo" → "Foo" (стандартный OpenAPI internal ref);
+//   - "../models/User.yaml" → "User" (path-only cross-file ref, one-schema-
+//     per-file layout как у zvonilka): берётся последний path-сегмент и
+//     отбрасывается расширение файла.
+//
+// Расширение обязано отбрасываться — иначе walkNested (source_marking) ищет
+// схему по имени "User.yaml" вместо "User", не находит её в project.Model и
+// помечает ref как ExternalRef → qualifyExternalType даёт any. refToName
+// (type.go / naming.go) уже стрипает расширение; здесь приведено к согласованному
+// поведению.
 func refToSchemaName(ref string) string {
 	if ref == "" {
 		return ""
 	}
 
 	if idx := strings.LastIndex(ref, "/"); idx >= 0 {
-		return ref[idx+1:]
+		ref = ref[idx+1:]
+	} else {
+		ref = strings.TrimPrefix(ref, "#/components/schemas/")
 	}
 
-	return strings.TrimPrefix(ref, "#/components/schemas/")
+	// Отбросить расширение файла для path-only ref ("User.yaml" → "User").
+	if idx := strings.LastIndex(ref, "."); idx >= 0 {
+		ref = ref[:idx]
+	}
+
+	return ref
 }
 
 func boolPtrOrFalse(b *bool) bool {
