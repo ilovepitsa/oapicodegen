@@ -4745,6 +4745,86 @@ func TestCrossServiceRef_SplitModeAddsSuffix(t *testing.T) {
 		"owner project has split enabled → suffix added by LookupForMode")
 }
 
+// TestBaseType_RefToDateTimeSchema_UTCTimeFlag — $ref на date-time схему при
+// USE_UTC_FOR_DATE_TIME рендерится как model.UTCTime (root), а не как тип
+// subpackage-стаба. Регрессия v1.3.2: path-only/$ref на Timestamp резолвился
+// в <subpkg>.Timestamp (пустой стаб, undefined) вместо model.UTCTime.
+func TestBaseType_RefToDateTimeSchema_UTCTimeFlag(t *testing.T) {
+	timestampSchema := &oapiparser.Schema{
+		Name:   "Timestamp",
+		Type:   "string",
+		Format: "date-time",
+	}
+	project := &oapiparser.Project{Folder: "svc", ImportPrefix: "example.com/svc"}
+	project.CreateModel(gogen.Import{Alias: "model"})
+	project.CreatePaths("example.com/svc")
+	project.Model.SetSchemas([]*oapiparser.Schema{timestampSchema})
+	project.Features.UseUTCForDateTime.Value = true
+
+	g := &Generator{project: project, factory: gogen.NewFileFactory("oapigen", "v1.2.0")}
+	m := g.newTypeMapper("model")
+	m.subPkg = "models" // рендерим поле схемы в subpackage "models"
+
+	// rolodex при резолве $ref копирует Type/Format целевой схемы в ref-схему.
+	got := m.baseType(&oapiparser.Schema{
+		Ref:    "../../schemas/time/Timestamp.yaml",
+		Type:   "string",
+		Format: "date-time",
+	})
+	assert.Equal(t, "model.UTCTime", got,
+		"$ref on date-time schema with USE_UTC_FOR_DATE_TIME must resolve to model.UTCTime, not the subpackage stub type")
+}
+
+// TestBaseType_RefToDateTimeSchema_FallbackLookup — если rolodex НЕ заполнил
+// Type/Format на ref-схеме (target не резолвился), isUTCTimeRefSchema делает
+// fallback-lookup по имени в Model и всё равно квалифицирует как UTCTime.
+func TestBaseType_RefToDateTimeSchema_FallbackLookup(t *testing.T) {
+	timestampSchema := &oapiparser.Schema{
+		Name:   "Timestamp",
+		Type:   "string",
+		Format: "date-time",
+	}
+	project := &oapiparser.Project{Folder: "svc", ImportPrefix: "example.com/svc"}
+	project.CreateModel(gogen.Import{Alias: "model"})
+	project.CreatePaths("example.com/svc")
+	project.Model.SetSchemas([]*oapiparser.Schema{timestampSchema})
+	project.Features.UseUTCForDateTime.Value = true
+
+	g := &Generator{project: project, factory: gogen.NewFileFactory("oapigen", "v1.2.0")}
+	m := g.newTypeMapper("model")
+	m.subPkg = "models"
+
+	// Ref без Type/Format (rolodex не резолвил) — fallback-lookup по имени.
+	got := m.baseType(&oapiparser.Schema{Ref: "../../schemas/time/Timestamp.yaml"})
+	assert.Equal(t, "model.UTCTime", got,
+		"fallback Model lookup must identify date-time target and qualify as UTCTime")
+}
+
+// TestBaseType_RefToDateTimeSchema_UTCTimeFlagOff — без USE_UTC_FOR_DATE_TIME
+// $ref на date-time схему резолвится как обычный model-тип (через qualifyModelType),
+// не как UTCTime.
+func TestBaseType_RefToDateTimeSchema_UTCTimeFlagOff(t *testing.T) {
+	timestampSchema := &oapiparser.Schema{
+		Name:   "Timestamp",
+		Type:   "string",
+		Format: "date-time",
+		SourceFile: "/input/svc/src/openapi/openapi.yaml",
+		SubPackage: "time",
+	}
+	project := &oapiparser.Project{Folder: "svc", ImportPrefix: "example.com/svc"}
+	project.CreateModel(gogen.Import{Alias: "model"})
+	project.CreatePaths("example.com/svc")
+	project.Model.SetSchemas([]*oapiparser.Schema{timestampSchema})
+
+	g := &Generator{project: project, factory: gogen.NewFileFactory("oapigen", "v1.2.0")}
+	m := g.newTypeMapper("model")
+	m.subPkg = "models"
+
+	got := m.baseType(&oapiparser.Schema{Ref: "../../schemas/time/Timestamp.yaml"})
+	assert.Equal(t, "time.Timestamp", got,
+		"without USE_UTC flag, ref resolves to the model type (subpackage-qualified)")
+}
+
 func TestGenerate_UTCTimeFile_WhenFeatureOn_EmitsFile(t *testing.T) {
 	t.Parallel()
 

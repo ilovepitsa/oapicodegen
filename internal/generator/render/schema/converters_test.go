@@ -156,3 +156,35 @@ func TestConvertersRenderer_UnresolvedAnyField_DirectCopy(t *testing.T) {
 	assert.NotContains(t, got, "anyToResponse",
 		"unresolved any field must direct-copy, not emit undefined anyToResponse")
 }
+
+// TestConvertersRenderer_UTCTimeField_DirectCopyNoUnusedImport — shared-поле,
+// резолвящееся в model.UTCTime (date-time, не splittable), должно копироваться
+// напрямую, без unused-import на root model-пакет. Регрессия v1.3.2: GoType
+// для сравнения типов добавлял import model как side-effect, но direct-copy
+// тело его не использовало → "imported and not used".
+func TestConvertersRenderer_UTCTimeField_DirectCopyNoUnusedImport(t *testing.T) {
+	t.Parallel()
+
+	// Оба режима дают одинаковый UTCTime-тип → reqType == respType → direct copy.
+	tm := &fakeTypeMapper{got: "model.UTCTime"}
+	r := newConvertersTestRenderer(t, tm)
+
+	require.NoError(t, r.OnSplitStruct(&parser.Schema{
+		Name:    "Room",
+		Type:    "object",
+		IsSplit: true,
+		Properties: []*parser.Property{
+			{
+				Name:     "createdAt",
+				Required: true,
+				Schema:   &parser.Schema{Ref: "../time/Timestamp.yaml", Type: "string", Format: "date-time"},
+			},
+		},
+	}))
+
+	got := string(r.Buf.Content())
+	assert.Contains(t, got, "resp.CreatedAt = req.CreatedAt",
+		"UTCTime field (non-splittable) must direct-copy")
+	assert.NotContains(t, got, "ToResponse(req.CreatedAt)",
+		"UTCTime has no Request/Response variants — no converter call")
+}

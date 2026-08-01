@@ -116,3 +116,42 @@ func TestImportTracker_Imports_EmptyByDefault(t *testing.T) {
 	assert.Empty(t, tr.Imports())
 	assert.NotNil(t, tr.Imports(), "slice must be non-nil even when empty")
 }
+
+// TestImportTracker_PruneUnused_KeepsReferencedDropsDangling — import'ы,
+// чей квалификатор не используется в body как `<qual>.`, удаляются; остальные
+// остаются. Защищает ConvertersRenderer от висячих импортов (GoType side-effect
+// для direct-copy полей, чей тип не эмитится в тело).
+func TestImportTracker_PruneUnused_KeepsReferencedDropsDangling(t *testing.T) {
+	t.Parallel()
+
+	tr := NewImportTracker()
+	tr.Add(gogen.Import{Path: "github.com/x/model", Alias: "model"})        // used
+	tr.Add(gogen.Import{Path: "github.com/x/model/users", Alias: "users"})  // dangling
+	tr.Add(gogen.Import{Path: "fmt"})                                       // used (no alias → "fmt")
+	tr.Add(gogen.Import{Path: "time"})                                      // dangling
+
+	body := []byte("resp.Foo = model.UTCTime(req.Foo)\n_ = fmt.Errorf(\"x\")\n")
+	tr.PruneUnused(body)
+
+	got := tr.Imports()
+	require.Len(t, got, 2)
+
+	paths := []string{got[0].Path, got[1].Path}
+	assert.Contains(t, paths, "github.com/x/model")
+	assert.Contains(t, paths, "fmt")
+	assert.NotContains(t, paths, "github.com/x/model/users")
+	assert.NotContains(t, paths, "time")
+}
+
+func TestImportTracker_PruneUnused_KeepsAllWhenAllReferenced(t *testing.T) {
+	t.Parallel()
+
+	tr := NewImportTracker()
+	tr.Add(gogen.Import{Path: "fmt"})
+	tr.Add(gogen.Import{Path: "github.com/x/model", Alias: "model"})
+
+	body := []byte("_ = fmt.Sprintf(\"%v\", model.UTCTime{})\n")
+	tr.PruneUnused(body)
+
+	assert.Len(t, tr.Imports(), 2)
+}

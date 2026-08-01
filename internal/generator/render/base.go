@@ -3,6 +3,9 @@
 package render
 
 import (
+	"bytes"
+	"path"
+
 	"github.com/ilovepitsa/oapicodegen/internal/codegen"
 	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
 	"github.com/ilovepitsa/oapicodegen/internal/parser"
@@ -55,6 +58,35 @@ func (t *ImportTracker) Add(imp gogen.Import) {
 
 // Imports возвращает накопленный срез импортов.
 func (t *ImportTracker) Imports() []gogen.Import { return t.imports }
+
+// PruneUnused удаляет импорты, чей квалификатор не встречается в body как
+// `<qual>.` (Go-qualified identifier). Квалификатор — Alias, если задан, иначе
+// последний сегмент Path (конвенция Go: имя пакета = последний сегмент).
+//
+// Применяется renderer'ами, которые вызывают TypeMapper.GoType для сравнения
+// типов, но не всегда эмитят тип в тело (ConvertersRenderer для direct-copy
+// полей): GoType добавляет import как side-effect (qualifyUTCTime/
+// qualifyModelType), и для direct-copy полей import остаётся unused →
+// compile-error "imported and not used". Prune убирает такие висячие импорты.
+//
+// Безопасно для сгенерированного кода: импорты всегда используются как
+// `pkg.Identifier` (dot/blank-imports генератор не эмитит).
+func (t *ImportTracker) PruneUnused(body []byte) {
+	kept := make([]gogen.Import, 0, len(t.imports))
+
+	for _, imp := range t.imports {
+		qual := imp.Alias
+		if qual == "" {
+			qual = path.Base(imp.Path)
+		}
+
+		if bytes.Contains(body, []byte(qual+".")) {
+			kept = append(kept, imp)
+		}
+	}
+
+	t.imports = kept
+}
 
 // Base — общий встраиваемый тип для renderer'ов.
 type Base struct {
