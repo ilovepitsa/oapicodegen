@@ -45,6 +45,12 @@ func (r *ConvertersRenderer) OnSplitStruct(s *parser.Schema) error {
 
 	r.renderRequestToResponse(s, goName(s.Name))
 
+	// GoType вызывается для сравнения Request/Response-типов каждого поля и
+	// добавляет import'ы как side-effect (qualifyUTCTime/qualifyModelType).
+	// Для direct-copy полей (тип не эмитится в тело) import остаётся unused —
+	// убираем висячие import'ы, иначе compile-error "imported and not used".
+	r.Imports.PruneUnused(r.Buf.Content())
+
 	return nil
 }
 

@@ -82,6 +82,16 @@ func (m *typeMapper) baseType(s *parser.Schema) string {
 	}
 
 	if s.Ref != "" {
+		// $ref на date-time схему при USE_UTC_FOR_DATE_TIME рендерится как
+		// model.UTCTime (root), а не как тип subpackage-стаба: сама date-time
+		// схема рендерится пустым стабом (настоящий тип живёт в root как
+		// UTCTime). Инлайн date-time-поле уходит через stringGoType→qualifyUTCTime,
+		// а $ref-ветка без этой проверки резолвилась в <subpkg>.Timestamp
+		// (undefined на пустом стабе). см. bug-report v1.3.2 Timestamp×USE_UTC.
+		if m.utcTime && m.isUTCTimeRefSchema(s, refToName(s.Ref)) {
+			return m.qualifyUTCTime()
+		}
+
 		return m.qualifyModelType(refToName(s.Ref))
 	}
 
@@ -212,6 +222,25 @@ func (m *typeMapper) qualifyModelType(name string) string {
 // прокидывается через typeMapper.
 func (m *typeMapper) isSplittable(name string) bool {
 	return m.splittable != nil && m.splittable[name]
+}
+
+// isUTCTimeRefSchema сообщает, что $ref-схема s указывает на date-time string-
+// схему (которая при USE_UTC_FOR_DATE_TIME рендерится как model.UTCTime, а не
+// как собственный тип). rolodex при резолве $ref копирует Type/Format целевой
+// схемы в s (fillSchema) — поэтому сначала проверяем s; если копирование не
+// произошло (target не резолвился), делаем fallback-lookup по имени в Model.
+func (m *typeMapper) isUTCTimeRefSchema(s *parser.Schema, name string) bool {
+	if s.Type == oapiTypeString && s.Format == oapiFormatDateTime {
+		return true
+	}
+
+	if m.project != nil && m.project.Model != nil {
+		if target, ok := m.project.Model.Lookup(name); ok {
+			return target.Type == oapiTypeString && target.Format == oapiFormatDateTime
+		}
+	}
+
+	return false
 }
 
 // qualifyUTCTime возвращает имя UTCTime-типа для текущего пакета.
