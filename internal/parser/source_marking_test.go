@@ -89,6 +89,39 @@ func TestMarkExternalRefs_LocalRefNoExternal(t *testing.T) {
 		"local $ref must not set ExternalRef")
 }
 
+// TestMarkExternalRefs_PathOnlyCrossFileRef_NoExternal — path-only cross-file
+// $ref (без #/-фрагмента, one-schema-per-file layout zvonilka) на схему,
+// зарегистрированную в этом же сервисе, НЕ должен помечаться ExternalRef.
+// До фикса refToSchemaName("../models/User.yaml") возвращал "User.yaml" →
+// Lookup падал → ExternalRef выставлялся → qualifyExternalType давал any
+// (дефект #2 из bug-report v1.3.0, блокер типизации #69).
+func TestMarkExternalRefs_PathOnlyCrossFileRef_NoExternal(t *testing.T) {
+	project := &Project{Folder: "svc"}
+	userSchema := &Schema{
+		Name: "User",
+		Type: "object",
+		Properties: []*Property{
+			{Name: "id", Schema: &Schema{Type: "string", ReadOnly: true}},
+		},
+	}
+	// Вложенный path-only $ref на User (zvonilka-формат, без #/).
+	nestedUser := &Schema{Ref: "../models/User.yaml", Name: "User.yaml"}
+	loginSchema := &Schema{
+		Name: "LoginResponse",
+		Type: "object",
+		Properties: []*Property{
+			{Name: "user", Schema: nestedUser},
+		},
+	}
+	project.Model = &Model{project: project, schemas: []*Schema{userSchema, loginSchema}}
+	project.Model.Index()
+
+	markExternalRefs(project, "/input/svc/src/openapi/openapi.yaml")
+
+	assert.Equal(t, "", nestedUser.ExternalRef,
+		"path-only cross-file $ref to a registered intra-service schema must NOT be marked ExternalRef")
+}
+
 func TestMarkExternalRefs_NilProject(t *testing.T) {
 	assert.NotPanics(t, func() {
 		markExternalRefs(nil, "/input/svc/openapi.yaml")

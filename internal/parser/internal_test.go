@@ -22,6 +22,17 @@ func TestRefToSchemaName_NoSlash(t *testing.T) {
 	assert.Equal(t, "Foo", refToSchemaName("#/components/schemas/Foo"))
 }
 
+// TestRefToSchemaName_PathOnlyRef_StripsExtension — path-only cross-file $ref
+// (one-schema-per-file layout, zvonilka-формат) должен давать имя схемы без
+// расширения файла. До фикса возвращалось "User.yaml" → walkNested не находил
+// схему в project.Model по имени → ref помечался ExternalRef → поле падало в any.
+func TestRefToSchemaName_PathOnlyRef_StripsExtension(t *testing.T) {
+	assert.Equal(t, "User", refToSchemaName("../models/User.yaml"))
+	assert.Equal(t, "User", refToSchemaName("./schemas/models/User.yaml"))
+	assert.Equal(t, "User", refToSchemaName("User.yaml"))
+	assert.Equal(t, "User", refToSchemaName("../models/User.yml"))
+}
+
 func TestDecodeNode_Nil(t *testing.T) {
 	assert.Nil(t, decodeNode(nil))
 }
