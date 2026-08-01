@@ -188,3 +188,71 @@ func TestConvertersRenderer_UTCTimeField_DirectCopyNoUnusedImport(t *testing.T) 
 	assert.NotContains(t, got, "ToResponse(req.CreatedAt)",
 		"UTCTime has no Request/Response variants — no converter call")
 }
+
+// TestConvertersRenderer_SplittableSliceField_RendersPerItemLoop — array-поле
+// с splittable item-типом ([]RoomRequest → []RoomResponse) должно
+// конвертироваться per-item циклом, а НЕ type-conversion `[]RoomRequestToResponse(req.Items)`
+// (функция — не тип → compile error). Регрессия v1.3.3 (следствие v1.3.2: path-only
+// ref на Room стал резолвиться → Items стал []RoomRequest/[]RoomResponse → триггер
+// латентного бага renderSplittableFieldConvert с v1.3.0, не умевшего array).
+func TestConvertersRenderer_SplittableSliceField_RendersPerItemLoop(t *testing.T) {
+	t.Parallel()
+
+	tm := &fakeTypeMapper{byMode: map[string]string{
+		modeRequest:  "[]RoomRequest",
+		modeResponse: "[]RoomResponse",
+	}}
+	r := newConvertersTestRenderer(t, tm)
+
+	require.NoError(t, r.OnSplitStruct(&parser.Schema{
+		Name:    "RoomList",
+		Type:    "object",
+		IsSplit: true,
+		Properties: []*parser.Property{
+			{
+				Name:     "items",
+				Required: true,
+				Schema:   &parser.Schema{Ref: "./Room.yaml", Type: "array"},
+			},
+		},
+	}))
+
+	got := string(r.Buf.Content())
+	assert.Contains(t, got, "resp.Items = make([]RoomResponse, len(req.Items))")
+	assert.Contains(t, got, "for i, v := range req.Items {")
+	assert.Contains(t, got, "resp.Items[i] = RoomRequestToResponse(v)")
+	assert.NotContains(t, got, "[]RoomRequestToResponse(",
+		"must not emit type-conversion with converter function name as a type")
+}
+
+// TestConvertersRenderer_SplittablePointerSliceField_RendersDerefLoop —
+// array of pointer splittable items ([]*RoomRequest → []*RoomResponse):
+// per-item цикл с deref и re-wrap, nil-элементы пропускаются.
+func TestConvertersRenderer_SplittablePointerSliceField_RendersDerefLoop(t *testing.T) {
+	t.Parallel()
+
+	tm := &fakeTypeMapper{byMode: map[string]string{
+		modeRequest:  "[]*RoomRequest",
+		modeResponse: "[]*RoomResponse",
+	}}
+	r := newConvertersTestRenderer(t, tm)
+
+	require.NoError(t, r.OnSplitStruct(&parser.Schema{
+		Name:    "RoomList",
+		Type:    "object",
+		IsSplit: true,
+		Properties: []*parser.Property{
+			{
+				Name:     "items",
+				Required: true,
+				Schema:   &parser.Schema{Ref: "./Room.yaml", Type: "array"},
+			},
+		},
+	}))
+
+	got := string(r.Buf.Content())
+	assert.Contains(t, got, "resp.Items = make([]*RoomResponse, len(req.Items))")
+	assert.Contains(t, got, "if v != nil {")
+	assert.Contains(t, got, "t := RoomRequestToResponse(*v)")
+	assert.Contains(t, got, "resp.Items[i] = &t")
+}

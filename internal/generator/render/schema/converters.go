@@ -13,6 +13,8 @@
 package schema
 
 import (
+	"strings"
+
 	"github.com/ilovepitsa/oapicodegen/internal/generator/render"
 	"github.com/ilovepitsa/oapicodegen/internal/generator/walk"
 	"github.com/ilovepitsa/oapicodegen/internal/parser"
@@ -102,7 +104,7 @@ func (r *ConvertersRenderer) renderRequestToResponse(s *parser.Schema, name stri
 		respType := r.Ctx.TypeMapper.GoType(p.Schema)
 
 		if reqType != respType {
-			r.renderSplittableFieldConvert(p, fieldName, reqType)
+			r.renderSplittableFieldConvert(p, fieldName, reqType, respType)
 			continue
 		}
 
@@ -114,15 +116,24 @@ func (r *ConvertersRenderer) renderRequestToResponse(s *parser.Schema, name stri
 }
 
 // renderSplittableFieldConvert рендерит конверсию splittable-поля через вложенный
-// <Type>RequestToResponse. reqType — Go-тип поля в modeRequest (вычислен в
-// renderRequestToResponse), к нему добавляется суффикс "ToResponse".
-// Pointer-поле разыменовывается и переоборачивается: nullable-поля уже несут
-// "*" в reqType (fieldIsOptional их не оборачивает повторно), optional-поля
-// оборачиваются StructRenderer'ом в *T — для них pointer=true.
-func (r *ConvertersRenderer) renderSplittableFieldConvert(p *parser.Property, fieldName, reqType string) {
+// <Type>RequestToResponse. reqType/respType — Go-типы поля в modeRequest/
+// modeResponse (вычислены в renderRequestToResponse). Pointer-поле разыменовывается
+// и переоборачивается: nullable-поля уже несут "*" в reqType (fieldIsOptional
+// их не оборачивает повторно), optional-поля оборачиваются StructRenderer'ом в *T.
+//
+// Array-поля ([]<Item> → []<Item> с splittable item-типом) рендерятся per-item
+// циклом — см. renderSplittableSliceConvert. Прямое `[]<Conv>(slice)` некорректно
+// (Go трактует <Conv> как тип в type-conversion, а <Conv> — функция → compile error).
+func (r *ConvertersRenderer) renderSplittableFieldConvert(p *parser.Property, fieldName, reqType, respType string) {
 	// requiredForMode читает режим typeMapper'а — выставляем modeRequest, как
 	// при рендере Request-варианта поля (renderField).
 	r.Ctx.TypeMapper.SetMode(modeRequest)
+
+	// Array of splittable items: per-item loop.
+	if strings.HasPrefix(reqType, "[]") {
+		r.renderSplittableSliceConvert(fieldName, reqType, respType)
+		return
+	}
 
 	required := requiredForMode(r.Ctx, p)
 	pointer := fieldIsOptional(required, reqType)
@@ -138,6 +149,40 @@ func (r *ConvertersRenderer) renderSplittableFieldConvert(p *parser.Property, fi
 	r.Buf.Print("\tif req.", fieldName, " != nil {\n")
 	r.Buf.Print("\t\tv := ", converterCall, "(*req.", fieldName, ")\n")
 	r.Buf.Print("\t\tresp.", fieldName, " = &v\n")
+	r.Buf.Print("\t}\n")
+}
+
+// renderSplittableSliceConvert рендерит конверсию array-поля с splittable
+// item-типом per-item циклом:
+//
+//	resp.Items = make([]<ItemResp>, len(req.Items))
+//	for i, v := range req.Items {
+//	    resp.Items[i] = <ItemReq>ToResponse(v)
+//	}
+//
+// elemReq/elemResp — item-типы (reqType/respType без префикса "[]"). Для
+// pointer-элементов ([]*T) — deref + re-wrap через временную переменную, nil
+// пропускается. converterCall строится из item-типа без "*", с суффиксом
+// "ToResponse" (и квалификацией subpackage, если item — cross-subpackage ref).
+func (r *ConvertersRenderer) renderSplittableSliceConvert(fieldName, reqType, respType string) {
+	elemReq := strings.TrimPrefix(reqType, "[]")
+	elemResp := strings.TrimPrefix(respType, "[]")
+	converterCall := strings.TrimPrefix(elemReq, "*") + "ToResponse"
+
+	r.Buf.Print("\tresp.", fieldName, " = make([]", elemResp, ", len(req.", fieldName, "))\n")
+	r.Buf.Print("\tfor i, v := range req.", fieldName, " {\n")
+
+	if strings.HasPrefix(elemReq, "*") {
+		// pointer elements: deref, convert, re-wrap. nil → оставить nil.
+		r.Buf.Print("\t\tif v != nil {\n")
+		r.Buf.Print("\t\t\tt := ", converterCall, "(*v)\n")
+		r.Buf.Print("\t\t\tresp.", fieldName, "[i] = &t\n")
+		r.Buf.Print("\t\t}\n")
+		r.Buf.Print("\t}\n")
+		return
+	}
+
+	r.Buf.Print("\t\tresp.", fieldName, "[i] = ", converterCall, "(v)\n")
 	r.Buf.Print("\t}\n")
 }
 
