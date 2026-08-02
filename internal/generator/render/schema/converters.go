@@ -117,28 +117,44 @@ func (r *ConvertersRenderer) renderRequestToResponse(s *parser.Schema, name stri
 
 // renderSplittableFieldConvert рендерит конверсию splittable-поля через вложенный
 // <Type>RequestToResponse. reqType/respType — Go-типы поля в modeRequest/
-// modeResponse (вычислены в renderRequestToResponse). Pointer-поле разыменовывается
-// и переоборачивается: nullable-поля уже несут "*" в reqType (fieldIsOptional
-// их не оборачивает повторно), optional-поля оборачиваются StructRenderer'ом в *T.
+// modeResponse (вычислены в renderRequestToResponse).
 //
-// Array-поля ([]<Item> → []<Item> с splittable item-типом) рендерятся per-item
-// циклом — см. renderSplittableSliceConvert. Прямое `[]<Conv>(slice)` некорректно
-// (Go трактует <Conv> как тип в type-conversion, а <Conv> — функция → compile error).
+// Ветвление по форме поля:
+//   - Array ([]<Item>): per-item цикл — renderSplittableSliceConvert.
+//   - Map (map[K]<Item>): per-key цикл — renderSplittableMapConvert.
+//   - Scalar: nullable (*T от s.Nullable) и optional (StructRenderer оборачивает
+//     в *T) — deref/rewrap; required value — прямой вызов.
+//
+// converterCall всегда строится из БАЗОВОГО типа элемента (без [], map[K], *)
+// с суффиксом "ToResponse" — иначе Go трактует `<composite>ToResponse(slice)`
+// как type-conversion, а <Conv> — функция, не тип → compile error.
 func (r *ConvertersRenderer) renderSplittableFieldConvert(p *parser.Property, fieldName, reqType, respType string) {
 	// requiredForMode читает режим typeMapper'а — выставляем modeRequest, как
 	// при рендере Request-варианта поля (renderField).
 	r.Ctx.TypeMapper.SetMode(modeRequest)
 
-	// Array of splittable items: per-item loop.
 	if strings.HasPrefix(reqType, "[]") {
 		r.renderSplittableSliceConvert(fieldName, reqType, respType)
 		return
 	}
 
-	required := requiredForMode(r.Ctx, p)
-	pointer := fieldIsOptional(required, reqType)
+	if strings.HasPrefix(reqType, "map[") {
+		r.renderSplittableMapConvert(fieldName, reqType, respType)
+		return
+	}
 
-	converterCall := reqType + "ToResponse"
+	r.renderSplittableScalarConvert(p, fieldName, reqType)
+}
+
+// renderSplittableScalarConvert рендерит конверсию скалярного splittable-поля
+// (ref на splittable-схему). nullable (*T) и optional (StructRenderer *T)
+// варианты — pointer: deref, convert, re-wrap; required value — прямой вызов.
+func (r *ConvertersRenderer) renderSplittableScalarConvert(p *parser.Property, fieldName, reqType string) {
+	required := requiredForMode(r.Ctx, p)
+	// nullable: GoType уже дал *T → strip для converterCall. optional:
+	// StructRenderer оборачивает в *T, GoType даёт базу T → fieldIsOptional.
+	converterCall := strings.TrimPrefix(reqType, "*") + "ToResponse"
+	pointer := strings.HasPrefix(reqType, "*") || fieldIsOptional(required, reqType)
 
 	if !pointer {
 		r.Buf.Print("\tresp.", fieldName, " = ", converterCall, "(req.", fieldName, ")\n")
@@ -183,6 +199,38 @@ func (r *ConvertersRenderer) renderSplittableSliceConvert(fieldName, reqType, re
 	}
 
 	r.Buf.Print("\t\tresp.", fieldName, "[i] = ", converterCall, "(v)\n")
+	r.Buf.Print("\t}\n")
+}
+
+// renderSplittableMapConvert рендерит конверсию map-поля со splittable values
+// per-key циклом:
+//
+//	resp.Users = make(<respType>, len(req.Users))
+//	for k, v := range req.Users {
+//	    resp.Users[k] = <ItemReq>ToResponse(v)
+//	}
+//
+// elemReq — тип значения (часть после первого "]" в map[K]V). Для pointer-значений
+// (map[K]*T) — deref + re-wrap, nil пропускается. make использует respType целиком
+// (map[K]<ItemResp>) — корректный map-тип без ручного парсинга K.
+func (r *ConvertersRenderer) renderSplittableMapConvert(fieldName, reqType, respType string) {
+	elemReq := reqType[strings.Index(reqType, "]")+1:]
+	converterCall := strings.TrimPrefix(elemReq, "*") + "ToResponse"
+
+	r.Buf.Print("\tresp.", fieldName, " = make(", respType, ", len(req.", fieldName, "))\n")
+	r.Buf.Print("\tfor k, v := range req.", fieldName, " {\n")
+
+	if strings.HasPrefix(elemReq, "*") {
+		// pointer values: deref, convert, re-wrap. nil → оставить nil.
+		r.Buf.Print("\t\tif v != nil {\n")
+		r.Buf.Print("\t\t\tt := ", converterCall, "(*v)\n")
+		r.Buf.Print("\t\t\tresp.", fieldName, "[k] = &t\n")
+		r.Buf.Print("\t\t}\n")
+		r.Buf.Print("\t}\n")
+		return
+	}
+
+	r.Buf.Print("\t\tresp.", fieldName, "[k] = ", converterCall, "(v)\n")
 	r.Buf.Print("\t}\n")
 }
 
