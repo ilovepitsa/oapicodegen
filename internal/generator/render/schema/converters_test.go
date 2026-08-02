@@ -256,3 +256,72 @@ func TestConvertersRenderer_SplittablePointerSliceField_RendersDerefLoop(t *test
 	assert.Contains(t, got, "t := RoomRequestToResponse(*v)")
 	assert.Contains(t, got, "resp.Items[i] = &t")
 }
+
+// TestConvertersRenderer_NullableSplittableField_RendersDerefRewrap —
+// nullable splittable ref-поле (GoType = *UserRequest от s.Nullable, не от
+// optional): конвертация через deref/rewrap с UserRequestToResponse, а НЕ
+// `*UserRequestToResponse(req.Field)` (GoType дал *T → converterCall был
+// "*UserRequestToResponse" — invalid). Латентный баг renderSplittableFieldConvert.
+func TestConvertersRenderer_NullableSplittableField_RendersDerefRewrap(t *testing.T) {
+	t.Parallel()
+
+	tm := &fakeTypeMapper{byMode: map[string]string{
+		modeRequest:  "*UserRequest",
+		modeResponse: "*UserResponse",
+	}}
+	r := newConvertersTestRenderer(t, tm)
+
+	require.NoError(t, r.OnSplitStruct(&parser.Schema{
+		Name:    "Container",
+		Type:    "object",
+		IsSplit: true,
+		Properties: []*parser.Property{
+			{
+				Name:     "user",
+				Required: true,
+				Schema:   &parser.Schema{Ref: "./User.yaml", Nullable: true},
+			},
+		},
+	}))
+
+	got := string(r.Buf.Content())
+	assert.Contains(t, got, "if req.User != nil {")
+	assert.Contains(t, got, "v := UserRequestToResponse(*req.User)")
+	assert.Contains(t, got, "resp.User = &v")
+	assert.NotContains(t, got, "*UserRequestToResponse(",
+		"must strip nullable * from converterCall, not emit *UserRequestToResponse")
+}
+
+// TestConvertersRenderer_SplittableMapField_RendersPerKeyLoop — map-поле
+// со splittable values (map[string]UserRequest → map[string]UserResponse):
+// per-key цикл, а НЕ `map[string]UserRequestToResponse(req.Field)`. Латентный
+// баг renderSplittableFieldConvert (не обрабатывал map-поля).
+func TestConvertersRenderer_SplittableMapField_RendersPerKeyLoop(t *testing.T) {
+	t.Parallel()
+
+	tm := &fakeTypeMapper{byMode: map[string]string{
+		modeRequest:  "map[string]UserRequest",
+		modeResponse: "map[string]UserResponse",
+	}}
+	r := newConvertersTestRenderer(t, tm)
+
+	require.NoError(t, r.OnSplitStruct(&parser.Schema{
+		Name:    "Container",
+		Type:    "object",
+		IsSplit: true,
+		Properties: []*parser.Property{
+			{
+				Name:     "users",
+				Required: true,
+				Schema:   &parser.Schema{Ref: "./User.yaml", Type: "object"},
+			},
+		},
+	}))
+
+	got := string(r.Buf.Content())
+	assert.Contains(t, got, "resp.Users = make(map[string]UserResponse, len(req.Users))")
+	assert.Contains(t, got, "for k, v := range req.Users {")
+	assert.Contains(t, got, "resp.Users[k] = UserRequestToResponse(v)")
+	assert.NotContains(t, got, "map[string]UserRequestToResponse(",
+		"must not emit type-conversion with converter function name as a type")
+}
