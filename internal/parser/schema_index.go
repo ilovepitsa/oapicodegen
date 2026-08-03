@@ -34,6 +34,7 @@ type SchemaEntry struct {
 	SchemaName string // имя схемы во владельце (для диагностики)
 	GoImport   string // например "github.com/ilovepitsa/oapicodegen/go/common"
 	GoType     string // например "User"; с учётом split-mode: "UserRequest"/"UserResponse"
+	SubPackage string // subpackage модели-владельца ("" = root model); для cross-service import
 }
 
 // Lookup возвращает SchemaEntry по абсолютному пути к yaml-файлу и имени
@@ -45,15 +46,18 @@ func (si *SchemaIndex) Lookup(absPath, schemaName string) (*SchemaEntry, bool) {
 }
 
 // LookupForMode возвращает SchemaEntry с GoType, адаптированным под mode
-// текущего использования ("", ModeRequest, ModeResponse). Если во владельце
-// не включён split-mode, GoType возвращается как есть.
+// текущего использования ("", ModeRequest, ModeResponse). Суффикс
+// "Request"/"Response" добавляется ТОЛЬКО если целевая схема splittable
+// (IsSplit=true): non-splittable схемы (примитивные alias'ы UUIDv7, Timestamp;
+// enums) не имеют Request/Response-вариантов, суффикс дал бы undefined-тип.
+// IsSplit выставляется generator.PrecomputeSplittable до генерации.
 func (si *SchemaIndex) LookupForMode(absPath, schemaName, mode string) (*SchemaEntry, bool) {
 	e, ok := si.Lookup(absPath, schemaName)
 	if !ok {
 		return nil, false
 	}
 
-	if e.Project == nil || !e.Project.Features.SplitRequestResponse.Value {
+	if mode == "" || !targetIsSplittable(e) {
 		return e, true
 	}
 
@@ -67,4 +71,23 @@ func (si *SchemaIndex) LookupForMode(absPath, schemaName, mode string) (*SchemaE
 	}
 
 	return &out, true
+}
+
+// targetIsSplittable сообщает, рендерится ли целевая схема владельца как split
+// (есть <Name>Request/<Name>Response). Non-splittable (primitive alias, enum,
+// split-disabled проект) → false → суффикс не добавляется.
+func targetIsSplittable(e *SchemaEntry) bool {
+	if e.Project == nil || !e.Project.Features.SplitRequestResponse.Value {
+		return false
+	}
+
+	if e.Project.Model == nil {
+		return false
+	}
+
+	if target, ok := e.Project.Model.Lookup(e.SchemaName); ok {
+		return target.IsSplit
+	}
+
+	return false
 }

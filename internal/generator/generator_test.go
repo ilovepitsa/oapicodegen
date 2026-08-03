@@ -4702,6 +4702,7 @@ func TestCrossServiceRef_SplitModeAddsSuffix(t *testing.T) {
 		Name:       "User",
 		Type:       "object",
 		SourceFile: commonSpec,
+		IsSplit:    true,
 	}
 	userSchema.Properties = []*oapiparser.Property{
 		{Name: "id", Schema: &oapiparser.Schema{Type: "string"}},
@@ -4743,6 +4744,114 @@ func TestCrossServiceRef_SplitModeAddsSuffix(t *testing.T) {
 	got := m.baseType(&oapiparser.Schema{ExternalRef: extRef})
 	assert.Equal(t, "common.UserRequest", got,
 		"owner project has split enabled → suffix added by LookupForMode")
+}
+
+// TestCrossServiceRef_SubPackageTarget_QualifiesSubpackage — cross-service $ref
+// на схему в subpackage владельца (model/identifiers/UUIDv7) эмитится как
+// identifiers.UUIDv7 с import <prefix>/model/identifiers, а НЕ как
+// <root-alias>.UUIDv7 (UUIDv7 не в root model владельца → undefined).
+func TestCrossServiceRef_SubPackageTarget_QualifiesSubpackage(t *testing.T) {
+	const commonSpec = "/input/common/src/openapi/openapi.yaml"
+	commonProject := &oapiparser.Project{
+		Folder:       "common",
+		ImportPrefix: "github.com/foo/bar/go/common",
+	}
+
+	uuidSchema := &oapiparser.Schema{
+		Name:       "UUIDv7",
+		Type:       "string",
+		SourceFile: "/input/common/src/openapi/schemas/identifiers/UUIDv7.yaml",
+		SubPackage: "identifiers",
+	}
+	commonProject.CreateModel(gogen.Import{Alias: "model"})
+	commonProject.CreatePaths("github.com/foo/bar/go/common")
+	commonProject.Model.SetSchemas([]*oapiparser.Schema{uuidSchema})
+
+	si := &oapiparser.SchemaIndex{
+		Schemas: map[string]*oapiparser.SchemaEntry{
+			"/input/common/src/openapi/schemas/identifiers/UUIDv7.yaml#/components/schemas/UUIDv7": {
+				Project:    commonProject,
+				SchemaName: "UUIDv7",
+				GoImport:   "github.com/foo/bar/go/common",
+				GoType:     "UUIDv7",
+				SubPackage: "identifiers",
+			},
+		},
+	}
+
+	usersProject := &oapiparser.Project{Folder: "users", ImportPrefix: "github.com/foo/bar/go/users"}
+	usersProject.CreateModel(gogen.Import{Alias: "model"})
+	usersProject.CreatePaths("github.com/foo/bar/go/users")
+
+	g := &Generator{project: usersProject, schemaIndex: si, factory: gogen.NewFileFactory("oapigen", "v1.2.0")}
+	m := g.newTypeMapper("model")
+	m.subPkg = "models"
+
+	got := m.baseType(&oapiparser.Schema{
+		ExternalRef: "/input/common/src/openapi/schemas/identifiers/UUIDv7.yaml#/components/schemas/UUIDv7",
+	})
+	assert.Equal(t, "identifiers.UUIDv7", got)
+
+	assert.True(t, containsImport(m.imports, "github.com/foo/bar/go/common/model/identifiers", "identifiers"))
+}
+
+// TestCrossServiceRef_DateTimeTarget_UTCTime — cross-service $ref на date-time
+// схему при USE_UTC_FOR_DATE_TIME рендерится как model.UTCTime текущего сервиса,
+// а не как тип владельца (UTCTime живёт в root каждого сервиса).
+func TestCrossServiceRef_DateTimeTarget_UTCTime(t *testing.T) {
+	commonProject := &oapiparser.Project{
+		Folder:       "common",
+		ImportPrefix: "github.com/foo/bar/go/common",
+	}
+
+	timestampSchema := &oapiparser.Schema{
+		Name:       "Timestamp",
+		Type:       "string",
+		Format:     "date-time",
+		SourceFile: "/input/common/src/openapi/schemas/time/Timestamp.yaml",
+		SubPackage: "time",
+	}
+	commonProject.CreateModel(gogen.Import{Alias: "model"})
+	commonProject.CreatePaths("github.com/foo/bar/go/common")
+	commonProject.Model.SetSchemas([]*oapiparser.Schema{timestampSchema})
+
+	si := &oapiparser.SchemaIndex{
+		Schemas: map[string]*oapiparser.SchemaEntry{
+			"/input/common/src/openapi/schemas/time/Timestamp.yaml#/components/schemas/Timestamp": {
+				Project:    commonProject,
+				SchemaName: "Timestamp",
+				GoImport:   "github.com/foo/bar/go/common",
+				GoType:     "Timestamp",
+				SubPackage: "time",
+			},
+		},
+	}
+
+	usersProject := &oapiparser.Project{Folder: "users", ImportPrefix: "github.com/foo/bar/go/users"}
+	usersProject.CreateModel(gogen.Import{Alias: "model"})
+	usersProject.CreatePaths("github.com/foo/bar/go/users")
+	usersProject.Features.UseUTCForDateTime.Value = true
+
+	g := &Generator{project: usersProject, schemaIndex: si, factory: gogen.NewFileFactory("oapigen", "v1.2.0")}
+	m := g.newTypeMapper("model")
+	m.subPkg = "models"
+
+	got := m.baseType(&oapiparser.Schema{
+		ExternalRef: "/input/common/src/openapi/schemas/time/Timestamp.yaml#/components/schemas/Timestamp",
+	})
+	assert.Equal(t, "model.UTCTime", got,
+		"cross-service $ref on date-time schema with USE_UTC must resolve to current service model.UTCTime, not owner type")
+}
+
+// containsImport сообщает, есть ли в imports запись с заданными Path и Alias.
+func containsImport(imports []gogen.Import, path, alias string) bool {
+	for _, imp := range imports {
+		if imp.Path == path && imp.Alias == alias {
+			return true
+		}
+	}
+
+	return false
 }
 
 // TestBaseType_RefToDateTimeSchema_UTCTimeFlag — $ref на date-time схему при

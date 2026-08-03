@@ -38,6 +38,7 @@ func addProjectSchemas(si *SchemaIndex, project *Project) {
 			SchemaName: s.Name,
 			GoImport:   project.ImportPrefix,
 			GoType:     s.Name,
+			SubPackage: s.SubPackage,
 		}
 	}
 }
@@ -70,13 +71,24 @@ func markExternalRefs(project *Project, specPath string) {
 
 	for _, s := range project.Model.schemas {
 		markTopLevel(s, project, specPath)
-		markNestedRefs(s, project, specPath)
+		// База для resolution nested $ref — SourceFile top-level схемы (файл,
+		// где физически лежат поля схемы), а НЕ specPath (openapi.yaml). Ref'ы
+		// пишутся относительно файла схемы (User.yaml), и resolveExternalRef
+		// относительно specPath уходит на неверную глубину (см. bug-report
+		// cross-service). Для inline top-level схем SourceFile == specPath.
+		markNestedRefs(s, project, s.SourceFile)
 	}
 }
 
 // markTopLevel выставляет SourceFile и OwnerProject на top-level схеме.
 // Если схема загружена из внешнего файла через $ref, SourceFile берётся из Ref
 // (резолвится относительно specPath). Для inline-схем используется specPath.
+//
+// После вычисления SourceFile $ref очищается: для top-level схемы это source-
+// pointer (откуда загружена), а не type-reference. Без очистки baseType (через
+// AliasRenderer.GoType) трактует $ref как type-ref → `type UUIDv7 UUIDv7`
+// (рекурсия) или пустой стаб (isAliasLike excludes sh.Ref). Field-схемы
+// сохраняют свой Ref — он нужен для type-resolution.
 func markTopLevel(s *Schema, project *Project, specPath string) {
 	if s == nil {
 		return
@@ -91,6 +103,7 @@ func markTopLevel(s *Schema, project *Project, specPath string) {
 		if idx := strings.Index(s.SourceFile, "#"); idx >= 0 {
 			s.SourceFile = s.SourceFile[:idx]
 		}
+		s.Ref = ""
 		return
 	}
 
@@ -127,7 +140,16 @@ func walkNested(s *Schema, project *Project, specPath string) {
 		// выставляем ExternalRef (иначе qualifyExternalType даст any из-за
 		// неверной базы/формата, см. markExternalRefs).
 		if !isLocal {
-			if extRef := resolveExternalRef(s.Ref, specPath); extRef != "" {
+			extRef := resolveExternalRef(s.Ref, specPath)
+			if extRef != "" {
+				// Path-only $ref (без #/-фрагмента, zvonilka one-schema-per-file)
+				// → дополняем #/components/schemas/<Name>, иначе qualifyExternalType
+				// не найдёт разделитель и поле падёт в any. Для ref с #/ оставляем
+				// как есть (включая нестандартные фрагменты — тем занимается
+				// upstream rolodex).
+				if !strings.Contains(extRef, "#") {
+					extRef = extRef + "#/components/schemas/" + name
+				}
 				s.ExternalRef = extRef
 			}
 		}
