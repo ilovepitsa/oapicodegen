@@ -130,6 +130,11 @@ func run(args []string, stderr *os.File) error {
 		len(ps.Projects), ps.Common != nil,
 	)
 
+	// Precompute IsSplit для всех проектов до генерации: cross-service $ref
+	// проверяет IsSplit target-схемы владельца, а Generate вычисляет splittable
+	// только для текущего проекта (порядок генерации недетерминирован).
+	generator.PrecomputeSplittable(ps)
+
 	// Версия бинарника константа на запуск — логируем один раз на старте,
 	// до начала per-project генерации.
 	sugar.Infof("oapigen version %s", version.Get())

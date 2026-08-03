@@ -1,9 +1,10 @@
 package generator
 
 import (
+	"strings"
+
 	"github.com/ilovepitsa/oapicodegen/internal/codegen/gogen"
 	"github.com/ilovepitsa/oapicodegen/internal/parser"
-	"strings"
 )
 
 // typeMapper мапит parser.Schema → Go-тип, собирая нужные импорты.
@@ -290,7 +291,14 @@ const externalRefSeparator = "#/components/schemas/"
 // возвращает goTypeAny (fallback).
 //
 // externalRef имеет вид "<absPath>#/components/schemas/<Name>", где absPath —
-// абсолютный путь к openapi.yaml сервиса-владельца.
+// абсолютный путь к yaml-файлу схемы-владельца.
+//
+// Импорт учитывает subpackage владельца: схема в model/<subpkg>/ эмитится как
+// <subpkg>.<Type> с import <prefix>/model/<subpkg>. Schema в root model —
+// <alias>.<Type> с import <prefix>/model.
+//
+// date-time target при USE_UTC_FOR_DATE_TIME рендерится как model.UTCTime
+// текущего сервиса (не тип владельца) — UTCTime живёт в root каждого сервиса.
 func (m *typeMapper) qualifyExternalType(externalRef string) string {
 	if m.schemaIndex == nil {
 		return goTypeAny
@@ -309,10 +317,36 @@ func (m *typeMapper) qualifyExternalType(externalRef string) string {
 		return goTypeAny
 	}
 
+	// date-time target + USE_UTC → model.UTCTime текущего сервиса.
+	if m.utcTime && m.targetIsDateTime(entry) {
+		return m.qualifyUTCTime()
+	}
+
+	if entry.SubPackage != "" {
+		importPath := entry.GoImport + "/model/" + entry.SubPackage
+		m.addImport(importPath, entry.SubPackage)
+		return entry.SubPackage + "." + entry.GoType
+	}
+
 	alias := crossServiceAlias(entry.GoImport)
 	m.addImport(entry.GoImport+"/model", alias)
 
 	return alias + "." + entry.GoType
+}
+
+// targetIsDateTime сообщает, является ли целевая схема cross-service ref'а
+// date-time string-схемой (рендерится как UTCTime при USE_UTC_FOR_DATE_TIME).
+func (m *typeMapper) targetIsDateTime(e *parser.SchemaEntry) bool {
+	if e == nil || e.Project == nil || e.Project.Model == nil {
+		return false
+	}
+
+	target, ok := e.Project.Model.Lookup(e.SchemaName)
+	if !ok {
+		return false
+	}
+
+	return target.Type == oapiTypeString && target.Format == oapiFormatDateTime
 }
 
 // crossServiceAlias генерирует Go-alias для импорта model-пакета другого

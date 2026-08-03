@@ -122,6 +122,39 @@ func TestMarkExternalRefs_PathOnlyCrossFileRef_NoExternal(t *testing.T) {
 		"path-only cross-file $ref to a registered intra-service schema must NOT be marked ExternalRef")
 }
 
+// TestMarkExternalRefs_PathOnlyCrossServiceRef_FragmentAppended — path-only
+// cross-service $ref (на схему ДРУГОГО сервиса, без #/-фрагмента) должен
+// получить #/components/schemas/<Name> фрагмент в ExternalRef, иначе
+// qualifyExternalType не найдёт разделитель → поле падает в any.
+// Резолвится относительно SourceFile top-level схемы (файла, где лежит ref),
+// не specPath (openapi.yaml) — иначе глубина ../ уходит неверно.
+func TestMarkExternalRefs_PathOnlyCrossServiceRef_FragmentAppended(t *testing.T) {
+	project := &Project{Folder: "users"}
+	// User loaded via $ref from schemas/models/User.yaml → markTopLevel
+	// выставит SourceFile = файл схемы (User.yaml), не specPath.
+	userSchema := &Schema{
+		Name:       "User",
+		Type:       "object",
+		Ref:        "./schemas/models/User.yaml",
+	}
+	// Nested path-only cross-service ref (на common/UUIDv7.yaml, нет в users).
+	nestedID := &Schema{Ref: "../../../../../common/src/openapi/schemas/identifiers/UUIDv7.yaml"}
+	userSchema.Properties = []*Property{
+		{Name: "id", Schema: nestedID},
+	}
+	project.Model = &Model{project: project, schemas: []*Schema{userSchema}}
+	project.Model.Index()
+
+	markExternalRefs(project, "/input/users/src/openapi/openapi.yaml")
+
+	// ExternalRef резолвится относительно User.yaml (SourceFile), не openapi.yaml:
+	// 5 ../ от schemas/models/ → /input/ → common/.../UUIDv7.yaml, + фрагмент.
+	assert.Equal(t,
+		"/input/common/src/openapi/schemas/identifiers/UUIDv7.yaml#/components/schemas/UUIDv7",
+		nestedID.ExternalRef,
+		"path-only cross-service $ref must resolve relative to top-level SourceFile and append #/components/schemas/<Name> fragment")
+}
+
 func TestMarkExternalRefs_NilProject(t *testing.T) {
 	assert.NotPanics(t, func() {
 		markExternalRefs(nil, "/input/svc/openapi.yaml")

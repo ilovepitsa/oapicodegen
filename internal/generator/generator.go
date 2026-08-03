@@ -540,6 +540,35 @@ func computeSplittable(schemas []*parser.Schema) map[string]bool {
 	return out
 }
 
+// PrecomputeSplittable выставляет Schema.IsSplit на top-level схемах всех
+// проектов ProjectSet. Должен вызываться до per-project генерации: cross-service
+// $ref (qualifyExternalType → LookupForMode) проверяет IsSplit target-схемы
+// владельца, а Generate вычисляет splittable только для текущего проекта.
+// Без precompute cross-service ref на non-splittable схему (UUIDv7, Timestamp)
+// ошибочно получает Request/Response-суффикс → undefined.
+func PrecomputeSplittable(ps *parser.ProjectSet) {
+	if ps == nil {
+		return
+	}
+
+	for _, project := range ps.Projects {
+		if project == nil || project.Model == nil {
+			continue
+		}
+
+		schemas := project.Model.Schemas()
+		if project.Features.SplitRequestResponse.Value {
+			computeSplittable(schemas)
+		} else {
+			for _, sh := range schemas {
+				if sh != nil {
+					sh.IsSplit = false
+				}
+			}
+		}
+	}
+}
+
 // excludeReferencedByComposite удаляет из out имена схем, на которые
 // ссылается sh через oneOf/anyOf/allOf/items/additionalProperties.
 // Эти контексты рендерятся с mode=="", поэтому splittable-ссылка
